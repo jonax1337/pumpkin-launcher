@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useView } from "@/app/Layout";
 
-/** Höhe des kompakten Kopfs (`--dc` in styles/pixelkino.css). */
+/** Höhe des kompakten Kopfs (`--dc` in pages/detail/detail.css). */
 const COMPACT_HEAD_PX = 64;
 /** So weit vor dem kompakten Kopf wechselt der große, damit der Wechsel nicht erst am Rand geschieht. */
 const COMPACT_SWITCH_MARGIN_PX = 28;

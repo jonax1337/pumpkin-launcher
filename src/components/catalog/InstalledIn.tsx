@@ -40,14 +40,14 @@ function useInstalledLabel(instances: Instance[] | undefined, maxLength: number)
   return { text, tip: t("components.installedIn.tip", { names: instances.map((i) => i.name).join(", ") }), describe: !one || text.endsWith("…") };
 }
 
-/** In der Katalogzeile klein mit Punkt (Metazeile 22 px). */
+/** In der Katalogzeile klein mit Haken in Akzentfarbe (Metazeile 22 px). */
 export function InstalledChipRow({ instances }: { instances?: Instance[] }) {
   const label = useInstalledLabel(instances, ROW_CHIP_MAX);
-  return label && <Tip label={label.tip} describe={label.describe}><Chip size="s" dot>{label.text}</Chip></Tip>;
+  return label && <Tip label={label.tip} describe={label.describe}><Chip size="s" tone="acc" icon="check">{label.text}</Chip></Tip>;
 }
 
 /** Im Projektkopf mit Haken. */
 export function InstalledChipHead({ instances }: { instances?: Instance[] }) {
   const label = useInstalledLabel(instances, HEAD_CHIP_MAX);
-  return label && <Tip label={label.tip} describe={label.describe}><Chip icon="check">{label.text}</Chip></Tip>;
+  return label && <Tip label={label.tip} describe={label.describe}><Chip size="s" icon="check">{label.text}</Chip></Tip>;
 }

@@ -65,6 +65,8 @@ export const mock = {
   "hooks.api.shareLogs": "Protokolle teilen",
   "hooks.api.openFiles": "Dateien öffnen",
   "hooks.api.restart": "Neu starten",
+  "hooks.api.createShortcut": "Verknüpfungen anlegen",
+  "hooks.api.foreignLinks": "Links anderer Programme übernehmen",
   "hooks.api.instanceNotFound": "Instanz „{id}“ nicht gefunden",
   "hooks.api.duplicateName": "{name} (Kopie)",
   "hooks.api.templateGone": "Die Vorlage gibt es nicht mehr",

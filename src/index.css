@@ -3,32 +3,30 @@
 @import "@fontsource/big-shoulders-display/800";
 @import "@fontsource-variable/hanken-grotesk";
 @import "@fontsource/jersey-10";
-/* Pixelkino liegt in der Komponenten-Schicht: Tailwind-Utilities dürfen Layout darüber setzen. */
-@import "./styles/pixelkino.css" layer(components);
-/* Pixel-Kit (src/ui): danach, gleiche Schicht */
+/* Kit (ui): Tailwind-Theme-Brücke (oberste Ebene, kein layer()) */
+@import "./ui/theme.css";
+/* Pixelkino liegt in der Komponenten-Schicht: Tailwind-Utilities dürfen Layout darüber setzen.
+   Reihenfolge: Basis und Gerüst, dann die Seiten und Dialoge in ihrer Kaskadenfolge, danach das Kit. */
+@import "./styles/base.css" layer(components);
+@import "./styles/shell.css" layer(components);
+@import "./pages/home/home.css" layer(components);
+@import "./pages/instances/library.css" layer(components);
+@import "./pages/detail/detail.css" layer(components);
+@import "./pages/discover-project.css" layer(components);
+@import "./pages/skins/skin-card.css" layer(components);
+@import "./pages/detail/screenshots/screenshots.css" layer(components);
+@import "./components/dialogs.css" layer(components);
+@import "./components/onboarding.css" layer(components);
+@import "./components/accounts/accounts.css" layer(components);
+@import "./components/friends/friends.css" layer(components);
+/* Kit (src/ui): danach, gleiche Schicht. Nur Aussehen; Layout kommt als Tailwind-Utilities */
 @import "./ui/ui.css" layer(components);
 /* Spielen (Knopf, Statuszeile, Protokoll) als Domänen-Baustein hinter dem Kit */
 @import "./components/play.css" layer(components);
 @import "./branding/branding.css" layer(components);
 
-/* Nur dunkles Schema. Farben und Schriften aus Pixelkino auch als Utilities (text-fg-2, bg-panel …). */
-@custom-variant dark (&);
-
+/* Tailwind-Preflight (html, code, pre) nimmt die Schriften aus Pixelkino. Farb-Utilities gibt es nicht: Komponenten nutzen semantische Klassen. */
 @theme inline {
-  --font-display: var(--f-display);
   --font-sans: var(--f-body);
-  --font-px: var(--f-px);
   --font-mono: var(--f-mono);
-  --color-bg: var(--bg);
-  --color-panel: var(--panel);
-  --color-panel-2: var(--panel-2);
-  --color-line: var(--line);
-  --color-fg: var(--fg);
-  --color-fg-2: var(--fg-2);
-  --color-fg-3: var(--fg-3);
-  --color-copper: var(--copper);
-  --color-acc: var(--acc);
-  --color-run: var(--run);
-  --color-warn: var(--warn);
-  --color-bad: var(--bad);
 }

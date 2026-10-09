@@ -18,7 +18,7 @@ use crate::error::{AppError, AppResult};
 use crate::models::{Instance, ModLoader};
 use crate::services::install::{self, InstallStep, OnProgress};
 use crate::services::mojang::{Argument, Library, VersionJson};
-use crate::services::{download, Dirs};
+use crate::services::{blocking, download, write_atomic, Dirs};
 use maven::library_key;
 
 /// Loader-Version für das Frontend (`loader_versions`).
@@ -264,13 +264,18 @@ async fn installed_profile<P: LoaderProfile>(dirs: &Dirs, target: LoaderTarget<'
     download::read_json(&profile_path::<P>(dirs, target)).await.map_err(|err| err.or_not_installed(target))
 }
 
-/// Legt das Profil ab; danach gilt die Loader-Version als installiert.
+/// Legt das Profil ab; danach gilt die Loader-Version als installiert. Atomar, denn der Start einer anderen Instanz
+/// mit derselben Loader-Version liest es womöglich gerade.
 async fn save_profile<P: LoaderProfile>(dirs: &Dirs, target: LoaderTarget<'_>, json: &[u8]) -> AppResult<()> {
     let path = profile_path::<P>(dirs, target);
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    Ok(tokio::fs::write(&path, json).await?)
+    let json = json.to_vec();
+    blocking(move |_| {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        write_atomic(&path, &json)
+    })
+    .await
 }
 
 /// Vanilla-Versions-JSON plus Loader-Profil: Loader-Main-Class, Loader-Libraries vor den Vanilla-Libraries,

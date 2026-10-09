@@ -6,7 +6,7 @@ import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
 import type { Instance } from "@/lib/types";
-import { Button, ConfirmDialog, Menu, Panel, Spacer, type MenuEntry } from "@/ui";
+import { Button, ConfirmDialog, Menu, Spacer, type MenuEntry } from "@/ui";
 import { useAssignGroup, useDeleteMany, useExportMany } from "./useBulkActions";
 
 /** So viele Namen nennt die Rückfrage beim Löschen, danach „und n weitere“. */
@@ -20,8 +20,8 @@ function namesText(names: string[], andMore: (n: number) => string) {
 }
 
 /**
- * Leiste unten, solange der Auswahlmodus an ist: Gruppe zuweisen, Exportieren (nacheinander) und Löschen für die Auswahl.
- * `onDone` verlässt den Auswahlmodus.
+ * Zweite Werkzeugleiste (`Toolbar alt`) im Platz der Filter, solange der Auswahlmodus an ist: Gruppe zuweisen, Exportieren (nacheinander)
+ * und Löschen für die Auswahl. Sie belegt denselben Platz wie die Filterleiste, der Wechsel verschiebt nichts. `onDone` verlässt den Auswahlmodus.
  */
 export function SelectionBar({ picked, groups, onSelectAll, onDone }: {
   picked: Instance[]; groups: string[]; onSelectAll: () => void; onDone: () => void;
@@ -56,19 +56,19 @@ export function SelectionBar({ picked, groups, onSelectAll, onDone }: {
     ...groups.map((group) => ({ id: `group:${group}`, text: group, onSelect: () => assignGroup(group) })),
     ...(groups.length ? ["-" as const] : []),
     { id: "group-new", text: t("components.instance.newGroupMenu"), icon: "plus", onSelect: () => setNaming(true) },
-    { id: "group-none", text: t("components.instance.removeFromGroup"), icon: "x", onSelect: () => assignGroup(null) },
+    { id: "group-none", text: t("components.instance.removeFromGroup"), icon: "close", onSelect: () => assignGroup(null) },
   ];
 
   return (
-    <Panel level="raised" pad="s" className="lib-bar" role="region" aria-label={t("pages.instances.selectionBar")}>
+    <div className="lib-bar" role="group" aria-label={t("pages.instances.selectionBar")}>
       <span className="lib-bar-count">{t("detail.content.selectedCount", { n: picked.length })}</span>
       <Button variant="ghost" size="s" onClick={onSelectAll}>{t("pages.instances.selectAll")}</Button>
       <Spacer />
       <Menu
         items={groupItems}
-        trigger={<Button size="s" icon="box" iconEnd="chevd" disabled={none || assign.isPending}>{t("components.instance.group")}</Button>}
+        trigger={<Button size="s" icon="tag" iconEnd="chev-down" disabled={none || assign.isPending}>{t("components.instance.group")}</Button>}
       />
-      <Button size="s" icon="ul" disabled={none || !api.capabilities.exportInstance} onClick={() => void exportMany(picked).catch(toastError)}>
+      <Button size="s" icon="upload" disabled={none || !api.capabilities.exportInstance} onClick={() => void exportMany(picked).catch(toastError)}>
         {t("components.instance.exportEllipsis")}
       </Button>
       <Button size="s" icon="trash" disabled={none} onClick={() => removal.ask(picked)}>{t("common.delete")}</Button>
@@ -96,6 +96,6 @@ export function SelectionBar({ picked, groups, onSelectAll, onDone }: {
           onConfirm: deleteSelected,
         })}
       />
-    </Panel>
+    </div>
   );
 }

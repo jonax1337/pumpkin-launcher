@@ -1,0 +1,8 @@
+/* ---------- Katalog: Trefferlisten (Entdecken, Seitenpanel, Dialog „Neue Instanz“) ---------- */
+.morebar { display: flex; justify-content: center; padding: 16px 0 8px; height: 72px; }
+/* Überschrift der Liste, Hinweisplatte darunter, gewählter Kategorie-Filter */
+.cat-head { margin-bottom: 12px; }
+.cat-note { margin-bottom: 8px; }
+.cat-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 10px; }
+.cat-also { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; }
+.cat-hint-above { margin-bottom: 8px; }

@@ -6,34 +6,34 @@
 <title>Pumpkin Launcher</title>
 <link rel="icon" href="@FAVICON@">
 <style>
-/* Seite nach der Microsoft-Anmeldung im Browser. Kein eigenes Design: Sie nutzt die Stylesheets der App
-   (src/styles/pixelkino.css, src/branding/branding.css) und deren Klassen wie im Onboarding (.onb-card, .plate,
-   .onb-heading, .steps). Platzhalter @…@ füllt services/auth.rs. Schriften: Big Shoulders Display und
-   Hanken Grotesk (SIL OFL 1.1, aus @fontsource), dieselben wie in der App. */
+/* Seite nach der Microsoft-Anmeldung im Browser. Eigenständig: sie nutzt nur die Farb- und Rastertokens der App
+   (src/styles/base.css, src/ui/tokens.css) und zeichnet ihre Karte selbst (.login-*), ohne Klassen der App-Oberfläche.
+   Platzhalter @…@ füllt services/auth.rs. Schriften: Big Shoulders Display und Hanken Grotesk (SIL OFL 1.1, aus @fontsource),
+   dieselben wie in der App. */
 @font-face{font-family:"Big Shoulders Display";font-weight:800;src:url(@F_BIG@) format("woff2");font-display:block}
 @font-face{font-family:"Hanken Grotesk Variable";font-weight:100 900;src:url(@F_HANKEN@) format("woff2");font-display:block}
 @CSS_APP@
-/* Nur die Stellen, an denen die Seite vom Onboarding abweicht: alles mittig, Buddy groß in eigener Zeile
-   über der Überschrift, ohne Fensterleiste, Höhe nach Inhalt */
-.onb{top:0}
-.onb-card{left:50%;transform:translate(-50%,-50%);height:auto;align-items:center;text-align:center}
-.onb-card .steps{justify-content:center}
-.onb-card.bad .steps i{background:var(--bad)}
-.onb-heading{flex-direction:column;gap:0;margin-bottom:10px}
-.onb-heading .buddy{width:168px;height:168px;margin:-14px 0 -10px}
-.onb-card .onb-heading h1{font-size:44px}
-.onb-card > p{margin-bottom:0}
-.onb-card .brand-wordmark{margin-top:26px;opacity:.9}
+:root{--tz:1}
+/* Karte: Steinplatte mittig im Fenster, alles zentriert, Buddy groß in eigener Zeile über der Überschrift, Höhe nach Inhalt */
+.login-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(540px,calc(100vw - 32px));display:flex;flex-direction:column;align-items:center;text-align:center;padding:24px 28px 18px;
+  background:var(--panel-2);border:var(--px) solid var(--edge);clip-path:var(--n1);box-shadow:inset var(--u2) var(--u2) 0 var(--line-hi),inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2)}
+/* Schrittanzeige: beide Schritte erledigt (Kupfer, bei Fehler rot) */
+.login-steps{display:flex;justify-content:center;gap:var(--u2);margin-bottom:16px}
+.login-steps i{width:48px;height:calc(var(--px) * 5);background:var(--copper);border:var(--px) solid var(--edge);box-shadow:inset 0 var(--px) 0 var(--line-hi)}
+.login-card.bad .login-steps i{background:var(--bad)}
+.login-heading{display:flex;flex-direction:column;align-items:center;margin-bottom:10px}
+.login-buddy{display:block;width:168px;height:168px;margin:-14px 0 -10px;object-fit:contain;image-rendering:pixelated}
+.login-heading h1{margin:0 0 8px;font:800 44px/.95 var(--f-display);text-transform:uppercase}
+.login-card > p{margin:0;color:var(--fg-2)}
+.login-wordmark{display:block;width:214px;height:24px;margin-top:26px;opacity:.9;object-fit:contain;image-rendering:pixelated}
 </style>
 </head>
 <body>
-<div class="onb">
-  <main class="onb-card plate @CLASS@">
-    <div class="steps" aria-hidden="true"><i class="on"></i><i class="on"></i></div>
-    <div class="onb-heading"><img class="buddy" src="@BUDDY@" width="168" height="168" alt=""><h1>@TITLE@</h1></div>
-    <p>@TEXT@</p>
-    <img class="brand-wordmark" src="@WORDMARK@" width="214" height="24" alt="Pumpkin Launcher">
-  </main>
-</div>
+<main class="login-card @CLASS@">
+  <div class="login-steps" aria-hidden="true"><i></i><i></i></div>
+  <div class="login-heading"><img class="login-buddy" src="@BUDDY@" width="168" height="168" alt=""><h1>@TITLE@</h1></div>
+  <p>@TEXT@</p>
+  <img class="login-wordmark" src="@WORDMARK@" width="214" height="24" alt="Pumpkin Launcher">
+</main>
 </body>
 </html>

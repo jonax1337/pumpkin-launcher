@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::coded;
 use crate::error::{AppError, AppResult, ErrorText};
 use crate::services::limits::ICON_DATA_URL_LIMIT;
+use crate::services::launch_settings::LaunchSettings;
 
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -254,6 +255,9 @@ pub struct LaunchOptions {
     pub default_jvm_args: Vec<String>,
     /// Fenster des Launchers für Instanzen, die ihres nicht selbst festlegen.
     pub default_window: Option<GameWindow>,
+    /// Umgebungsvariablen, Wrapper und Hooks des Launchers für Instanzen, die zu einem Feld nichts eingestellt haben.
+    #[serde(default)]
+    pub default_launch: LaunchSettings,
     /// Launcher-Einstellung „In Discord anzeigen“, was Spieler gerade spielen; ohne Angabe aus.
     pub discord_presence: Option<bool>,
     /// Direkt in eine Welt oder auf einen Server.
@@ -314,6 +318,18 @@ impl InstanceScene {
     }
 }
 
+/// Benanntes Profil: welche Inhalte einer Instanz an waren, als es gespeichert wurde (siehe `services::mod_profiles`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModProfile {
+    pub id: String,
+    pub name: String,
+    /// `Mod::id` der Inhalte, die beim Speichern an waren.
+    pub enabled_ids: Vec<String>,
+    /// `Mod::id` aller schaltbaren Inhalte beim Speichern: Was später dazukam, kennt das Profil nicht und lässt es in Ruhe.
+    pub known_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Instance {
@@ -337,6 +353,9 @@ pub struct Instance {
     /// Eigene Spielargumente, angehängt nach denen der Version.
     #[serde(default)]
     pub game_args: Vec<String>,
+    /// Eigene Umgebungsvariablen, Wrapper und Hooks; nur die eigenen Einstellungen setzen sie, nie ein Import oder Pack.
+    #[serde(default)]
+    pub launch: LaunchSettings,
     /// Summe aller beendeten Sitzungen in Sekunden. Zählt nur das Backend.
     #[serde(default)]
     pub playtime_secs: u64,
@@ -367,6 +386,12 @@ pub struct Instance {
     /// Konto, mit dem diese Instanz startet (Schlüssel, den das Frontend vergibt); ohne gilt das aktive Konto.
     #[serde(default)]
     pub default_account: Option<String>,
+    /// Gespeicherte Profile der Inhalte; nur `services::mod_profiles` ändert sie.
+    #[serde(default)]
+    pub mod_profiles: Vec<ModProfile>,
+    /// `ModProfile::id` des zuletzt gespeicherten oder angewendeten Profils.
+    #[serde(default)]
+    pub active_mod_profile: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -393,6 +418,7 @@ impl Instance {
             java_path: None,
             window: GameWindow::Default,
             game_args: Vec::new(),
+            launch: LaunchSettings::default(),
             playtime_secs: 0,
             group: None,
             notes: String::new(),
@@ -405,6 +431,8 @@ impl Instance {
             last_played_at: None,
             last_quick_play: None,
             default_account: None,
+            mod_profiles: Vec::new(),
+            active_mod_profile: None,
         }
     }
 }
@@ -503,6 +531,21 @@ mod tests {
         assert_eq!((i.name.as_str(), i.loader), ("Alt", ModLoader::Fabric));
         assert_eq!((i.java_path, i.window, i.game_args.len(), i.playtime_secs, i.group), (None, GameWindow::Default, 0, 0, None));
         assert_eq!((i.min_memory_mb, i.default_account), (None, None));
+    }
+
+    #[test]
+    fn old_instance_json_has_no_mod_profiles_and_profiles_serialize_in_camel_case() {
+        let i: Instance = serde_json::from_value(serde_json::json!({
+            "id": "i", "name": "Alt", "minecraftVersion": "1.21.1", "loader": "vanilla", "loaderVersion": null,
+            "memoryMb": null, "jvmArgs": [], "mods": [], "createdAt": 1, "lastPlayedAt": null
+        }))
+        .unwrap();
+        assert_eq!((i.mod_profiles, i.active_mod_profile), (Vec::new(), None));
+        let profile = ModProfile { id: "p".into(), name: "Leicht".into(), enabled_ids: vec!["a".into()], known_ids: vec!["a".into(), "b".into()] };
+        assert_eq!(
+            serde_json::to_value(&profile).unwrap(),
+            serde_json::json!({"id": "p", "name": "Leicht", "enabledIds": ["a"], "knownIds": ["a", "b"]})
+        );
     }
 
     #[test]

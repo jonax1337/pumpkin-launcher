@@ -1,0 +1,15 @@
+/* Bildkachel (PhotoTile): Platte wie im Inventar. Rahmen und Kerbe liegen auf ::before, sonst schnitte die Kerbe den Fokusring (.fx) ab.
+   Hover hellt Platte und Bild auf, Druck dunkelt die Platte. Auswahl: Marke in der Ecke, gewählt = Kupfermarke, Auswahlrahmen und Tönung.
+   Nur Aussehen; Maße und Lage der Marke setzt PhotoTile.tsx. */
+
+.lk-photo { position: relative; isolation: isolate; }
+.lk-photo::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--panel); border: var(--px) solid var(--edge);
+  box-shadow: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); clip-path: var(--n1); transition: background-color var(--st); }
+.lk-photo:hover::before { background: var(--hv-row); }
+.lk-photo:active::before { background: var(--pr-row); }
+.lk-photo img { transition: filter var(--st); }
+.lk-photo:hover img { filter: brightness(1.12); }
+
+.lk-photo-mark { background: var(--sunk); color: var(--ink); box-shadow: inset 0 0 0 var(--px) var(--line-2); clip-path: var(--n1); }
+.lk-photo[data-selected] .lk-photo-mark { background: var(--copper); box-shadow: none; }
+.lk-photo[data-selected]::before { background: var(--sel-bg); box-shadow: var(--sel-edge); }

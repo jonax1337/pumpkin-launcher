@@ -1,0 +1,113 @@
+/* Overlays: Dialoge, Menüs, Aufgaben-Popover, Toasts, Befehlspalette.
+   Nur Kit-Klassen und gemeinsame Tokens; keine stilspezifischen Werte. */
+
+/* Dialoge: Kopf und Fuß bleiben stehen, der Inhalt scrollt */
+.dialog.s-ov { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
+.dialog.s-ov .dbody { overflow: auto; min-height: 0; scrollbar-width: thin; scrollbar-color: var(--ctl) var(--sunk); }
+.dialog.s-ov footer { align-items: center; }
+.dialog.s-ov .fld { max-width: none; }
+.dialog.s-ov .prog { max-width: none; }
+.s-ov-hint { margin-right: auto; padding-left: 10px; font-size: 13px; color: var(--fg-3); }
+.dialog.s-ov .nm { display: grid; gap: 2px; min-width: 0; }
+.dialog.s-ov .nm b { font: 700 15px/1.2 var(--f-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog.s-ov .nm small { font-size: 13px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dialog.s-ov .nm b.h2, .dialog.s-ov .nm b.h3 { font-family: var(--f-display); text-transform: uppercase; }
+.dialog.s-ov .nm b.h2 { font-size: 22px; font-weight: 800; line-height: 1.1; }
+.dialog.s-ov .nm b.h3 { font-size: 18px; font-weight: 800; line-height: 1.1; }
+.dialog.s-ov .lb small { margin-left: 6px; font-size: 13px; }
+
+.dialog .field-ico > svg.ico { z-index: 1; }
+
+/* Wiederverwendete Zeilen */
+.s-ov-items { display: grid; gap: 8px; }
+.s-ov-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; min-width: 0; }
+.s-ov-item > .nm { flex: 1 1 auto; }
+.s-ov-opts { display: grid; gap: 4px; }
+
+/* Neue Instanz: senkrechte Tabs links, Inhalt rechts */
+.dbody.s-ov-split { display: grid; grid-template-columns: 292px minmax(0, 1fr); gap: 0; padding: 0; height: min(540px, calc(100vh - 230px)); overflow: hidden; }
+.s-ov-split > .tabs { grid-template-columns: minmax(0, 1fr); min-width: 0; align-content: start; padding: 12px 0 12px 12px; }
+.s-ov-pane { display: grid; gap: 18px; align-content: start; min-width: 0; min-height: 0; padding: 18px; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--ctl) var(--sunk); }
+.s-ov-pane[hidden] { display: none; }
+.s-ov-icon { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.s-ov-drop { display: grid; justify-items: center; align-content: center; gap: 10px; min-height: 280px; padding: 24px; text-align: center; border-style: dashed; color: var(--fg-2); }
+.s-ov-drop b { font: 700 17px/1.2 var(--f-body); color: var(--fg); }
+.s-ov-drop small { font-size: 13px; color: var(--fg-3); }
+.s-ov-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.s-ov-card { display: grid; gap: 10px; align-content: start; justify-items: start; padding: 14px; }
+.s-ov-card p { margin: 0; }
+.s-ov-card .btn { margin-top: 4px; }
+
+/* Befehlspalette */
+.overlay.s-ov-top { place-items: start center; padding-top: 72px; }
+.s-ov-pal { gap: 12px; }
+.s-ov-pal .menu button[role=menuitem] .grow { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-ov-gl { padding: 10px 12px 4px; font-size: 15px; }
+.s-ov-gl:first-child { padding-top: 4px; }
+
+/* Anmeldung / Codes */
+.s-ov-codebox { display: grid; gap: 8px; }
+.s-ov-code { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 10px 10px 18px; min-width: 0; }
+.s-ov-bigcode { font: 400 44px/1 var(--f-px); letter-spacing: .14em; color: var(--copper); text-shadow: 0 var(--px) 0 #000; white-space: nowrap; }
+.s-ov-link { font: 400 22px/1.2 var(--f-px); letter-spacing: .04em; color: var(--fg); }
+.s-ov-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; font-size: 15px; }
+.s-ov-steps li { display: flex; align-items: center; gap: 12px; }
+.s-ov-steps .n { width: 28px; height: 28px; flex: none; display: grid; place-items: center; font: 400 18px/1 var(--f-px); color: var(--copper); background: var(--sunk); border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
+
+/* Freund hinzufügen */
+.s-ov-fa { display: grid; gap: 14px; align-content: start; min-height: 230px; }
+.s-ov-fa[hidden] { display: none; }
+.s-ov-codein { font: 400 24px/1 var(--f-px); letter-spacing: .16em; text-transform: uppercase; }
+.s-ov-mine { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 20px; }
+.s-ov-mine[hidden] { display: none; }
+.s-ov-qr { display: grid; grid-template-columns: repeat(13, 10px); grid-auto-rows: 10px; padding: 10px; background: var(--fg); border: var(--px) solid var(--edge); }
+.s-ov-qr span { display: block; }
+.s-ov-qr span.o { background: var(--ink); }
+
+/* Mod-Details */
+.s-ov-modhead { display: flex; align-items: center; gap: 16px; }
+.s-ov-modhead .nm { flex: 1 1 auto; gap: 4px; }
+.s-ov-shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.s-ov-shots .scenebox { height: 78px; border: var(--px) solid; border-color: var(--slot-bd); }
+
+/* Tastenkürzel */
+.dbody.s-ov-sc { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-content: start; }
+.s-ov-sc .stack-s { align-content: start; }
+.s-ov-sc .r { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; padding: 0 2px; border-bottom: var(--px) solid var(--line); font-size: 15px; }
+.s-ov-sc .keys { display: inline-flex; gap: 4px; }
+
+/* Update */
+.s-ov-nm { gap: 4px; }
+.s-ov-log { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 15px; }
+.s-ov-log li { display: flex; align-items: flex-start; gap: 10px; line-height: 1.35; }
+.s-ov-log .ico { margin-top: 2px; color: var(--acc); }
+
+/* Menüs */
+#m-account .menu { min-width: 240px; }
+.s-ov-mh { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+.s-ov-mh .nm { display: grid; gap: 2px; }
+.s-ov-mh b { font: 700 16px/1.2 var(--f-body); color: var(--fg); }
+.s-ov-mh small { font-size: 13px; color: var(--fg-2); }
+.menu .s-ov-chk { width: 16px; height: 16px; flex: none; display: grid; place-items: center; color: var(--acc); }
+.menu button[role=menuitem][aria-checked=true] { color: var(--fg); }
+#m-tasks { width: 400px; }
+.s-ov-tasks { display: grid; gap: 10px; padding: 14px; }
+.s-ov-tasks .prog { height: 52px; }
+.s-ov-tasks .btn { justify-self: start; }
+.s-ov-done { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--sunk); border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
+.s-ov-done .ico { color: var(--run); }
+.s-ov-done .nm { display: grid; gap: 1px; min-width: 0; }
+.s-ov-done b { font: 600 14px/1.2 var(--f-body); }
+.s-ov-done small { font-size: 13px; color: var(--fg-3); }
+
+/* Toasts: unten rechts, ohne Abdunklung */
+.overlay.s-ov-toasts { place-items: end end; background: transparent; pointer-events: none; }
+.overlay.s-ov-toasts > .scrim { pointer-events: none; }
+.s-ov-tstack { position: relative; display: grid; gap: 12px; width: min(460px, 100%); pointer-events: auto; }
+.s-ov-tstack .toast { width: 100%; }
+.s-ov-tstack .toast[data-t=warn] > .ico { color: var(--warn); }
+
+@media (max-width: 720px) {
+  .dbody.s-ov-split { grid-template-columns: minmax(0, 1fr); height: auto; }
+  .s-ov-cards, .dbody.s-ov-sc { grid-template-columns: minmax(0, 1fr); }
+}

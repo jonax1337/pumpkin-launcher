@@ -15,7 +15,7 @@ use crate::models::{
 };
 use crate::services::gamesignal::{lan_line_forwarder, GameSignal, LaunchReporter};
 use crate::services::install::{self, InstallProgress, InstallStep, OnProgress, INSTALL_PROGRESS_EVENT};
-use crate::services::launch::{self, ExitCause, LaunchSpec, LogStream, ProcessExit, Running, Session, EXIT_EVENT, LOG_EVENT};
+use crate::services::launch::{self, ExitCause, GameCommand, LaunchSpec, LogStream, ProcessExit, Running, Session, EXIT_EVENT, LOG_EVENT};
 use crate::services::loader::{self, LoaderVersion};
 use crate::services::mojang::{VersionEntry, VersionManifest, MANIFEST_URL};
 use crate::services::presence::Activity;
@@ -23,7 +23,9 @@ use crate::services::progress::emit;
 use crate::services::rules::Env;
 use crate::services::modbridge::ingame::Injection;
 use crate::services::launch_args::ArgList;
-use crate::services::{auth, crashreport, download, gamelog, java, launch_args, mods, pack_update, remove_logged, sessionlog, system, worlds};
+use crate::services::launch_hooks::Hook;
+use crate::services::launch_settings::LaunchEnvironment;
+use crate::services::{argfile, auth, crashreport, download, gamelog, java, launch_args, mods, pack_update, remove_logged, sessionlog, system, worlds};
 use crate::state::AppState;
 
 pub(crate) fn require_instance_name(name: &str) -> AppResult<()> {
@@ -36,6 +38,7 @@ fn require_launch_settings(instance: &Instance, old: &Instance) -> AppResult<()>
     require_window(instance.window)?;
     launch_args::require_args(&instance.jvm_args, ArgList::Jvm)?;
     launch_args::require_args(&instance.game_args, ArgList::Game)?;
+    instance.launch.require_valid()?;
     if instance.notes.chars().count() > MAX_NOTES_LEN {
         return Err(AppError::invalid(coded!("errors.app.notesTooLong", max = MAX_NOTES_LEN)));
     }
@@ -56,6 +59,7 @@ fn require_window(window: GameWindow) -> AppResult<()> {
 /// Frontends und werden wie die der Instanz geprüft, bevor sie in die Startargumente gehen.
 fn require_launcher_defaults(options: &LaunchOptions) -> AppResult<()> {
     launch_args::require_args(&options.default_jvm_args, ArgList::Jvm)?;
+    options.default_launch.require_valid()?;
     options.default_window.map_or(Ok(()), require_window)
 }
 
@@ -71,7 +75,7 @@ pub fn get_instance(state: State<'_, AppState>, id: String) -> AppResult<Instanc
 
 #[tauri::command]
 pub fn create_instance(state: State<'_, AppState>, input: NewInstance) -> AppResult<Instance> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_creation()?;
     require_instance_name(&input.name)?;
     let instance = state.instances.insert(Instance::from_new(input))?;
     tracing::info!(id = %instance.id, name = %instance.name, "Instanz angelegt");
@@ -89,7 +93,7 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
     let id = instance.id.clone();
     // Spielzeit und letzten Start (samt Quick-Play-Ziel) führt nur das Backend: ein veralteter Stand im Frontend darf
     // sie nicht zurücksetzen, auch nicht, wenn das Spielende sie gerade erst speichert. Icon und Szene ändern
-    // `instance_set_icon` und `instance_set_scene`.
+    // `instance_set_icon` und `instance_set_scene`; die Profile der Inhalte nur `mod_profile_*`.
     let commit = |_| {
         state.instances.modify(&id, |current| {
             *current = Instance {
@@ -98,6 +102,8 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
                 last_quick_play: current.last_quick_play.take(),
                 icon: current.icon.take(),
                 scene: current.scene.take(),
+                mod_profiles: std::mem::take(&mut current.mod_profiles),
+                active_mod_profile: current.active_mod_profile.take(),
                 ..instance
             }
         })
@@ -209,6 +215,7 @@ pub fn instance_install_cancel(state: State<'_, AppState>, instance_id: String) 
 }
 
 async fn install_instance(app: AppHandle, state: &AppState, instance_id: String) -> AppResult<()> {
+    let _game_files = state.lock_game_files().await;
     let instance = state.instances.get(&instance_id)?;
     tracing::info!(instance = %instance_id, version = %instance.minecraft_version, loader = ?instance.loader, "Installation gestartet");
     let on_progress = |step, done, total| {
@@ -316,16 +323,21 @@ fn announce_spawn(state: &AppState, instance_id: &str, pid: u32, options: &Launc
 struct PreparedLaunch {
     java: PathBuf,
     args: Vec<String>,
+    /// Ordner der Argumentdatei, wenn die JVM sie liest; ohne gehen die Argumente direkt auf die Kommandozeile.
+    argfile_dir: Option<PathBuf>,
     game_dir: PathBuf,
     /// Spielername, nur fürs Protokoll.
     player: String,
+    /// Variablen, Wrapper und Hooks aus den Einstellungen von Instanz und Launcher.
+    environment: LaunchEnvironment,
     /// Die Mod im Spiel: eingespeist samt Umgebung für das Spiel, oder nicht eingespeist und der Start wie ohne sie.
     injection: Injection,
 }
 
 /// Prüft die Standards des Launchers, holt den Stand vor einem unterbrochenen Pack-Update zurück, prüft das
-/// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an, speist die Mod im Spiel ein, wenn alles passt
-/// (docs/bridge/README.md, "Support selection"), und baut die Startargumente. Nach jedem Schritt, der dauern kann, meldet `reporter` Fortschritt.
+/// Quick-Play-Ziel, bringt die Mods auf Stand, meldet das Konto an, stellt Umgebung, Wrapper und den Befehl vor dem Start
+/// bereit, speist die Mod im Spiel ein, wenn alles passt (docs/bridge/README.md, "Support selection"), und baut die
+/// Startargumente. Nach jedem Schritt, der dauern kann, meldet `reporter` Fortschritt.
 async fn prepare_launch(
     state: &AppState,
     instance: &Instance,
@@ -347,6 +359,8 @@ async fn prepare_launch(
     reporter.progress();
     let java = java::resolve(&state.dirs, version.java_component(), instance.java_path.as_deref(), options.java_path.as_deref())?;
     reporter.progress();
+    let game_dir = state.dirs.game_dir(&instance.id);
+    let environment = prepare_environment(instance, options, &game_dir, reporter).await?;
     let user_jvm_args = launch::effective_jvm_args(&instance.jvm_args, &options.default_jvm_args);
     let injection = ingame_launch::inject_into_launch(state, instance, &java, session.is_some(), user_jvm_args);
     let start_args = injection.start_args(user_jvm_args, &instance.game_args);
@@ -368,8 +382,20 @@ async fn prepare_launch(
     });
     // Der Start ist in der Brücke schon angemeldet: scheitert hier etwas, darf kein Datensatz ohne Spiel zurückbleiben.
     let args = launch::build_args(&spec, &Env::current()).inspect_err(|_| state.bridge.forget(&instance.id))?;
-    let game_dir = state.dirs.game_dir(&instance.id);
-    Ok(PreparedLaunch { java, args, game_dir, player: account.username, injection })
+    let argfile_dir = argfile::dir_for(&state.dirs, state.ingame.java.of(&java), &args);
+    Ok(PreparedLaunch { java, args, argfile_dir, game_dir, player: account.username, environment, injection })
+}
+
+/// Variablen, Wrapper und Hooks des Starts. Der Befehl vor dem Start läuft hier, vor der Einspeisung: scheitert er (oder
+/// fehlt der Wrapper), hat die Brücke den Start noch nicht angemeldet und nichts bleibt aufzuräumen.
+async fn prepare_environment(instance: &Instance, options: &LaunchOptions, game_dir: &Path, reporter: &LaunchReporter) -> AppResult<LaunchEnvironment> {
+    let settings = instance.launch.or_defaults(&options.default_launch);
+    let environment = LaunchEnvironment::resolve(&settings, instance, game_dir)?;
+    if let Some(hook) = &environment.pre_launch {
+        hook.run_before_launch().await?;
+        reporter.progress();
+    }
+    Ok(environment)
 }
 
 /// Mit Microsoft-Konto: echte Sitzung (bei Bedarf erneuert); sonst Offline mit dem Spielernamen der Optionen.
@@ -387,8 +413,9 @@ async fn launch_account(state: &AppState, options: &LaunchOptions) -> AppResult<
 }
 
 /// Startet das Spiel: Ausgabezeilen gehen als `instance-log` ans Frontend und, roh, an die Erkennung des LAN-Ports,
-/// das Ende an `on_game_exit`. Nur ein Start mit eingespeister Mod bekommt die Umgebungsvariablen der Brücke und eine
-/// Wache über die ersten 90 Sekunden (docs/bridge/README.md, "Startup recovery"); der Prozess wird gleich nach dem Start an seinen Datensatz gebunden.
+/// das Ende an `on_game_exit`. Die Umgebungsvariablen des Nutzers gelten für jeden Start; nur ein Start mit eingespeister
+/// Mod bekommt außerdem die der Brücke (sie gelten bei gleichem Namen zuletzt) und eine Wache über die ersten 90 Sekunden
+/// (docs/bridge/README.md, "Startup recovery"); der Prozess wird gleich nach dem Start an seinen Datensatz gebunden.
 fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> AppResult<Running> {
     let state = app.state::<AppState>();
     let (log_app, log_id) = (app.clone(), instance_id.to_owned());
@@ -396,11 +423,18 @@ fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> 
     let started = SystemTime::now();
     let watch = prepared.injection.node_id().map(|_| LaunchWatch::new(app, instance_id));
     let (line_watch, exit_watch) = (watch.clone(), watch);
+    let post_exit = prepared.environment.post_exit.clone();
+    let env = prepared.environment.variables_with(prepared.injection.env());
+    let command = GameCommand {
+        wrapper: prepared.environment.wrapper.as_ref(),
+        java: &prepared.java,
+        args: &prepared.args,
+        argfile_dir: prepared.argfile_dir.as_deref(),
+        game_dir: &prepared.game_dir,
+        env: &env,
+    };
     let game = launch::spawn(
-        &prepared.java,
-        &prepared.args,
-        &prepared.game_dir,
-        prepared.injection.env(),
+        &command,
         move |stream, line| {
             tracing::info!(target: "minecraft", instance = %log_id, ?stream, "{line}");
             if let Some(watch) = &line_watch {
@@ -409,7 +443,7 @@ fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> 
             emit(&log_app, LOG_EVENT, LogPayload { instance_id: log_id.clone(), stream, line });
         },
         lan_line_forwarder(state.signals.clone(), instance_id.to_owned()),
-        move |result| on_game_exit(&exit_app, exit_id, started, result, exit_watch),
+        move |result| on_game_exit(&exit_app, exit_id, started, result, exit_watch, post_exit),
     )
     .inspect_err(|_| state.bridge.forget(instance_id))?;
     prepared.injection.bind_pid(&state.bridge, instance_id, game.pid);
@@ -438,8 +472,16 @@ fn announce_in_discord(state: &AppState, instance: &Instance, options: &LaunchOp
 }
 
 /// Aufräumen nach dem Ende des Spiels: Anzeige in Discord weg, Eintrag entfernen, Token der Mod verwerfen, Freunde-Funktion
-/// benachrichtigen, Startfehler der Mod festhalten, Spielzeit buchen, `instance-exit` senden.
-fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, result: ProcessExit, watch: Option<LaunchWatch>) {
+/// benachrichtigen, Startfehler der Mod festhalten, Spielzeit buchen, `instance-exit` senden und zuletzt den Befehl nach dem
+/// Ende starten (er läuft im Hintergrund und hält nichts davon auf).
+fn on_game_exit(
+    app: &AppHandle,
+    instance_id: String,
+    started: SystemTime,
+    result: ProcessExit,
+    watch: Option<LaunchWatch>,
+    post_exit: Option<Hook>,
+) {
     let code = result.code;
     let state = app.state::<AppState>();
     // Held until the process is gone and its session log is archived, so no relocation can start in between; released
@@ -466,6 +508,9 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, resul
     drop(running);
     tracing::info!(instance = %instance_id, ?code, crashed, "Spiel beendet");
     emit(app, EXIT_EVENT, ExitPayload { instance_id, code, crashed, crash_report, log_file, suspected_mods });
+    if let Some(hook) = post_exit {
+        hook.run_after_exit(code);
+    }
 }
 
 /// Entfernt den Eintrag in den laufenden Spielen, wenn er fällt.
@@ -669,6 +714,25 @@ mod tests {
         assert!(require_launcher_defaults(&options(vec!["-Dx=1
 -Dy=2".into()], None)).is_err());
         assert!(require_launcher_defaults(&options(vec![], Some(GameWindow::Size { width: 0, height: 480 }))).is_err());
+    }
+
+    #[test]
+    fn invalid_launch_settings_of_an_instance_or_the_launcher_are_refused() {
+        use crate::services::launch_settings::{EnvVar, LaunchSettings};
+        let base = Instance::from_new(NewInstance { name: "Start".into(), minecraft_version: "1.21.4".into(), loader: ModLoader::Vanilla, loader_version: None });
+        let reserved = LaunchSettings { env: vec![EnvVar { name: "PUMPKIN_IPC_TOKEN".into(), value: "x".into() }], ..LaunchSettings::default() };
+        let unclosed = LaunchSettings { pre_launch: "tool \"unfinished".into(), ..LaunchSettings::default() };
+        let fine = LaunchSettings { env: vec![EnvVar { name: "FOO".into(), value: "bar".into() }], wrapper: "gamemoderun".into(), ..LaunchSettings::default() };
+
+        for launch in [reserved, unclosed] {
+            let instance = Instance { launch: launch.clone(), ..base.clone() };
+            assert!(require_launch_settings(&instance, &base).is_err());
+            let options = LaunchOptions { default_launch: launch, ..serde_json::from_str(r#"{"username":"Alex"}"#).unwrap() };
+            assert!(require_launcher_defaults(&options).is_err());
+        }
+        assert!(require_launch_settings(&Instance { launch: fine.clone(), ..base.clone() }, &base).is_ok());
+        let options = LaunchOptions { default_launch: fine, ..serde_json::from_str(r#"{"username":"Alex"}"#).unwrap() };
+        assert!(require_launcher_defaults(&options).is_ok());
     }
 
     #[test]

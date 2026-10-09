@@ -1,0 +1,10 @@
+/* ---------- Bibliothek ----------
+   Die Seite (Instances.tsx) ist Container „library“; Spalten, Auswahlstreifen und das schmale Layout der Zeilen stehen als Tailwind in InstanceView.tsx. */
+/* Gruppenkopf: Verschieben-Knöpfe rechts, bei Hover oder Fokus (Touch: immer) */
+.lib-group { position: relative; margin-bottom: 8px; }
+.lib-group-move { position: absolute; z-index: 1; top: 0; right: 0; display: flex; gap: 2px; opacity: 0; transition: opacity .12s steps(2, end); }
+.lib-group:is(:hover, :focus-within) > .lib-group-move { opacity: 1; }
+@media (hover: none) { .lib-group-move { opacity: 1; } }
+/* Auswahlleiste: steht in der Werkzeugleiste (zweite Leiste im selben Platz), `display: contents` lässt ihre Knöpfe in deren Zeile mitlaufen */
+.lib-bar { display: contents; }
+.lib-bar-count { font-weight: 600; color: var(--fg); }

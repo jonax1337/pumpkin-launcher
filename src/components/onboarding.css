@@ -1,0 +1,26 @@
+/* ---------- Onboarding ---------- */
+/* Karte, Titel, Schrittanzeige und Startwege sind Kit-Bausteine mit Tailwind in Onboarding.tsx; hier nur die Seite selbst. */
+.onb { position: fixed; z-index: 55; top: var(--bar); left: 0; right: 0; bottom: 0; overflow: hidden; }
+/* Abdunklung links, damit die Karte vor der Szene steht (Verlauf nur als Abdunklung, keine Dekoration) */
+.onb .shade-onb { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7,10,17,.9) 0, rgba(7,10,17,.7) 40%, rgba(7,10,17,.1) 75%), radial-gradient(120% 100% at 70% 40%, transparent 50%, rgba(7,10,17,.6)); }
+.onb-form { display: contents; }
+.onb-card > p, .onb-card > form > p { color: var(--fg-2); margin-bottom: 14px; }
+/* Innenabstand >= Fokusring (2 Einheiten), sonst schneidet der Bildlauf ihn seitlich ab; der Rand gleicht ihn wieder aus */
+.onb-card .ob { flex: 1; min-height: 0; overflow-y: auto; margin: calc(var(--u2) * -1 - 1px); padding: calc(var(--u2) + 1px); }
+.onb-card .of { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 14px; box-shadow: inset 0 var(--px) 0 var(--line); }
+.or { display: flex; align-items: center; gap: 10px; color: var(--fg-3); font-size: calc(13px * var(--tz)); margin: 14px 0; }
+.or::before, .or::after { content: ""; flex: 1; height: var(--px); background: var(--line); }
+.onb-card .or { margin: 18px 0 14px; }
+/* Kleine Fenster */
+@media (max-height: 700px) {
+  .onb-card .of { padding-top: 10px; }
+}
+/* Bei 200 % Zoom bleibt kaum Höhe: die Erklärzeile weicht den Startwegen */
+@media (max-height: 500px) {
+  .onb-card > p, .onb-card > form > p { display: none; }
+}
+
+/* Kontrastmodus: Szenen hinter Text sind Dekor und nähmen ihm den Kontrast: weg, der Grund bleibt Canvas */
+@media (forced-colors: active) {
+  .onb .scene, .shade-onb { display: none; }
+}

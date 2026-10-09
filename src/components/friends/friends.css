@@ -1,0 +1,33 @@
+/* Freunde: Bausteine der Dialoge und der Sitzungsmarke (components/friends). Die Seite selbst: pages/friends/friends.css */
+
+/* Selbst angegebener Name samt Kopf: Tooltip-Wirt ohne eigene Fläche */
+.fr-self { display: inline-flex; min-width: 0; }
+.fr-form { display: flex; flex-direction: column; gap: 12px; }
+.fr-points { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; padding-left: 20px; list-style: disc; }
+.fr-detail { margin-top: 8px; color: var(--fg-3); }
+
+/* Person: Kopf links, Name und Zeile darunter rechts */
+.fr-person { display: flex; align-items: center; gap: 12px; }
+.fr-person-text { min-width: 0; }
+.fr-person-line { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.fr-line { display: block; }
+.fr-line-sub { display: block; color: var(--fg-3); }
+
+/* Einladung: Chips, Modliste und Abstände der Blöcke */
+.fr-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.fr-mods { margin-top: 12px; }
+.fr-mods-list { display: flex; flex-direction: column; gap: 4px; }
+.fr-mods-list > li { min-width: 0; }
+.fr-plan { margin-top: 16px; }
+
+/* Sitzungsmarke und ihr Popover */
+.fr-session-tail { flex: none; }
+.fr-session-pop { display: flex; flex-direction: column; gap: 16px; padding: 4px; }
+.fr-facts { display: flex; flex-direction: column; gap: 8px; }
+.fr-fact { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: calc(13px * var(--tz)); }
+.fr-fact > :first-child { color: var(--fg-3); }
+.fr-fact > :last-child { min-width: 0; text-align: right; }
+
+/* Fingerabdruck in Pixelschrift; im Dialog auf einer Slot-Fläche */
+.fr-fingerprint { font: 400 calc(17px * var(--tz))/1 var(--f-px); letter-spacing: .04em; white-space: nowrap; }
+.fr-fingerprint[data-size="l"] { font-size: calc(30px * var(--tz)); letter-spacing: .06em; }

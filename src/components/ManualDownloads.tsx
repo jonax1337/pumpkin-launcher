@@ -34,11 +34,10 @@ function ManualDownloadsDialog() {
       onOpenChange={(open) => !open && closeManualDownloads()}
       title={pending.length === 1 ? t("components.manual.titleOne") : t("components.manual.titleMany", { n: pending.length || items.length })}
       sub={target?.instanceName}
-      width={560}
       footer={<DialogActions cancel={pending.length ? t("components.manual.later") : t("common.done")} />}
     >
       <Hint icon="info">{t("components.manual.hint")}</Hint>
-      <List variant="versions" aria-label={t("components.manual.listLabel")} className="mt-3">
+      <List flat aria-label={t("components.manual.listLabel")} className="mt-3">
         {items.map((i) => (
           <ListRow key={i.fileId}>
             <RowTitle title={i.name} sub={i.fileName} />
@@ -46,8 +45,8 @@ function ManualDownloadsDialog() {
               <Chip icon="check">{t("components.manual.builtIn")}</Chip>
             ) : (
               <>
-                <Chip size="s" dot>{t("components.manual.waiting")}</Chip>
-                <Button size="s" icon="ext" onClick={() => openPage(i.url)}>{t("common.open")}</Button>
+                <Chip size="s">{t("components.manual.waiting")}</Chip>
+                <Button size="s" icon="external" onClick={() => openPage(i.url)}>{t("common.open")}</Button>
               </>
             )}
           </ListRow>

@@ -2,7 +2,7 @@ import { useI18n } from "@/i18n";
 import { ungrouped } from "@/hooks/useInstances";
 import { useLookStore } from "@/store/look";
 import { focusSoon } from "@/pages/detail/content/focus";
-import { Count, Disclosure, IconButton } from "@/ui";
+import { Count, Disclosure, Heading, IconButton } from "@/ui";
 import { InstanceItems, InstanceListHeader } from "./InstanceView";
 import { movedGroup, type Section } from "./libraryModel";
 
@@ -12,9 +12,9 @@ type Step = -1 | 1;
 function MoveButtons({ group, groups, onMove }: { group: string; groups: string[]; onMove: (group: string, step: Step) => void }) {
   const { t } = useI18n();
   const at = groups.indexOf(group);
-  const buttons: { step: Step; icon: "up" | "down"; label: string; disabled: boolean }[] = [
-    { step: -1, icon: "up", label: t("pages.instances.moveGroupUp", { name: group }), disabled: at <= 0 },
-    { step: 1, icon: "down", label: t("pages.instances.moveGroupDown", { name: group }), disabled: at >= groups.length - 1 },
+  const buttons: { step: Step; icon: "chev-up" | "chev-down"; label: string; disabled: boolean }[] = [
+    { step: -1, icon: "chev-up", label: t("pages.instances.moveGroupUp", { name: group }), disabled: at <= 0 },
+    { step: 1, icon: "chev-down", label: t("pages.instances.moveGroupDown", { name: group }), disabled: at >= groups.length - 1 },
   ];
   return (
     <div className="lib-group-move">
@@ -56,12 +56,13 @@ export function GroupedView({ sections, groups, reorderable }: { sections: Secti
         // Schlüssel ist die Gruppe selbst ("" = ohne Gruppe): eine Gruppe darf auch „Ohne Gruppe“ heißen.
         const key = group ?? "";
         return (
-          <div key={key} className="lib-group mb-4">
+          <div key={key} className="lib-group">
             {group !== null && reorderable && <MoveButtons group={group} groups={groups} onMove={move} />}
             <Disclosure
+              summaryClassName="ml-0 h-10 pl-2"
               open={!collapsed.includes(key)}
               onToggle={(open) => setCollapsed(key, !open)}
-              summary={<>{group ?? ungrouped()} <Count value={members.length} muted /></>}
+              summary={<><Heading level="card" as="h3" zoom className="leading-[1.1] tracking-[.02em]">{group ?? ungrouped()}</Heading> <Count value={members.length} muted /></>}
             >
               <InstanceItems instances={members} label={group ?? ungrouped()} />
             </Disclosure>

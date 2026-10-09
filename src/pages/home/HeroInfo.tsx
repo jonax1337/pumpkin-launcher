@@ -1,5 +1,5 @@
 import { useI18n } from "@/i18n";
-import { ButtonLink, Button, Count, Meta } from "@/ui";
+import { Button, ChipLink, Count, HeroMeta, HeroTitle, Meta } from "@/ui";
 import { isGameLive, usePhase } from "@/components/play/phase";
 import { lastPlayedLine, loaderLine } from "@/components/common";
 import { useModUpdates } from "@/hooks/useContent";
@@ -23,11 +23,10 @@ export function HeroInfo({ instance }: { instance: Instance }) {
   const resume = playing || phase === "preparing" ? null : instance.lastQuickPlay;
   return (
     <div className="hero-k rise">
-      <div className="titlebox">
-        <h2 title={instance.name}>{instance.name}</h2>
-      </div>
-      <div className="hmeta">
+      <HeroTitle as="h2" size="xl" title={instance.name}>{instance.name}</HeroTitle>
+      <HeroMeta outline>
         <Meta
+          size="l"
           onScene
           items={[
             loaderLine(instance),
@@ -38,16 +37,18 @@ export function HeroInfo({ instance }: { instance: Instance }) {
           ]}
         />
         {updateCount > 0 && (
-          <ButtonLink to={instanceUrl(instance.id, "content")} size="s" icon="up" count={updateCount} onScene>
+          // Chip-Knopf im Warnton, derselbe Aufbau wie im Instanzkopf: Pfeil, „Updates“ und Zähler
+          <ChipLink to={instanceUrl(instance.id, "content")} tone="warn" icon="update">
             {updatesLabel(updateCount)}
-          </ButtonLink>
+            <Count value={updateCount} />
+          </ChipLink>
         )}
         {resume && (
           <Button size="s" icon="play" onScene onClick={() => void play(instance, undefined, resume)}>
             {t("pages.home.resumeIn", { world: quickPlayTarget(resume) })}
           </Button>
         )}
-      </div>
+      </HeroMeta>
     </div>
   );
 }

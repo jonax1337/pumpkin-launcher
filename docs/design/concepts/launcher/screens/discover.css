@@ -1,0 +1,46 @@
+/* Entdecken: Suche, Ergebnislisten, Projektdetail. Nur Tokens, stilneutral. */
+.s-discover .tb { margin-bottom: 20px; }
+.s-discover .field-ico > svg.ico { z-index: 1; }
+.s-discover .selw { display: flex; align-items: center; gap: 8px; }
+.s-discover .selw .sl { font: 400 16px/1 var(--f-px); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); }
+.s-discover .selw .sel { width: auto; min-width: 140px; }
+.s-discover .list-panel { display: grid; gap: 14px; }
+.s-discover .list-panel .panel-h { margin: 0; }
+.s-discover .starter { justify-self: start; }
+
+/* Ergebniszeilen */
+.s-discover .results { list-style: none; margin: 0; padding: 0; display: grid; }
+.s-discover .res { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px 4px; border-bottom: var(--px) solid var(--line); }
+.s-discover .res:last-child { border-bottom: 0; }
+.s-discover .res[data-off] { opacity: .5; }
+.s-discover .rb { display: grid; gap: 6px; min-width: 0; }
+.s-discover .rt { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.s-discover .rtitle { padding: 0; font: 700 16px/1.2 var(--f-body); color: var(--fg); text-align: left; cursor: pointer; }
+.s-discover .rtitle:hover { color: var(--acc); text-decoration: underline; text-decoration-thickness: var(--px); text-underline-offset: 3px; }
+.s-discover .rtitle:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 2px; }
+.s-discover .rd { margin: 0; font-size: 14px; color: var(--fg-2); }
+.s-discover .rc { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.s-discover .rc .dl { font-size: 13px; color: var(--fg-3); margin-right: 4px; }
+.s-discover .ra { width: 156px; display: flex; justify-content: flex-end; }
+.s-discover .ra .prog { width: 100%; }
+.s-discover .tile[style*="--c"] { background: color-mix(in srgb, var(--c) 14%, var(--sunk)); }
+
+/* Detail */
+.s-discover .detail { margin-top: 28px; display: grid; gap: 18px; }
+.s-discover .detail .panel-h { margin: 0; }
+.s-discover .dh { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 20px; }
+.s-discover .dh .tile { --s: 96px; }
+.s-discover .dhm { flex: 1 1 280px; min-width: 0; display: grid; gap: 8px; }
+.s-discover .dhm p { margin: 0; }
+.s-discover .split { display: inline-flex; gap: var(--px); }
+.s-discover .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 260px)); gap: 12px; }
+.s-discover .shot { aspect-ratio: 16 / 9; border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
+.s-discover .dtx { display: grid; gap: 8px; max-width: 72ch; }
+.s-discover .dtx p { margin: 0; font-size: 14px; line-height: 1.5; }
+.s-discover .vt { border-top: var(--px) solid var(--line); }
+@media (max-width: 960px) {
+  .s-discover .res { grid-template-columns: 72px minmax(0, 1fr); }
+  .s-discover .ra { grid-column: 2; justify-content: flex-start; }
+  .s-discover .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .s-discover .vt { overflow-x: auto; }
+}

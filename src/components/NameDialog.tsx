@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { useI18n } from "@/i18n";
-import { Dialog, DialogActions, Field, TextField } from "@/ui";
+import { Dialog, DialogActions, Field, Input } from "@/ui";
 
 /**
  * Dialog mit einem Namensfeld (Umbenennen, neue Gruppe, Vorlage speichern). Ruft `onSubmit` mit dem getrimmten Namen auf;
@@ -29,12 +29,12 @@ export function NameDialog({ title, label, help, initial, maxLength, pending, al
       open
       onOpenChange={(o) => !o && onClose()}
       title={title}
-      width={480}
-      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: pending ? (confirm?.pending ?? t("components.common.saving")) : (confirm?.label ?? t("common.save")), width: 130, form: formId, disabled: !ready }} />}
+      size="s"
+      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: pending ? (confirm?.pending ?? t("components.common.saving")) : (confirm?.label ?? t("common.save")), className: "w-[130px]", form: formId, disabled: !ready }} />}
     >
       <form id={formId} onSubmit={submit}>
         <Field label={label} help={help}>
-          <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={maxLength} autoFocus />
+          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={maxLength} autoFocus />
         </Field>
       </form>
     </Dialog>

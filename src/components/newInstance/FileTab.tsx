@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Empty, Field, Glyph, Icon, IconButton, Panel, RowTitle, TextField } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { Button, DropZone, Field, Glyph, Icon, IconButton, Panel, RowTitle, Input } from "@/ui";
 import { api } from "@/lib/api";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName } from "@/lib/format";
@@ -26,30 +27,30 @@ function FilePane({ path, customName, setPath, setCustomName }: {
 
   if (!api.capabilities.pickPaths) {
     return (
-      <Empty title={t("components.newInstance.appOnlyTitle")} size="pane">
+      <EmptyState title={t("components.newInstance.appOnlyTitle")} size="pane">
         {t("components.newInstance.appOnlyText")}
-      </Empty>
+      </EmptyState>
     );
   }
   return (
     <>
-      <div className="drop">
-        <Icon name="ul" size="xl" tone="muted" />
+      <DropZone className="h-[190px]">
+        <Icon name="download" size="xl" tone="muted" />
         <b>{t("components.newInstance.dropHere")}</b>
         <span>{t("components.common.or")}</span>
         <Button onClick={() => void chooseFile()}>{t("components.newInstance.chooseFile")}</Button>
-      </div>
+      </DropZone>
       {/* Platz bleibt reserviert (unsichtbar), damit nichts springt, wenn eine Datei gewählt wird */}
-      <Panel level="raised" className={cn("mt-3 flex h-14 items-center gap-2.5 pr-2 pl-3", !path && "invisible")}>
+      <Panel level="raised" className={cn("mt-3 flex h-14 items-center gap-2.5 py-0 pr-2 pl-3", !path && "invisible")}>
         <Glyph name="chest" pal="copper" />
         <div className="min-w-0 flex-1">
           <RowTitle title={path ? fileName(path) : ""} sub={path} />
         </div>
-        <IconButton size="s" icon="x" label={t("components.newInstance.removeFile")} disabled={!path} onClick={() => setPath("")} />
+        <IconButton size="s" icon="close" label={t("components.newInstance.removeFile")} disabled={!path} onClick={() => setPath("")} />
       </Panel>
       {path && (
         <Field label={t("common.name")} optional className="mt-4">
-          <TextField value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={packName(path)} maxLength={64} />
+          <Input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={packName(path)} maxLength={64} />
         </Field>
       )}
     </>

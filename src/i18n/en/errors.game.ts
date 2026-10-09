@@ -17,6 +17,12 @@ export const errorsGame: typeof deErrorsGame = {
   "errors.game.versionWithoutArguments": "Version {version} has no launch arguments",
   "errors.game.quickPlayWorldUnsupported": "Minecraft {version} cannot launch straight into a world; that only works from 1.20",
   "errors.game.rosettaRequired": "This Java is built for Intel Macs and needs Rosetta 2. Install it in the terminal with `softwareupdate --install-rosetta --agree-to-license` and launch again.",
+  "errors.game.launch.wrapperNotFound": "The wrapper “{program}” was not found. Enter the full path or install the program.",
+  "errors.game.launch.hookNotFound": "The program “{program}” was not found. Enter the full path or install it.",
+  "errors.game.launch.preLaunchNotStarted": "The command before launch “{program}” could not be started. The game was not launched.",
+  "errors.game.launch.preLaunchFailed": "The command before launch “{program}” ended with code {code}. The game was not launched.",
+  "errors.game.launch.preLaunchEnded": "The command before launch “{program}” was ended from outside. The game was not launched.",
+  "errors.game.launch.preLaunchTimeout": "The command before launch “{program}” took longer than {seconds} seconds and was stopped. The game was not launched.",
 
   "errors.game.loaderLibraryWithoutSha1": "Loader library {name} has no SHA-1",
   "errors.game.loaderProfileInherits": "The {loader} profile inherits from {inherits} instead of {mc}",

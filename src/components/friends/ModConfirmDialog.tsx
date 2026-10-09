@@ -5,14 +5,13 @@ import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
 import { cn } from "@/lib/utils";
 import type { ModConfirmEvent } from "@/lib/types";
-import { Button, Dialog, DialogActions, Hint } from "@/ui";
+import { Button, DescriptionList, Dialog, DialogActions, Hint } from "@/ui";
 import { confirmOperationLine, scopeSentenceKey } from "./modRequestModel";
 import { opText } from "./modRequestText";
 import { useConsentGuard } from "./useConsentGuard";
 
-const DIALOG_WIDTH_PX = 480;
-const DENY_WIDTH_PX = 124;
-const ALLOW_WIDTH_PX = 210;
+const DENY_WIDTH = "w-[124px]";
+const ALLOW_WIDTH = "w-[210px]";
 
 /**
  * Die Mod einer Instanz will etwas tun, was nur der Launcher erlauben kann: eine Welt teilen oder die Freundesliste ändern
@@ -36,16 +35,16 @@ export function ModConfirmDialog({ confirm, onClose }: { confirm: ModConfirmEven
       open
       onOpenChange={(open) => !open && reply(false)}
       title={t("friendsInvite.mod.title")}
-      width={DIALOG_WIDTH_PX}
+      size="s"
       role="alertdialog"
       describedBy={textId}
       busy={answer.isPending}
       footer={
         <>
-          <DialogActions cancel={{ label: t("friendsInvite.mod.deny"), width: DENY_WIDTH_PX, autoFocus: true, disabled: answer.isPending }} />
+          <DialogActions cancel={{ label: t("friendsInvite.mod.deny"), className: DENY_WIDTH, autoFocus: true, disabled: answer.isPending }} />
           <Button
             variant="primary"
-            width={ALLOW_WIDTH_PX}
+            className={ALLOW_WIDTH}
             disabled={!guard.armed || answer.isPending}
             onPointerDown={guard.onPointerDown}
             onClick={(event) => guard.activate(event, () => reply(true))}
@@ -56,12 +55,15 @@ export function ModConfirmDialog({ confirm, onClose }: { confirm: ModConfirmEven
       }
     >
       <p id={textId}>{t(scopeSentenceKey(confirm.scope))}</p>
-      <dl className="kv mt-3">
-        <dt>{t("friendsInvite.mod.game")}</dt>
-        <dd>{confirm.instanceName}</dd>
-        <dt>{t("friendsInvite.mod.operation")}</dt>
-        <dd className="min-w-0 break-words">{opText(confirmOperationLine(confirm))}</dd>
-      </dl>
+      <DescriptionList
+        size="s"
+        end
+        className="mt-3"
+        items={[
+          { label: t("friendsInvite.mod.game"), value: confirm.instanceName },
+          { label: t("friendsInvite.mod.operation"), value: opText(confirmOperationLine(confirm)) },
+        ]}
+      />
       {/* Der Platz bleibt reserviert: der Hinweis verschwindet, ohne dass der Dialog springt. */}
       <Hint className={cn("mt-3", guard.armed && "invisible")}>{t("friendsInvite.mod.wait")}</Hint>
     </Dialog>

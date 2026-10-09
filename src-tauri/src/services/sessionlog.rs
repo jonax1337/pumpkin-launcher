@@ -31,7 +31,7 @@ fn millis(time: SystemTime) -> u64 {
     time.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or_default()
 }
 
-fn session_path(dirs: &Dirs, instance_id: &str, started_at: u64) -> PathBuf {
+pub fn session_path(dirs: &Dirs, instance_id: &str, started_at: u64) -> PathBuf {
     dirs.session_logs(instance_id).join(format!("{started_at}.{EXTENSION}"))
 }
 

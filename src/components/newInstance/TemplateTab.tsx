@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Choice, ConfirmDialog, Empty, ErrorBox, Glyph, Hint, IconButton } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Button, Choice, ConfirmDialog, Empty, Glyph, Hint, IconButton } from "@/ui";
 import { loaderLine } from "@/components/common";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useDeleteTemplate, useExportTemplate, useImportTemplate, useTemplates } from "@/hooks/useTemplates";
@@ -55,7 +56,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
               onClick={() => onSelect(tpl)}
             />
             {api.capabilities.exportInstance && (
-              <IconButton size="s" icon="ul" label={t("components.template.exportNamed", { name: tpl.name })} tip={t("components.template.export")} disabled={exportTemplate.isPending} onClick={() => exportTemplate.mutate(tpl)} />
+              <IconButton size="s" icon="upload" label={t("components.template.exportNamed", { name: tpl.name })} tip={t("components.template.export")} disabled={exportTemplate.isPending} onClick={() => exportTemplate.mutate(tpl)} />
             )}
             <IconButton size="s" icon="trash" tone="bad" label={t("components.template.deleteNamed", { name: tpl.name })} tip={t("components.template.delete")} disabled={del.isPending} onClick={() => removal.ask(tpl)} />
           </div>

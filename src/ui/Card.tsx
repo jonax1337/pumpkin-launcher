@@ -1,13 +1,17 @@
 import { useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 import { Tooltip as T } from "radix-ui";
-import { ContextMenu, type MenuEntry } from "./Menu";
-import { TIP_DELAY_MS } from "./Tip";
 import { cn } from "@/lib/utils";
 import { PixelScene } from "@/pixel/PixelScene";
 import type { Biome } from "@/pixel/scene";
 import { HitEl, type Hit } from "./Hit";
 import { Icon } from "./Icon";
+import { ContextMenu, type MenuEntry } from "./Menu";
+import { TIP_DELAY_MS } from "./tipBase";
+import { TIP_BOX } from "./Tooltip";
 import { cssVars, flag, isOverflowing } from "./util";
+import { Chip } from "./Chip";
+import { ART } from "./Art";
+import { Skel } from "./Feedback";
 
 /** Aussehen einer Instanz: Biom, Seed der Szene, Akzent (--acc). */
 export type SceneLook = { bio: Biome; seed: number; acc?: string };
@@ -15,6 +19,9 @@ export type SceneLook = { bio: Biome; seed: number; acc?: string };
 /** Nur Vorschau (/_kit): Zustand erzwingen. */
 type ForcedState = "hover" | "press" | "focus";
 
+/* Layout (Tailwind), gemeinsam: Szene als Bild füllt ihren Rahmen (ART, Art.tsx); die Leinwand darin wird von scene.ts platziert. */
+/** Einzeilige Beschriftung mit Auslassung. */
+const LINE = "block min-w-0 truncate";
 
 export type SceneCardProps = {
   look: SceneLook;
@@ -28,24 +35,26 @@ export type SceneCardProps = {
   /** Hauptaktion (Spielen) oben rechts, sichtbar bei Hover/Fokus. */
   primary?: ReactNode;
   hit: Hit;
-  /** „aktuell“: Akzentbalken unten (mini), aria-current am Knopf. */
+  /** „aktuell“: Akzentplatte (mini), aria-current am Knopf. */
   current?: boolean;
   /** Kontextmenü (Rechtsklick). */
   menu?: MenuEntry[];
   /** Bedienhinweis im Tooltip; der volle Titel erscheint dort nur, wenn er abgeschnitten ist. */
   tip?: ReactNode;
+  /** Seite des Tooltips (Standard oben); der Hinweis fängt nie den Zeiger ab. */
+  tipSide?: "top" | "bottom";
   className?: string;
   "data-force"?: ForcedState;
 };
 
 const cardStyle = (look: SceneLook) => cssVars({ "--acc": look.acc });
 
-/** Landschaft mit Rahmenlicht; das Instanz-Icon bleibt in der Beschriftung unverzerrt. */
-function SceneMedia({ look }: { look: SceneLook }) {
+/** Landschaft mit Rahmenlicht; das Instanz-Icon bleibt in der Beschriftung unverzerrt. `className` setzt die Maße (Standard 16 : 9). */
+function SceneMedia({ look, className }: { look: SceneLook; className?: string }) {
   return (
-    <span className="vx-card-media">
-      <PixelScene bio={look.bio} seed={look.seed} className="vx-art" />
-      <span className="vx-card-frame" />
+    <span className={cn("lk-card-media block aspect-video", className)}>
+      <PixelScene bio={look.bio} seed={look.seed} className={ART} />
+      <span className="lk-card-frame absolute inset-0 z-2" />
     </span>
   );
 }
@@ -54,8 +63,8 @@ function SceneMedia({ look }: { look: SceneLook }) {
  * Trefferfläche der Karte mit Tooltip: voller Titel und Unterzeile nur, wenn sie abgeschnitten sind;
  * der Bedienhinweis `tip` immer.
  */
-function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
-  hit: Hit; title: string; sub?: string; tip?: ReactNode; current?: boolean; pressed?: boolean;
+function CardHit({ hit, title, sub, tip, tipSide = "top", current, pressed, titleRef, subRef }: {
+  hit: Hit; title: string; sub?: string; tip?: ReactNode; tipSide?: "top" | "bottom"; current?: boolean; pressed?: boolean;
   titleRef: RefObject<HTMLElement | null>; subRef?: RefObject<HTMLElement | null>;
 }) {
   const [truncated, setTruncated] = useState<{ title: boolean; sub: boolean } | null>(null);
@@ -67,30 +76,39 @@ function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
   return (
     <T.Root open={!!truncated} onOpenChange={onOpenChange} delayDuration={TIP_DELAY_MS}>
       <T.Trigger asChild>
-        <HitEl hit={hit} fallbackLabel={title} current={current} pressed={pressed} />
+        <HitEl hit={hit} fallbackLabel={title} current={current} pressed={pressed} className="absolute inset-0 z-1 block" />
       </T.Trigger>
       <T.Portal>
-        <T.Content className="vx-tip" side="top" sideOffset={8} collisionPadding={8}>
-          {truncated?.title && <span className="vx-tt">{title}</span>}
-          {truncated?.sub && <span className="vx-tt-s">{sub}</span>}
-          {tip != null && <span className="vx-tt-h">{tip}</span>}
+        <T.Content className={TIP_BOX} data-pass="" side={tipSide} sideOffset={8} collisionPadding={8}>
+          {truncated?.title && <span className="lk-tt block">{title}</span>}
+          {truncated?.sub && <span className="lk-tt-s block">{sub}</span>}
+          {tip != null && <span className="lk-tt-h block [.lk-tt+&]:mt-1 [.lk-tt-s+&]:mt-1">{tip}</span>}
         </T.Content>
       </T.Portal>
     </T.Root>
   );
 }
 
+/** Breite der Szenenkarte und der Neu-Kachel: gemeinsam über `--mini` (Standard 256 px) einstellbar. */
+const MINI_W = "w-(--mini,256px)";
+/** Platte der Szenenkarte, Namensschild, Titel und Unterzeile (gemeinsam mit dem Platzhalter). */
+const MINI = "lk-card @container grid flex-none content-start gap-1.5 min-w-0 p-(--u3)";
+const CARD_CAP = "lk-card-cap lk-stone flex min-w-0 items-center gap-3 px-[9px] py-1.5";
+const CARD_TITLE = "truncate text-[calc(15px*var(--tz))] leading-[1.2]";
+const CARD_SUB = "mt-0.5 text-ctl-s leading-[calc(18px*var(--tz))]";
+
 /**
  * Szenenkarte: breite Pixel-Landschaft, Instanz-Icon und Bildunterschrift, und eine
- * Trefferfläche (`hit`, Link oder Knopf) über allem. Hover: eine Hebung (1 Einheit) + helleres Rahmenlicht; Druck setzt ab.
- * Fokusring an der Karte (über Rahmen und Bildunterschrift).
+ * Trefferfläche (`hit`, Link oder Knopf) über allem. Platte mit Bildrahmen (Slot) und Namensschild; Hover hellt den Rand auf, „aktuell“ färbt die Platte in der Akzentfarbe.
+ * Fokusring an der Karte (über Rahmen und Bildunterschrift). Breite: `className="w-80"` oder `[--mini:320px]`.
  */
-export function SceneCard({ look, art, title, sub, status, primary, hit, current, menu, tip, className, "data-force": force }: SceneCardProps) {
+export function SceneCard({ look, art, title, sub, status, primary, hit, current, menu, tip, tipSide = "top", className, "data-force": force }: SceneCardProps) {
   const titleRef = useRef<HTMLElement>(null);
   const subRef = useRef<HTMLElement>(null);
   const card = (
     <div
-      className={cn("vx-card", className)}
+      className={cn(MINI, MINI_W, className)}
+      data-kit-item="card"
       data-variant="mini"
       data-bio={look.bio}
       data-cur={flag(current)}
@@ -98,23 +116,39 @@ export function SceneCard({ look, art, title, sub, status, primary, hit, current
       style={cardStyle(look)}
     >
       <SceneMedia look={look} />
-      <span className="vx-card-cap">
-        {art && <span className="vx-card-icon" aria-hidden>{art}</span>}
-        <span className="vx-card-copy">
-          <b ref={titleRef}>{title}</b>
-          {sub && <span ref={subRef}>{sub}</span>}
+      <span className={CARD_CAP}>
+        {art && <span className="lk-card-icon block size-10 flex-none overflow-hidden" aria-hidden>{art}</span>}
+        <span className="block min-w-0 flex-1">
+          <b ref={titleRef} className={cn("lk-card-title", CARD_TITLE, LINE)}>{title}</b>
+          {sub && <span ref={subRef} className={cn("lk-card-sub", CARD_SUB, LINE)}>{sub}</span>}
         </span>
       </span>
-      {status && <span className="vx-card-st">{status}</span>}
-      <CardHit hit={hit} title={title} sub={sub} tip={tip} current={current} titleRef={titleRef} subRef={subRef} />
-      {primary && <div className="vx-card-tr">{primary}</div>}
+      {status && <span className="lk-card-st absolute z-2 top-[calc(var(--u3)_+_6px)] left-[calc(var(--u3)_+_6px)]">{status}</span>}
+      <CardHit hit={hit} title={title} sub={sub} tip={tip} tipSide={tipSide} current={current} titleRef={titleRef} subRef={subRef} />
+      {primary && <div className="lk-card-tr absolute z-3 flex gap-1 top-[calc(var(--u3)_+_6px)] right-[calc(var(--u3)_+_6px)]">{primary}</div>}
     </div>
   );
   return menu ? <ContextMenu items={menu}>{card}</ContextMenu> : card;
 }
 
+/** Platzhalter einer Szenenkarte beim Laden: dieselbe Platte (Bild, Namensschild) und Breite, damit die Seite nicht springt. Dekorativ (`aria-hidden` setzt der Aufrufer). */
+export function SceneCardSkel({ className }: { className?: string }) {
+  return (
+    <div className={cn(MINI, MINI_W, className)} data-variant="mini">
+      <Skel className="lk-card-media aspect-video" />
+      <span className={CARD_CAP}>
+        <Skel className="size-10 flex-none" />
+        <span className="block min-w-0 flex-1">
+          <b className={cn(CARD_TITLE, LINE)}>&nbsp;</b>
+          <span className={cn(CARD_SUB, LINE)}>&nbsp;</span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /**
- * Szenenwahl-Karte 96×64 mit dem Namen darunter. „gewählt“ (`pressed`): Kupferring, aria-pressed am Knopf.
+ * Szenenwahl-Karte 96×64 mit dem Namen darunter. „gewählt“ (`pressed`): Akzentring, aria-pressed am Knopf.
  * Fokus auf Gewähltem = Doppelring.
  */
 export function ThumbCard({ look, title, pressed, hit, className, "data-force": force }: {
@@ -122,19 +156,19 @@ export function ThumbCard({ look, title, pressed, hit, className, "data-force": 
 }) {
   const titleRef = useRef<HTMLElement>(null);
   return (
-    <div className={cn("vx-card", className)} data-variant="thumb" data-bio={look.bio} data-pressed={flag(pressed)} data-force={force} style={cardStyle(look)}>
-      <SceneMedia look={look} />
-      <span className="vx-card-t" ref={titleRef}>{title}</span>
+    <div className={cn("lk-card @container flex w-24 flex-none min-w-0 flex-col gap-[5px] pb-0.5", className)} data-kit-item="card" data-variant="thumb" data-bio={look.bio} data-pressed={flag(pressed)} data-force={force} style={cardStyle(look)}>
+      <SceneMedia look={look} className="h-16 w-24 aspect-auto" />
+      <span className={cn("lk-card-t text-center text-ctl-s leading-[calc(16px*var(--tz))]", LINE)} ref={titleRef}>{title}</span>
       <CardHit hit={hit} title={title} pressed={!!pressed} titleRef={titleRef} />
     </div>
   );
 }
 
-/** Kachel „Neu …“ in Wallpaper-Größe (256×144): Platte, Icon über der Beschriftung. */
+/** Kachel „Neu …“ in Wallpaper-Größe (Breite wie die Szenenkarte, Mindesthöhe 176; die Höhe folgt der Reihe): leerer Slot, Icon über der Beschriftung. */
 export function AddCard({ label, className, type = "button", ...props }: { label: string } & Omit<ComponentProps<"button">, "children">) {
   return (
-    <button type={type} className={cn("vx-add fx", className)} {...props}>
-      <span className="vx-add-in">
+    <button type={type} className={cn("lk-add fx grid flex-none place-items-center self-stretch min-h-44", MINI_W, className)} {...props}>
+      <span className="lk-add-in flex max-w-full flex-col items-center gap-1 px-1 text-center text-ctl-s">
         <Icon name="plus" size="m" />
         {label}
       </span>
@@ -142,33 +176,51 @@ export function AddCard({ label, className, type = "button", ...props }: { label
   );
 }
 
-/** Quadratische Auswahlkachel (Pixel-Icon, Farbe): Platte, „gewählt“ mit Kupferring. Der Name ist Pflicht, er steht als aria-label und Tooltip am Knopf. */
-export function PickTile({ label, pressed, size = 48, onClick, children }: {
-  label: string; pressed: boolean; size?: 32 | 48; onClick: () => void; children: ReactNode;
+/** Quadratische Auswahlkachel (Pixel-Icon, Farbe): Platte, „gewählt“ mit Akzentrahmen. Der Name ist Pflicht, er steht als aria-label und Tooltip am Knopf. */
+export function PickTile({ label, pressed, size = 48, onClick, className, children }: {
+  label: string; pressed: boolean; size?: 32 | 48; onClick: () => void; className?: string; children: ReactNode;
 }) {
   return (
-    <button type="button" className="vx-pick fx" data-size={size} aria-pressed={pressed} aria-label={label} title={label} onClick={onClick}>
+    <button
+      type="button"
+      className={cn("lk-pick fx grid flex-none place-items-center", size === 32 ? "size-8" : "size-12", className)}
+      data-size={size}
+      aria-pressed={pressed}
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
       {children}
     </button>
   );
 }
 
-/** Raster für Bildkarten (auto-fill ab 188 px, Lücke 14) oder thumb (umbrechende Reihe, Lücke 12). */
-export function CardGrid({ variant = "poster", className, children, ...props }: { variant?: "poster" | "thumb" } & ComponentProps<"div">) {
+/** Rastervarianten: Spalten- und Lückenmaße als Tailwind, Mindestbreite über `--card-min` (und `--card-max` bei pick) einstellbar. */
+const GRID = {
+  poster: "grid grid-cols-[repeat(auto-fill,minmax(var(--card-min,188px),1fr))] gap-3.5",
+  thumb: "flex flex-wrap gap-3 p-1.5",
+  pick: "grid grid-cols-[repeat(auto-fill,minmax(var(--card-min,160px),var(--card-max,200px)))] gap-4",
+};
+
+/**
+ * Raster für Bildkarten: poster (auto-fill ab 188 px, Lücke 14), thumb (umbrechende Reihe, Lücke 12) oder pick (Auswahlkarten 160–200 px, Lücke 16).
+ * Anpassen: `className="[--card-min:220px] gap-5"` oder eigene `grid-cols-*`.
+ */
+export function CardGrid({ variant = "poster", className, children, ...props }: { variant?: "poster" | "thumb" | "pick" } & ComponentProps<"div">) {
   return (
-    <div className={cn("vx-cards", className)} data-variant={variant} {...props}>
+    <div className={cn(GRID[variant], className)} data-variant={variant} {...props}>
       {children}
     </div>
   );
 }
 
-/** Kleine Szene als Bild (Listenzeile 44, Menüeintrag 28): Kerbe, keine Fläche. */
+/** Kleine Szene als Bild (Listenzeile 44, Menüeintrag 28): Slot-Rand um das Bild. */
 export function SceneThumb({ bio, seed, size = 44, art, className }: {
   bio: Biome; seed: number; size?: 28 | 44; art?: ReactNode; className?: string;
 }) {
   return (
-    <span className={cn("vx-sthumb", className)} data-size={size} aria-hidden>
-      {art ? <span className="vx-art">{art}</span> : <PixelScene bio={bio} seed={seed} className="vx-art" />}
+    <span className={cn("lk-sthumb block flex-none", size === 28 ? "size-7 [--iu:2px]" : "size-11", className)} data-size={size} aria-hidden>
+      {art ? <span className={ART}>{art}</span> : <PixelScene bio={bio} seed={seed} className={ART} />}
     </span>
   );
 }
@@ -187,42 +239,62 @@ export type ChoiceProps = {
   role?: "radio" | "button";
 } & Omit<ComponentProps<"button">, "title" | "role">;
 
+/* Layout der Größen: Spalten, Abstand, Höhe und Innenabstand (links Platz für ▶), Schrift von Name und Zusatz. */
+const CHOICE = {
+  m: { box: "grid-cols-[40px_minmax(0,1fr)_auto] gap-2.5 h-14 pr-2.5 pl-[22px]", title: "text-[calc(15px*var(--tz))]" },
+  l: { box: "grid-cols-[48px_minmax(0,1fr)_auto] gap-3 h-[72px] pr-3.5 pl-[30px]", title: "text-[calc(16px*var(--tz))]" },
+};
+
 /**
- * Auswahlzeile/-karte. Hover-Platte --hv-row, gewählt = Kupferrahmen 1 Einheit + 10 % Tönung,
+ * Auswahlzeile/-karte. Hover-Platte --hv-row, gewählt = Akzentrahmen (1 Einheit) + Tönung + ▶,
  * Druck: Fläche eingelassen, Inhalt 1 Einheit tiefer. Fokus auf Gewähltem: Doppelring.
  */
 export function Choice({ size = "m", media, title, sub, trail, selected, role = "button", className, type = "button", ...props }: ChoiceProps) {
   const sel = role === "radio" ? { role: "radio" as const, "aria-checked": selected } : { "aria-pressed": selected };
   return (
-    <button type={type} className={cn("vx-choice fx", className)} data-size={size} data-selected={flag(selected)} {...sel} {...props}>
-      <span className="vx-choice-m">{media}</span>
-      <span className="vx-choice-t">
-        <b>{title}</b>
-        {sub != null && <span>{sub}</span>}
+    <button type={type} className={cn("lk-choice fx grid w-full items-center", CHOICE[size].box, className)} data-size={size} data-selected={flag(selected)} {...sel} {...props}>
+      <span className="lk-choice-m relative grid min-w-0 place-items-center">{media}</span>
+      <span className="lk-choice-t min-w-0">
+        <b className={cn(LINE, CHOICE[size].title)}>{title}</b>
+        {sub != null && <span className={cn(LINE, "text-[calc(13px*var(--tz))]")}>{sub}</span>}
       </span>
-      {trail != null && <span className="vx-choice-r">{trail}</span>}
+      {trail != null && <span className="lk-choice-r flex items-center gap-1.5">{trail}</span>}
     </button>
   );
 }
 
-export type PanelProps = {
-  /** plate: Grund --panel (Standard) · raised: --panel-2, Licht · sunk: eingelassen */
-  level?: "plate" | "raised" | "sunk";
-  /** Kerbe: 1 Stufe (Standard) oder 2 (große Flächen) */
-  notch?: 1 | 2;
-  /** Innenabstand 12 / 16 / 24 px; ohne Angabe keiner. */
-  pad?: "s" | "m" | "l";
-  as?: "div" | "section" | "article" | "aside" | "li";
-} & ComponentProps<"div">;
+export type PickCardProps = {
+  /** Bild oben im Slot (Umhang, Skin …). */
+  media: ReactNode;
+  title: ReactNode;
+  sub?: ReactNode;
+  /** Marke oben links im Bild, solange die Karte gewählt ist (z. B. „Aktiv“). */
+  flag?: ReactNode;
+  selected: boolean;
+} & Omit<ComponentProps<"button">, "title" | "role">;
 
 /**
- * Platte mit Bevel und Kerbe. Setzt den Overlay-Kontext (Hover/Auswahl darin eine Stufe heller, tokens.css).
+ * Auswahlkarte für radiogroups: Bild im eingelassenen Slot, darunter Name und Zusatz. Gewählt = Akzentrahmen + Tönung + Marke
+ * mit Haken (`flag`), Fokus auf Gewähltem = Doppelring. Pfeiltasten legt der Container fest (`useRovingItems`, `item=".lk-pickcard"`).
+ * Bildhöhe: `[&_.lk-pickcard-pic]:h-32` am `className`.
  */
-export function Panel({ level = "plate", notch = 1, pad, as: Tag = "div", className, children, ...props }: PanelProps) {
-  const El = Tag as "div";
+export function PickCard({ media, title, sub, flag: flagText, selected, className, type = "button", ...props }: PickCardProps) {
   return (
-    <El className={cn("vx-panel", className)} data-level={level} data-notch={notch} data-pad={pad} {...props}>
-      {children}
-    </El>
+    <button
+      type={type}
+      role="radio"
+      aria-checked={selected}
+      className={cn("lk-pickcard fx grid w-full min-w-0 content-start justify-items-start gap-1 p-3", className)}
+      data-kit-item="pick"
+      data-selected={flag(selected)}
+      {...props}
+    >
+      <span className="lk-pickcard-pic lk-pit relative mb-1.5 grid h-28 w-full place-items-center">
+        {media}
+        {selected && flagText != null && <Chip className="absolute top-(--u4) left-(--u4) z-2" tone="acc" icon="check" size="s">{flagText}</Chip>}
+      </span>
+      <b className={cn("lk-pickcard-t max-w-full truncate text-[calc(15px*var(--tz))] leading-[1.2]")}>{title}</b>
+      {sub != null && <small className="lk-pickcard-s max-w-full truncate text-ctl-s">{sub}</small>}
+    </button>
   );
 }

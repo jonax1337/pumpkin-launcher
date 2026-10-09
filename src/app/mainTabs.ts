@@ -1,5 +1,5 @@
 import type { TKey } from "@/i18n";
-import type { IconName } from "@/ui/types";
+import type { IconName } from "@/ui";
 import { withMod } from "./shortcuts";
 
 type MainTab = { to: string; key: TKey; icon: IconName; match: (pathname: string) => boolean; shortcut: string };
@@ -10,11 +10,11 @@ export const FRIENDS_PATH = "/friends";
 // Hauptbereiche; `key` ist der Wörterbuchschlüssel, die Beschriftung entsteht erst beim Rendern.
 const AREAS: Omit<MainTab, "shortcut">[] = [
   { to: "/", key: "ui.nav.home", icon: "home", match: (p) => p === "/" },
-  { to: "/instances", key: "ui.nav.library", icon: "box", match: (p) => p.startsWith("/instances") },
-  { to: "/discover", key: "ui.nav.discover", icon: "search", match: (p) => p.startsWith("/discover") },
-  { to: "/skins", key: "ui.nav.skins", icon: "shirt", match: (p) => p.startsWith("/skins") },
-  { to: FRIENDS_PATH, key: "ui.nav.friends", icon: "users", match: (p) => p.startsWith(FRIENDS_PATH) },
-  { to: "/announcements", key: "ui.nav.announcements", icon: "info", match: (p) => p.startsWith("/announcements") },
+  { to: "/instances", key: "ui.nav.library", icon: "library", match: (p) => p.startsWith("/instances") },
+  { to: "/discover", key: "ui.nav.discover", icon: "discover", match: (p) => p.startsWith("/discover") },
+  { to: "/skins", key: "ui.nav.skins", icon: "skins", match: (p) => p.startsWith("/skins") },
+  { to: FRIENDS_PATH, key: "ui.nav.friends", icon: "friends", match: (p) => p.startsWith(FRIENDS_PATH) },
+  { to: "/announcements", key: "ui.nav.announcements", icon: "news", match: (p) => p.startsWith("/announcements") },
 ];
 
 /** Die Reihenfolge ist die der Seitenleiste und bestimmt das Kürzel: der n-te Bereich ist Strg+n. */

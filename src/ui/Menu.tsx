@@ -1,246 +1,50 @@
 /**
- * Menüs des Kits: Dropdown und Kontextmenü mit gleichen Einträgen, freie Menübausteine.
- * Verhalten aus Radix; Aussehen: ui/overlay.css (vx-pop, vx-mi). Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
+ * Menüs des Kits: Dropdown und Kontextmenü mit gleichen Einträgen, freie Menübausteine. Verhalten (Radix, Fokus-Rückgabe,
+ * Textmenü, Menü-Herkunft) kommt aus menuBase.tsx (`MenuBase`, `ContextMenuBase`, `KitItem`); Aussehen aus look/overlay.css (lk-*),
+ * Maße und Anordnung als Tailwind-Utilities hier. Innerhalb gilt der hellere Hover-Kontext (data-ctx="overlay", tokens.css).
  */
-import { useRef, useState, type ComponentProps, type FocusEvent, type KeyboardEvent, type ReactNode, type SyntheticEvent } from "react";
-import { ContextMenu as CM, DropdownMenu as DM } from "radix-ui";
+import type { ComponentProps, ReactNode } from "react";
+import { DropdownMenu as DM } from "radix-ui";
 import { cn } from "@/lib/utils";
-import { Icon } from "./Icon";
-import { markMenuClosed, rememberMenuOrigin } from "./menuOrigin";
-import { FOCUSABLE, flag, hasContent } from "./util";
-import { captureTextContext, restoreTextContext, textMenuEntries, type TextContext } from "./textMenu";
-import type { IconName } from "./types";
+import { ContextMenuBase, KitItem, MenuBase, type ItemLook, type MenuEntry, type MenuProps, type MenuSkin } from "./menuBase";
+
+export type { MenuEntry };
 
 /**
- * "-" = Trenner, { label } = Gruppentitel, { items } = Untermenü, sonst Eintrag
- * (Icon s; `lead` ersetzt das Icon, z. B. Avatar; `sub` = zweite Zeile, Eintrag 52 px).
+ * Fläche von Menü, Popover und Auswahlliste ohne Innenabstand: so viel Platz wie Radix (Popper) nach Kollision und collisionPadding
+ * übrig lässt, darüber scrollt die Fläche (Gutter stabil, nichts springt). Breite nach Inhalt, mindestens 240.
  */
-export type MenuEntry =
-  | "-"
-  | { label: string }
-  | { id: string; text: ReactNode; icon?: IconName; disabled?: boolean; items: MenuEntry[] }
-  | { id: string; text: ReactNode; icon?: IconName; bad?: boolean; disabled?: boolean; onSelect: () => void; sub?: ReactNode; lead?: ReactNode; checked?: boolean };
+export const POP_BOX = "lk-pop relative z-70 min-w-60 max-w-[calc(var(--vw1,1vw)*100_-_16px)] max-h-[var(--radix-popper-available-height,calc(var(--vh1,1vh)*100_-_16px))] overflow-y-auto [scrollbar-gutter:stable] outline-none";
+const POP = `${POP_BOX} p-u2`;
 
-/** Dropdown- und Kontextmenü von Radix haben dieselben Bausteine. */
-type MenuKit = typeof DM | typeof CM;
+/** Eintrag 36 px (tall 52), Symbol s, Schrift 15. */
+const ITEM = "lk-mi relative flex h-9 w-full items-center gap-2.5 px-3 text-[length:calc(15px*var(--tz))] whitespace-nowrap";
+const SEP = "lk-msep my-u1 h-u1";
+const LABEL = "lk-mlabel px-3 pt-2 pb-1 text-ctl-s";
 
-function entries(list: MenuEntry[], kit: MenuKit): ReactNode[] {
-  return list.map((e, i) => {
-    if (e === "-") return <MenuSep key={`s${i}`} />;
-    if ("label" in e) return <MenuLabel key={`l${i}`}>{e.label}</MenuLabel>;
-    if ("items" in e) return subMenu(e, kit);
-    return (
-      <KitItem key={e.id} kit={kit} icon={e.icon} bad={e.bad} lead={e.lead} sub={e.sub} checked={e.checked} disabled={e.disabled} onSelect={e.onSelect}>
-        {hasContent(e.sub) ? e.text : <span className="vx-trunc">{e.text}</span>}
-      </KitItem>
-    );
-  });
-}
-
-function subMenu(e: Extract<MenuEntry, { items: MenuEntry[] }>, M: MenuKit) {
-  return (
-    <M.Sub key={e.id}>
-      <M.SubTrigger className="vx-mi" disabled={e.disabled}>
-        {e.icon && <Icon name={e.icon} size="s" />}
-        <span className="vx-trunc">{e.text}</span>
-        <Icon name="chev" size="s" className="vx-mi-sub" />
-      </M.SubTrigger>
-      <M.Portal>
-        <M.SubContent className="vx-pop" data-ctx="overlay" sideOffset={4} collisionPadding={8} onContextMenu={suppressContextMenu}>
-          {entries(e.items, M)}
-        </M.SubContent>
-      </M.Portal>
-    </M.Sub>
-  );
-}
-
-type ItemLook = {
-  /** 52 px (zwei Zeilen/Vorschaubild); mit `sub` oder `lead` automatisch. */
-  tall?: boolean;
-  bad?: boolean;
-  /** Bild vor dem Text, ersetzt `icon`. */
-  lead?: ReactNode;
-  icon?: IconName;
-  /** Zweite Zeile; `children` steht dann fett darüber. */
-  sub?: ReactNode;
-  checked?: boolean;
+const SKIN: MenuSkin = {
+  pop: POP,
+  trunc: "min-w-0 truncate",
+  item: ITEM,
+  tall: "h-13",
+  t2: "lk-mi-t2 flex min-w-0 flex-col leading-tight [&>span]:text-ctl-s",
+  ck: "lk-mi-ck ml-auto",
+  sub: "ml-auto",
+  sep: SEP,
+  label: LABEL,
 };
 
-/** Ein Eintrag für beide Menüarten: Radix-Item mit Look; ohne `sub` steht `children` unverändert da. */
-function KitItem({ kit: M, className, tall, bad, lead, icon, sub, checked, children, ...props }: ItemLook & { kit: MenuKit } & ComponentProps<typeof DM.Item>) {
-  const two = hasContent(sub);
-  return (
-    <M.Item
-      className={cn("vx-mi", className)}
-      data-tall={flag(tall || two || lead)}
-      data-tone={bad ? "bad" : undefined}
-      {...(checked !== undefined && { role: "menuitemcheckbox", "aria-checked": checked })}
-      {...props}
-    >
-      {lead ?? (icon && <Icon name={icon} size="s" />)}
-      {two ? <span className="vx-mi-t2"><b className="vx-trunc">{children}</b><span className="vx-trunc">{sub}</span></span> : children}
-      {checked && <Icon name="check" size="s" className="vx-mi-ck" />}
-    </M.Item>
-  );
-}
-
 /**
- * Radix fokussiert die Menüfläche, wenn der Zeiger einen Eintrag verlässt – auch noch während der Ausblend-Animation,
- * wenn der Eintrag gerade einen Dialog geöffnet hat (dessen Scrim schiebt sich unter den Zeiger). Dann geht der Fokus
- * mit der Fläche verloren. Ein geschlossenes Menü gibt den Fokus deshalb sofort zurück.
+ * Dropdown-Menü an einem Auslöser. Einträge über `items` oder frei als `children` (MenuItem, MenuSep, MenuLabel).
+ * `wide`: feste Breite 320 (Kontomenü, Auswahl mit Zweitzeile); die Breite ersetzt der Aufrufer per `className` (`w-96`).
  */
-function keepFocusWhenClosed(e: FocusEvent<HTMLDivElement>) {
-  if (e.target !== e.currentTarget || e.currentTarget.dataset.state !== "closed") return;
-  const prev = e.relatedTarget;
-  if (prev instanceof HTMLElement && prev.isConnected) prev.focus({ preventScroll: true });
-}
-
-function suppressContextMenu(event: SyntheticEvent) {
-  event.preventDefault();
-  event.stopPropagation();
-}
-
-function isContextMenuKey(event: KeyboardEvent<HTMLElement>) {
-  return event.key === "ContextMenu" || (event.shiftKey && event.key === "F10");
-}
-
-function dispatchContextMenu(target: Element, x: number, y: number) {
-  target.dispatchEvent(new MouseEvent("contextmenu", {
-    bubbles: true, cancelable: true, clientX: x, clientY: y,
-  }));
-}
-
-/** Dropdown-Menü an einem Auslöser. Einträge über `items` oder frei als `children` (MenuItem, MenuSep, MenuLabel). */
-export function Menu({ trigger, items, align = "end", width, className, open, onOpenChange, children }: {
-  trigger: ReactNode; items?: MenuEntry[]; align?: "start" | "end";
-  /** Feste Breite in px (sonst nach Inhalt, mindestens 220). */
-  width?: number;
-  className?: string; open?: boolean; onOpenChange?: (o: boolean) => void; children?: ReactNode;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  return (
-    <DM.Root
-      open={open}
-      onOpenChange={(o) => {
-        if (o) rememberMenuOrigin(ref.current ?? (document.activeElement as HTMLElement | null));
-        else markMenuClosed();
-        onOpenChange?.(o);
-      }}
-      modal={false}
-    >
-      <DM.Trigger asChild ref={ref}>{trigger}</DM.Trigger>
-      <DM.Portal>
-        <DM.Content className={cn("vx-pop", className)} data-ctx="overlay" style={width ? { width } : undefined} align={align} sideOffset={6} collisionPadding={8} onFocus={keepFocusWhenClosed}>
-          {items && entries(items, DM)}
-          {children}
-        </DM.Content>
-      </DM.Portal>
-    </DM.Root>
-  );
+export function Menu({ wide, className, ...props }: MenuProps) {
+  return <MenuBase skin={SKIN} className={cn(wide && "w-80", className)} {...props} />;
 }
 
 /** Kontextmenü (Rechtsklick) mit denselben Einträgen. */
-export function ContextMenu({ items, children, includePortals = false }: { items: MenuEntry[]; children: ReactNode; includePortals?: boolean }) {
-  const [textContext, setTextContext] = useState<TextContext>();
-  const originRef = useRef<HTMLElement | null>(null);
-  const interactedOutsideRef = useRef(false);
-  const portalTargetRef = useRef<Element | null>(null);
-
-  function dispatchPortalMenu(root: HTMLElement, target: Element, x: number, y: number) {
-    portalTargetRef.current = target;
-    try {
-      dispatchContextMenu(root, x, y);
-    } finally {
-      portalTargetRef.current = null;
-    }
-  }
-
-  function isForeignPortal(root: HTMLElement, target: EventTarget) {
-    return includePortals && target instanceof Element && !root.contains(target)
-      && !target.closest('[data-context-menu-trigger], [role="menu"]');
-  }
-
-  function recordTarget(root: HTMLElement, target: Element) {
-    const context = captureTextContext(target);
-    setTextContext(context);
-    const hit = target.closest<HTMLElement>(FOCUSABLE);
-    const origin = hit && (includePortals || root.contains(hit)) ? hit
-      : root.matches(FOCUSABLE) ? root : root.querySelector<HTMLElement>(FOCUSABLE);
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    originRef.current = context ? context.field ?? (context.editable ? context.target : previousFocus) : origin;
-    rememberMenuOrigin(originRef.current);
-    interactedOutsideRef.current = false;
-  }
-
-  return (
-    <CM.Root modal={false} onOpenChange={(o) => !o && markMenuClosed()}>
-      <CM.Trigger
-        asChild
-        data-context-menu-trigger=""
-        onContextMenuCapture={(e) => {
-          if (e.defaultPrevented || !isForeignPortal(e.currentTarget as HTMLElement, e.target)) return;
-          suppressContextMenu(e);
-          dispatchPortalMenu(e.currentTarget as HTMLElement, e.target as Element, e.clientX, e.clientY);
-        }}
-        onKeyDownCapture={(e) => {
-          if (e.defaultPrevented || !isContextMenuKey(e)) return;
-          if (!isForeignPortal(e.currentTarget as HTMLElement, e.target)) return;
-          suppressContextMenu(e);
-          const target = e.target as Element;
-          const rect = target.getBoundingClientRect();
-          dispatchPortalMenu(e.currentTarget as HTMLElement, target, rect.left, rect.bottom);
-        }}
-        onContextMenu={(e) => {
-          if (e.defaultPrevented) return;
-          const root = e.currentTarget as HTMLElement;
-          if (!(e.target instanceof Element)) return;
-          if ((!includePortals && !root.contains(e.target)) || e.target.closest('[role="menu"]')) {
-            suppressContextMenu(e);
-            return;
-          }
-          recordTarget(root, portalTargetRef.current ?? e.target);
-          e.stopPropagation();
-        }}
-        onPointerDown={(e) => {
-          if (e.defaultPrevented || e.pointerType === "mouse") return;
-          const root = e.currentTarget as HTMLElement;
-          if (!(e.target instanceof Element) || (!includePortals && !root.contains(e.target))) return;
-          recordTarget(root, e.target);
-          e.stopPropagation();
-        }}
-        onKeyDown={(e) => {
-          if (e.defaultPrevented || !isContextMenuKey(e)) return;
-          const root = e.currentTarget as HTMLElement;
-          if (!(e.target instanceof Element) || (!includePortals && !root.contains(e.target))) return;
-          const rect = e.target.getBoundingClientRect();
-          dispatchContextMenu(e.target, rect.left, rect.bottom);
-          suppressContextMenu(e);
-        }}
-      >
-        {children}
-      </CM.Trigger>
-      <CM.Portal>
-        <CM.Content
-          className="vx-pop"
-          data-ctx="overlay"
-          collisionPadding={8}
-          onFocus={keepFocusWhenClosed}
-          onContextMenu={suppressContextMenu}
-          onInteractOutside={() => { interactedOutsideRef.current = true; }}
-          onCloseAutoFocus={(e) => {
-            if (interactedOutsideRef.current) return;
-            e.preventDefault();
-            const active = document.activeElement;
-            if (active instanceof HTMLElement && active !== document.body && !active.closest('[role="menu"]')) return;
-            originRef.current?.isConnected && originRef.current.focus({ preventScroll: true });
-            if (textContext) restoreTextContext(textContext);
-          }}
-        >
-          {entries(textContext ? textMenuEntries(textContext) : items, CM)}
-        </CM.Content>
-      </CM.Portal>
-    </CM.Root>
-  );
+export function ContextMenu(props: { items: MenuEntry[]; children: ReactNode; includePortals?: boolean }) {
+  return <ContextMenuBase skin={SKIN} {...props} />;
 }
 
 /**
@@ -248,20 +52,37 @@ export function ContextMenu({ items, children, includePortals = false }: { items
  * Mit `sub` wie ein Eintrag aus `items`: `children` fett, `sub` als zweite Zeile, `lead` (Bild) davor, 52 px.
  */
 export function MenuItem(props: ItemLook & ComponentProps<typeof DM.Item>) {
-  return <KitItem kit={DM} {...props} />;
+  return <KitItem kit={DM} skin={SKIN} {...props} />;
 }
-/** Scrollbereich für lange Eintragslisten; Kopf (MenuLabel) und Fuß des Menüs bleiben stehen. */
+
+/** Scrollbereich für lange Eintragslisten; Kopf (MenuLabel) und Fuß des Menüs bleiben stehen. Höchstens 320 px bzw. was unter dem Auslöser Platz hat, abzüglich Kopf und Fuß. */
 export function MenuScroll({ className, ...props }: ComponentProps<typeof DM.Group>) {
-  return <DM.Group className={cn("vx-mscroll", className)} {...props} />;
+  return <DM.Group className={cn("max-h-[min(320px,calc(var(--radix-dropdown-menu-content-available-height,400px)_-_80px))] overflow-y-auto [scrollbar-gutter:stable]", className)} {...props} />;
 }
+
 /** Leiser Hinweis im Menü (kein Eintrag, nicht per Pfeiltaste erreichbar), z. B. „Noch keine Instanz.“ */
 export function MenuNote({ className, ...props }: ComponentProps<typeof DM.Label>) {
-  return <DM.Label className={cn("vx-mnote", className)} {...props} />;
+  return <DM.Label className={cn("lk-mnote px-3 py-1.5 text-ctl-s", className)} {...props} />;
 }
+
 /** Trenner und Gruppentitel sind kontextfrei und gelten in beiden Menüarten. */
 export function MenuSep({ className, ...props }: ComponentProps<typeof DM.Separator>) {
-  return <DM.Separator className={cn("vx-msep", className)} {...props} />;
+  return <DM.Separator className={cn(SEP, className)} {...props} />;
 }
+
 export function MenuLabel({ className, ...props }: ComponentProps<typeof DM.Label>) {
-  return <DM.Label className={cn("vx-mlabel", className)} {...props} />;
+  return <DM.Label className={cn(LABEL, className)} {...props} />;
+}
+
+/** Kopfzeile eines Menüs (Item-Tooltip-Titel): Bild/Symbol `lead`, Name, Zusatz; kein Eintrag, z. B. Konto im Kontomenü. */
+export function MenuHead({ lead, title, sub, className }: { lead?: ReactNode; title: ReactNode; sub?: ReactNode; className?: string }) {
+  return (
+    <DM.Label className={cn("flex items-center gap-3 px-3 py-2", className)}>
+      {lead}
+      <span className="grid min-w-0 gap-0.5">
+        <b className="lk-mhead-n text-ctl-l leading-[1.2]">{title}</b>
+        {sub && <small className="lk-mhead-s text-ctl-s">{sub}</small>}
+      </span>
+    </DM.Label>
+  );
 }

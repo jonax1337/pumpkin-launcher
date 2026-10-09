@@ -3,6 +3,7 @@ import { useLocation, useOutlet } from "react-router";
 import { FriendDialogs } from "@/components/friends/FriendDialogs";
 import { ShareLogDialog } from "@/components/support";
 import { InstanceDialogs } from "@/components/instance";
+import { DeepLinks } from "@/components/DeepLinks";
 import { ManualDownloads } from "@/components/ManualDownloads";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
@@ -17,10 +18,12 @@ import { usePixelUnit } from "@/pixel/unit";
 import { isGameActive, useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 import { useI18n } from "@/i18n";
+import { SkipLink } from "@/ui";
 import { Sidebar } from "./Sidebar";
 import { AppContextMenu } from "./AppContextMenu";
 import { TitleBar } from "./TitleBar";
 import { useAppearance } from "./useAppearance";
+import { CommandPalette } from "./palette/CommandPalette";
 import { useFits } from "./useFits";
 import { usePageFocus } from "./usePageFocus";
 import { usePageTitle } from "./usePageTitle";
@@ -84,9 +87,7 @@ export function Layout() {
     <ViewContext.Provider value={view}>
       <AppContextMenu>
         <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
-          <button type="button" className="skip" onClick={() => view.current?.focus()}>
-            {t("ui.skipToContent")}
-          </button>
+          <SkipLink onClick={() => view.current?.focus()}>{t("ui.skipToContent")}</SkipLink>
           <TitleBar online={online} />
           <Sidebar />
           <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>
@@ -97,7 +98,9 @@ export function Layout() {
           <ShareLogDialog />
           <FriendDialogs />
           <ShortcutsDialog />
+          <CommandPalette />
           <ManualDownloads />
+          <DeepLinks />
         </div>
       </AppContextMenu>
     </ViewContext.Provider>

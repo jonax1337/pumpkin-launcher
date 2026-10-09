@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { Button, Choice, Count, ErrorBox, Hint, ProjectIcon, SearchField } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Button, Choice, Count, Hint, ProjectIcon, SearchField } from "@/ui";
 import { SourceSelect } from "@/components/catalog/SourceSelect";
 import { SourceTag } from "@/components/catalog/SourceTag";
 import { useCatalogSearch } from "@/components/catalog/ContentResults";
@@ -93,7 +94,7 @@ export function usePackTab(ctx: TabContext): TabModel {
         <Button
           variant="ghost"
           size="s"
-          icon="chev"
+          icon="chev-right"
           bleed="start"
           className="mt-2.5"
           onClick={() => {

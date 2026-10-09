@@ -138,7 +138,7 @@ export function useAddContent() {
           ? installDatapack(qc, instance, world, versionId, operationId)
           : catalogApi(source).installMod({ instanceId: instance.id, projectId: project.id, versionId }, operationId),
       label,
-      { doneLabel: t("components.content.installTaskDone", { name: project.title }) },
+      { doneLabel: t("components.content.installTaskDone", { name: project.title }), instanceIds: [instance.id] },
     );
     enqueueContent({ target: project.id, label, start: () => startContentInstall(run, (result) => reportAdded(request, result, before)) });
   }

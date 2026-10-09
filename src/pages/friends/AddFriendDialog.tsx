@@ -11,9 +11,6 @@ import { MyCodeTab } from "./MyCodeTab";
 import { NameTab } from "./NameTab";
 export type { AddFriendTab };
 
-const DIALOG_WIDTH = 520;
-/** Fest, damit der Dialog beim Erzeugen und Widerrufen von Codes nicht wächst und schrumpft. */
-const DIALOG_HEIGHT = 600;
 
 /** Die Wege zum Hinzufügen: der erste öffnet den Dialog auf seinem Reiter, „Mein Code“ auf dem eigenen Code. */
 export function AddFriendButtons({ onAdd }: { onAdd: (tab: AddFriendTab) => void }) {
@@ -75,8 +72,8 @@ export function AddFriendDialog({ initialTab, onClose }: { initialTab: AddFriend
   const nameTab: TabItem<AddFriendTab> = { value: "name", label: t("friends.name.tab"), icon: "user" };
   const tabs: TabItem<AddFriendTab>[] = [
     ...(nameSearchUnavailable ? [] : [nameTab]),
-    { value: "enter", label: t("friends.enter.tab"), icon: "plus" },
-    { value: "mine", label: t("friends.myCode.tab"), icon: "link" },
+    { value: "enter", label: t("friends.enter.tab"), icon: "key" },
+    { value: "mine", label: t("friends.myCode.tab"), icon: "share" },
   ];
 
   return (
@@ -84,25 +81,23 @@ export function AddFriendDialog({ initialTab, onClose }: { initialTab: AddFriend
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friends.add.title")}
-      width={DIALOG_WIDTH}
-      height={DIALOG_HEIGHT}
       busy={pending}
       footer={
         tab === "mine" ? (
-          <DialogActions cancel={{ label: t("common.close"), width: 124 }} />
+          <DialogActions cancel={{ label: t("common.close"), className: "w-[124px]" }} />
         ) : (
           <DialogActions
             cancel={{ label: t("common.cancel"), disabled: pending }}
-            confirm={{ label: pending ? t("friends.add.sending") : t("friends.add.send"), width: 160, form: formId, disabled: !ready }}
+            confirm={{ label: pending ? t("friends.add.sending") : t("friends.add.send"), className: "w-[160px]", form: formId, disabled: !ready }}
           />
         )
       }
     >
       <Tabs idBase="add-friend" label={t("friends.add.tabsLabel")} value={tab} onChange={setTab} items={tabs} />
-      <TabPanel idBase="add-friend" value={tab} className="mt-4">
+      <TabPanel idBase="add-friend" value={tab} className="friends-add-panel">
         {tab === "mine" && <MyCodeTab create={createCode} />}
         {tab === "enter" && nameSearchUnavailable && (
-          <Hint className="mt-3">{t("friends.name.buildUnavailable")}</Hint>
+          <Hint className="friends-add-hint">{t("friends.name.buildUnavailable")}</Hint>
         )}
         {tab === "enter" && (
           <EnterCodeTab formId={formId} input={code} onInput={setCode} onSubmit={sendCode} />

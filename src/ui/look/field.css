@@ -1,0 +1,72 @@
+/* Formular (Abschnitt, Zeile, Feld, Hinweis), Auswahl und Aufklappbereich. Nur Aussehen; das Raster steckt in Field.tsx / Select.tsx. */
+
+/* Abschnitt: Linie unten (nicht beim letzten); `data-plate` = eigene gewölbte Platte */
+.lk-fsec { box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.lk-fsec:last-child { box-shadow: none; }
+/* flach: weder Karte noch Linie, der Titel steht gedämpft über den Zeilen */
+.lk-fsec[data-flat] { box-shadow: none; }
+.lk-fsec[data-flat] > .lk-h { color: var(--fg-2); }
+.lk-fsec[data-plate] {
+  background: var(--panel); border: var(--px) solid var(--edge); clip-path: var(--n1);
+  box-shadow: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2);
+}
+/* Gefahrenzone: roter Rand (Platte) und roter Titel */
+.lk-fsec[data-plate][data-danger] { border-color: var(--bad); }
+.lk-fsec[data-danger] > .lk-h { color: var(--bad); }
+
+/* Zeile: optional Linie unten (nicht an der letzten); Label, Hilfe mit 1-Einheit-Linie links */
+.lk-frow[data-divided] { box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.lk-frow[data-divided]:last-child { box-shadow: none; }
+.lk-fl { color: var(--fg-2); font-weight: 600; text-shadow: var(--tsh); }
+.lk-frow[data-strong] > .lk-fl { color: var(--fg); font-weight: 700; }
+.lk-fl-sub { color: var(--fg-3); font-weight: 400; text-shadow: none; }
+.lk-fh { color: var(--fg-3); box-shadow: inset var(--px) 0 0 var(--line); }
+
+/* Feld: Label über der Eingabe, Hilfe darunter */
+.lk-field-l { color: var(--fg-2); font-weight: 600; text-shadow: var(--tsh); }
+.lk-opt { color: var(--fg-3); font-weight: 400; text-shadow: none; }
+.lk-help { color: var(--fg-3); }
+
+/* Hinweis: Warnung und Fehler immer mit Symbol (nie nur Farbe) */
+.lk-hint { color: var(--fg-3); }
+.lk-hint[data-tone="warn"] { color: var(--warn); }
+.lk-hint[data-tone="bad"] { color: var(--bad); font-weight: 600; }
+.lk-hint[data-tone="ok"] { color: var(--fg-2); }
+.lk-hint[data-tone="ok"] > .lk-ico { color: var(--run); }
+
+/* ---------- Auswahl: Slot mit Steinknopf (Pfeil) rechts ---------- */
+.lk-select { color: var(--fg); font-weight: 500; text-align: left; user-select: none; cursor: pointer; }
+.lk-select:is(:hover, [data-force="hover"]):not([data-disabled]) { background: var(--bg-2); }
+.lk-select[data-state="open"]:not([data-disabled]) { border-color: var(--fg-2); }
+.lk-select.lk-slot[data-disabled] { background: var(--panel); border-color: var(--line); box-shadow: none; color: var(--fg-3); cursor: default; }
+.lk-select.lk-slot[aria-invalid="true"] { border-color: var(--bad); box-shadow: inset var(--u2) 0 0 var(--bad), var(--slot-sh); }
+.lk-select.lk-slot[aria-invalid="true"]:focus-visible { box-shadow: var(--ring-i); }
+/* Vorspann in Pixelschrift („LOADER  Alle“) */
+.lk-sel-lab { color: var(--fg-3); font-family: var(--f-px); font-weight: 400; letter-spacing: .04em; text-transform: uppercase; font-variant-numeric: normal; }
+.lk-select[data-placeholder] .lk-sel-val > span:first-child { color: var(--fg-3); }
+.lk-sel-chev { color: var(--fg); background: var(--panel-3); clip-path: var(--n1);
+  box-shadow: inset var(--px) var(--px) 0 var(--line-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--bg-2); }
+.lk-select[data-disabled] .lk-sel-chev { color: var(--fg-3); background: var(--panel); box-shadow: none; }
+.lk-sel-chev .lk-ico { transition: transform .12s steps(2, end); }
+.lk-select[data-state="open"] .lk-sel-chev .lk-ico { transform: rotate(180deg); }
+/* Einträge der Liste (Fläche: .lk-pop): markiert = --hl + Fokusbalken links, gewählt = hell */
+.lk-selitem { color: var(--fg); font-weight: 600; cursor: pointer; outline: none; user-select: none; }
+.lk-selitem[data-highlighted] { --fg-3: var(--fg-2); background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--focus); }
+.lk-selitem:active:not([data-disabled]) { background: var(--tip-b); }
+.lk-selitem:active:not([data-disabled]) > * { translate: 0 var(--px); }
+.lk-selitem[data-state="checked"] { color: var(--fg-strong); }
+.lk-selitem[data-disabled] { color: var(--fg-3); cursor: default; }
+.lk-sel-ck { color: var(--acc); }
+.lk-selscroll { color: var(--fg-2); cursor: default; }
+
+/* ---------- Aufklappbereich: Zusammenfassung wie Geist s; beim Überfahren ein Slot (Platte auf ::before) ---------- */
+.lk-disc-s { position: relative; isolation: isolate; color: var(--fg-2); font-weight: 600; cursor: pointer; user-select: none; }
+.lk-disc-s::-webkit-details-marker { display: none; }
+.lk-disc-s::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); }
+.lk-disc-s:is(:hover, [data-force="hover"]) { color: var(--fg); }
+.lk-disc-s:is(:hover, [data-force="hover"])::before { background: var(--sunk); box-shadow: var(--slot-sh); }
+.lk-disc-s:active::before { background: var(--edge); }
+.lk-disc-s:active > .lk-disc-c { translate: 0 var(--px); }
+.lk-disc-s:is(:focus-visible)::before { border: var(--px) solid var(--focus); box-shadow: var(--ring-i); }
+.lk-disc-c > .lk-ico { transition: transform .12s steps(2, end); }
+.lk-disc[open] > .lk-disc-s .lk-disc-c > .lk-ico { transform: rotate(90deg); }

@@ -1,0 +1,19 @@
+/* ---------- Instanz: Screenshots ---------- */
+/* Rhythmus: Leiste und Tage im Abstand m, die Tage untereinander l, Kopf und Raster eines Tages s */
+.shots { display: flex; flex-direction: column; gap: var(--pg-gap-m); min-width: 0; }
+.shots-days { display: flex; flex-direction: column; gap: var(--pg-gap-l); min-width: 0; }
+.shots-day { display: flex; flex-direction: column; gap: var(--pg-gap-s); min-width: 0; }
+/* Große Ansicht: das Fenster unter der Fensterleiste, Leisten oben und unten, dazwischen das Bild in einer scrollenden Fläche */
+.shot-lb { position: fixed; z-index: 66; inset: var(--bar) 0 0 0; display: flex; flex-direction: column; background: var(--bg); outline: none; isolation: isolate; }
+.shot-lb-bar { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px var(--gut); }
+.shot-lb-bar:last-child { justify-content: space-between; }
+.shot-lb-title { flex: 1; min-width: 0; }
+.shot-lb-title p { margin-top: 4px; color: var(--fg-2); font-size: 13px; }
+.shot-stage { flex: 1; min-height: 0; display: flex; overflow: auto; background: var(--sunk); outline: none; }
+.shot-stage img { flex: none; display: block; width: var(--w); height: var(--h); margin: auto; max-width: none; user-select: none; }
+.shot-stage img:not([data-ready]) { visibility: hidden; }
+.shot-stage:focus-visible { outline: var(--px) solid var(--focus); outline-offset: calc(var(--px) * -1); }
+.shot-stage[data-pan] { cursor: grab; }
+.shot-stage[data-pan]:active { cursor: grabbing; }
+.shot-zoom { display: flex; align-items: center; gap: 4px; }
+.shot-zoom-n { min-width: 56px; text-align: center; }

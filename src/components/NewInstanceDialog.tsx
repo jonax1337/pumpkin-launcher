@@ -20,11 +20,11 @@ import { useTemplateTab } from "@/components/newInstance/TemplateTab";
 
 // Reiter des Dialogs; Beschriftungen als Schlüssel, übersetzt beim Rendern.
 const TABS: { value: Tab; label: TKey; icon: IconName }[] = [
-  { value: "blank", label: "components.newInstance.tab.own", icon: "plus" },
-  { value: "pack", label: TYPE_ONE_KEYS.modpack, icon: "box" },
+  { value: "blank", label: "components.newInstance.tab.own", icon: "grass" },
+  { value: "pack", label: TYPE_ONE_KEYS.modpack, icon: "modpack" },
   { value: "file", label: "components.newInstance.tab.file", icon: "file" },
-  { value: "tpl", label: "components.newInstance.tab.template", icon: "save" },
-  { value: "import", label: "components.newInstance.tab.import", icon: "swap" },
+  { value: "tpl", label: "components.newInstance.tab.template", icon: "book" },
+  { value: "import", label: "components.newInstance.tab.import", icon: "download" },
 ];
 
 /**
@@ -71,8 +71,8 @@ function NewInstanceForm({ open, onOpenChange, start, onBusy, onDone, onImported
       open={open}
       onOpenChange={onOpenChange}
       title={t("components.newInstance.title")}
-      width={720}
-      height={600}
+      size="l"
+      height="l"
       footLeft={hint}
       footer={
         <>
@@ -81,14 +81,16 @@ function NewInstanceForm({ open, onOpenChange, start, onBusy, onDone, onImported
           )}
           <DialogActions
             cancel={busy ? t("common.close") : t("common.cancel")}
-            confirm={{ label: current.label, width: 170, disabled: !current.valid || busy, onClick: current.submit }}
+            confirm={{ label: current.label, className: "w-[170px]", disabled: !current.valid || busy, onClick: current.submit }}
           />
         </>
       }
     >
-      <div className="nwrap">
-        <Tabs variant="vertical" idBase="ni" label={t("components.newInstance.tabsLabel")} value={tab} onChange={setTab} items={TABS.map(({ value, label, icon }) => ({ value, label: t(label), icon }))} />
-        <TabPanel idBase="ni" value={tab} className="npane">{current.renderPane(busy)}</TabPanel>
+      {/* Senkrechte Tabs in eigener Spalte (220–260, „Anderer Launcher“ passt auch im schmalen Dialog), Formular rechts; füllt den Dialogkörper bis an den Rand (hebt dessen Innenabstand auf) */}
+      <div className="-m-4 grid h-[calc(100%+32px)] grid-cols-[clamp(220px,28%,260px)_minmax(0,1fr)]">
+        <Tabs className="self-stretch py-3 pr-0 pl-3" variant="vertical" idBase="ni" label={t("components.newInstance.tabsLabel")} value={tab} onChange={setTab} items={TABS.map(({ value, label, icon }) => ({ value, label: t(label), icon }))} />
+        {/* Innenabstand >= Fokusring (2 Einheiten), sonst schneidet der Bildlauf ihn am Suchfeld ab */}
+        <TabPanel idBase="ni" value={tab} className="min-h-0 overflow-y-auto p-[18px] [scrollbar-gutter:stable]">{current.renderPane(busy)}</TabPanel>
       </div>
     </Dialog>
   );

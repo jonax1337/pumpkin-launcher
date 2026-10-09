@@ -1,14 +1,37 @@
 import { Fragment } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Cell, Checkbox, Chip, GhostRow, ListRow, ProjectIcon, RowTitle, Tip } from "@/ui";
-import { WIDTH } from "@/lib/breakpoints";
+import { Button, Cell, Checkbox, Chip, GhostRow, ListRow, ProjectIcon, RowTitle, Tip, TipLine, TipTitle, TileRow, type IconName } from "@/ui";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { formatDate, formatSize } from "@/lib/format";
 import { SourceTag } from "@/components/catalog/SourceTag";
 import type { Mod } from "@/lib/types";
+import { KindTile } from "../KindTile";
 import { useContentModel } from "./ContentModel";
 import { EnabledCell, MoreMenu, UpdateCell } from "./RowCells";
 import type { Ghost, Row, Warn } from "./types";
+
+/**
+ * Unter 720 px zweizeilig: oben der Name über die ganze Breite, darunter Hinweis, Update, Schalter und Menü; Auswahl und Bild
+ * stehen links über beide Zeilen. Die Spalten setzt ContentList an der Liste, die Zeile legt hier ihr eigenes Raster darüber.
+ */
+const NARROW = {
+  row: "le-720:grid-cols-[28px_40px_minmax(0,1fr)_auto_auto_36px] le-720:gap-y-0.5 le-720:py-1.5",
+  pick: "le-720:row-[1/3]",
+  title: "le-720:[grid-area:1/3/2/-1]",
+  warn: "le-720:[grid-area:2/3]",
+  update: "le-720:[grid-area:2/-4]",
+  enabled: "le-720:[grid-area:2/-3]",
+  more: "le-720:[grid-area:2/-2]",
+} as const;
+/** Abhängiger Inhalt: Name eingerückt, Winkel zur Zeile darüber. */
+const DEP_TITLE = "relative pl-[22px] before:absolute before:-top-1.5 before:left-1.5 before:h-[18px] before:w-2.5 before:content-[''] before:[box-shadow:inset_var(--px)_calc(var(--px)*-1)_0_var(--line-2)]";
+
+/** Symbol je Art, solange das Projekt kein eigenes Bild hat. */
+const KIND_ICONS = { mod: "mod", resourcepack: "resourcepack", shader: "shader" } as const satisfies Record<Mod["kind"], IconName>;
+
+function ContentIcon({ mod, url, box, className }: { mod: Mod; url: string | null | undefined; box?: 40 | 52; className?: string }) {
+  return <KindTile url={url} seed={mod.id} icon={KIND_ICONS[mod.kind]} box={box} className={className} />;
+}
 
 /** Tooltip der Zeile: Name, Art und Version, wer den Inhalt braucht, Update, Hinweise, Beschreibung. */
 function RowTip({ row, warns }: { row: Row; warns: Warn[] }) {
@@ -19,16 +42,16 @@ function RowTip({ row, warns }: { row: Row; warns: Warn[] }) {
   const description = model.descriptionOf(mod);
   return (
     <>
-      <div className="tn">{model.titleOf(mod)}</div>
-      <div className="tv">
+      <TipTitle>{model.titleOf(mod)}</TipTitle>
+      <TipLine>
         {t(TYPE_ONE_KEYS[mod.kind])} · {t("common.version")} {mod.version}
         {mod.enabled ? "" : ` · ${t("detail.content.turnedOffInline")}`}
-      </div>
-      {row.owners.length > 0 && <div className="tr">{t("detail.content.requiredBy", { names: row.owners.join(", ") })}</div>}
-      {mod.packManaged && <div className="tr">{t("detail.content.packManagedTip")}</div>}
-      {update && <div className="tu">{t("detail.content.updateAvailable", { version: update.versionNumber })}</div>}
-      {warns.map((w) => <div key={w.text} className="tw">{w.detail ?? w.text}</div>)}
-      {description && <div className="td">{description}</div>}
+      </TipLine>
+      {row.owners.length > 0 && <TipLine>{t("detail.content.requiredBy", { names: row.owners.join(", ") })}</TipLine>}
+      {mod.packManaged && <TipLine>{t("detail.content.packManagedTip")}</TipLine>}
+      {update && <TipLine tone="update">{t("detail.content.updateAvailable", { version: update.versionNumber })}</TipLine>}
+      {warns.map((w) => <TipLine key={w.text} tone="bad">{w.detail ?? w.text}</TipLine>)}
+      {description && <TipLine tone="desc">{description}</TipLine>}
     </>
   );
 }
@@ -105,15 +128,15 @@ function WarnAction({ warn }: { warn: Warn }) {
 
 /**
  * Der erste Hinweis, weitere als Zähler (die Zeile ist fest hoch, ihr Text im Tooltip), dann die Handlung.
- * Der Chip kürzt sich bei Platzmangel; `hideChipBelow` blendet ihn unter dieser Fensterbreite aus (die Handlung nennt den Hinweis mit).
+ * Der Chip kürzt sich bei Platzmangel; `hideChip` blendet ihn unter 1040 px aus (die Handlung nennt den Hinweis mit).
  */
-function WarnCell({ warns, hideChipBelow }: { warns: Warn[]; hideChipBelow?: number }) {
+function WarnCell({ warns, hideChip }: { warns: Warn[]; hideChip?: boolean }) {
   if (!warns.length) return null;
   const [first, ...more] = warns;
   return (
     <Fragment>
       <Tip label={first.detail ?? first.text}>
-        <Chip size="s" dot tone="warn" data-hide={hideChipBelow}><span className="truncate min-w-0">{first.text}</span></Chip>
+        <Chip size="s" tone="warn" className={hideChip ? "le-1040:hidden" : undefined}><span className="dc-warn-text">{first.text}</span></Chip>
       </Tip>
       {more.length > 0 && (
         <Tip label={more.map((w) => w.detail ?? w.text).join(" ")}>
@@ -139,23 +162,25 @@ function useRowPresentation(row: Row) {
 export function ContentRow({ row }: { row: Row }) {
   const { t } = useI18n();
   const { model, mod, warns, picked, description, subline } = useRowPresentation(row);
+  const dep = model.grouped && row.owners.length > 0;
   return (
-    <ListRow selected={picked} off={!mod.enabled} dep={model.grouped && row.owners.length > 0}>
+    <ListRow selected={picked} off={!mod.enabled} lazy className={NARROW.row}>
       <Checkbox
+        className={NARROW.pick}
         checked={picked}
         onChange={(on) => model.togglePick(mod.id, on)}
         label={t("detail.content.selectItem", { name: model.titleOf(mod) })}
       />
-      <ProjectIcon url={model.iconOf(mod)} seed={mod.id} />
+      <ContentIcon className={NARROW.pick} mod={mod} url={model.iconOf(mod)} />
       <Tip label={<RowTip row={row} warns={warns} />}>
-        <div>
-          <RowTitle title={model.titleOf(mod)} aside={<ModSourceTag mod={mod} />} sub={subline} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle>
+        <div className={NARROW.title}>
+          <RowTitle title={model.titleOf(mod)} className={dep ? DEP_TITLE : undefined} meta={<><ModSourceTag mod={mod} /><span className="dc-sub">{subline}</span></>} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle>
         </div>
       </Tip>
-      {model.hasWarnings && <Cell flex><WarnCell warns={warns} hideChipBelow={WIDTH.md} /></Cell>}
-      <Cell flex align="end"><UpdateCell mod={mod} layout="list" /></Cell>
-      <Cell flex align="end"><EnabledCell mod={mod} layout="list" /></Cell>
-      <MoreMenu mod={mod} describedBy={description ? model.descriptionId(mod) : undefined} />
+      {model.hasWarnings && <Cell flex className={NARROW.warn}><WarnCell warns={warns} hideChip /></Cell>}
+      <Cell flex align="end" className={NARROW.update}><UpdateCell mod={mod} layout="list" /></Cell>
+      <Cell flex align="end" className={NARROW.enabled}><EnabledCell mod={mod} layout="list" /></Cell>
+      <MoreMenu className={NARROW.more} mod={mod} describedBy={description ? model.descriptionId(mod) : undefined} />
     </ListRow>
   );
 }
@@ -170,29 +195,36 @@ export function ContentTile({ row }: { row: Row }) {
   // Beschreibung steht schon im Screenreader-Text (ReaderDescription); Art/Version nur hier.
   const about = row.owners.length ? "" : model.descriptionOf(mod) ?? "";
   return (
-    <ListRow selected={picked} off={!mod.enabled}>
-      <span>
-        <ProjectIcon url={model.iconOf(mod)} seed={mod.id} box={52} />
+    <TileRow
+      selected={picked}
+      off={!mod.enabled}
+      lazy
+      media={<ContentIcon mod={mod} url={model.iconOf(mod)} box={52} />}
+      check={
         <Checkbox
           checked={picked}
           onChange={(on) => model.togglePick(mod.id, on)}
           label={t("detail.content.selectItem", { name: model.titleOf(mod) })}
         />
-      </span>
-      <Tip label={<RowTip row={row} warns={warns} />}>
-        <div><RowTitle title={model.titleOf(mod)} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle></div>
-      </Tip>
-      <span>
-        <EnabledCell mod={mod} layout="tile" />
-        <MoreMenu mod={mod} describedBy={description ? model.descriptionId(mod) : undefined} />
-      </span>
-      <span>
-        {warns.length
+      }
+      title={
+        <Tip label={<RowTip row={row} warns={warns} />}>
+          <div><RowTitle title={model.titleOf(mod)} trunc={false}><ReaderDescription row={row} text={description} /></RowTitle></div>
+        </Tip>
+      }
+      actions={
+        <>
+          <EnabledCell mod={mod} layout="tile" />
+          <MoreMenu mod={mod} describedBy={description ? model.descriptionId(mod) : undefined} />
+        </>
+      }
+      meta={
+        warns.length
           ? <WarnCell warns={warns} />
-          : about ? <span className="truncate" aria-hidden>{about}</span> : <span className="truncate">{subline}</span>}
-      </span>
-      <span><UpdateCell mod={mod} layout="tile" hideNoSource={warns.length > 0} /></span>
-    </ListRow>
+          : about ? <span className="ell" aria-hidden>{about}</span> : <span className="ell">{subline}</span>
+      }
+      footer={<UpdateCell mod={mod} layout="tile" hideNoSource={warns.length > 0} />}
+    />
   );
 }
 
@@ -204,6 +236,7 @@ export function GhostEntry({ ghost }: { ghost: Ghost }) {
   return (
     <GhostRow
       variant={tile ? "tile" : "content"}
+      lazy
       text={ghost.by && !tile
         ? t("detail.content.removedGhostWith", { name: ghost.title, by: ghost.by })
         : t("detail.content.removedGhost", { name: ghost.title })}

@@ -16,7 +16,7 @@ export function GameSection({ instance, form, locked }: { instance: Instance; fo
   const { t } = useI18n();
   const globalJava = useSettings((s) => s.javaPath);
   return (
-    <FormSection title={t("pages.settings.tabGame")}>
+    <FormSection plate title={t("pages.settings.tabGame")}>
       <FormRow label={t("settings.account.label")} htmlFor="inst-account" hint={t("settings.account.hint")}>
         <AccountField
           id="inst-account"
@@ -56,7 +56,7 @@ export function GameSection({ instance, form, locked }: { instance: Instance; fo
           fallback={
             <>
               {t("detail.settings.javaFallback")}{" "}
-              <span className="text-fg-3">({globalJava ? t("detail.settings.javaOwnInstall") : t("detail.settings.javaAutomatic")})</span>
+              <span className="st-muted">({globalJava ? t("detail.settings.javaOwnInstall") : t("detail.settings.javaAutomatic")})</span>
             </>
           }
         />

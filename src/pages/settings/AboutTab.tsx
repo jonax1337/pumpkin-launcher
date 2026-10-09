@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { Actions, Button, FormRow, Hint } from "@/ui";
+import { Heading, Hint, LinkList, LinkRow, Panel } from "@/ui";
 import { BrandWordmark, Buddy } from "@/branding/Brand";
-import { UpdateRow } from "@/components/AppUpdate";
+import { UpdateCheckButton, UpdateChip, UpdateDetails } from "@/components/AppUpdate";
 import { PrivacyNotice } from "@/components/PrivacyNotice";
+import { SupportSection } from "@/components/support";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { openPage, REPO_URL } from "@/lib/links";
 import pkg from "../../../package.json";
-import { SettingsInfo } from "./SettingsInfo";
+import { InfoDialog } from "./SettingsInfo";
 
 /** Version der laufenden App; im Browser die aus der package.json. */
 function useAppVersion() {
@@ -20,47 +21,47 @@ function useAppVersion() {
   return version;
 }
 
-/** Lizenz des Launchers (Apache-2.0) und sein Quellcode. */
-function LicenseRows() {
+/** Quellcode, Lizenz, Fragen, Fehler melden und Datenschutz an einer Stelle. */
+function AboutLinks() {
   const { t } = useI18n();
+  const [privacyOpen, setPrivacyOpen] = useState(false);
   return (
-    <>
-      <FormRow label={t("settings.about.license")} hint={t("settings.about.licenseHint")}>
-        <Actions>
-          <Button icon="ext" onClick={() => openPage(`${REPO_URL}/blob/main/LICENSE`)}>{t("settings.about.licenseRead")}</Button>
-        </Actions>
-      </FormRow>
-      <FormRow label={t("settings.about.source")} hint={t("settings.about.sourceHint")}>
-        <Actions>
-          <Button icon="ext" onClick={() => openPage(REPO_URL)}>{t("settings.about.sourceOpen")}</Button>
-        </Actions>
-      </FormRow>
-    </>
+    <div>
+      <Heading level="sub" className="mb-3">{t("settings.about.linksTitle")}</Heading>
+      <LinkList>
+        <LinkRow icon="link" label={t("settings.about.source")} hint={t("settings.about.sourceHint")} onClick={() => openPage(REPO_URL)} />
+        <LinkRow icon="book" label={t("settings.about.license")} hint={t("settings.about.licenseHint")} onClick={() => openPage(`${REPO_URL}/blob/main/LICENSE`)} />
+        <LinkRow icon="bug" label={t("components.support.reportBug")} hint={t("components.support.reportHint")} onClick={() => openPage(`${REPO_URL}/issues/new/choose`)} />
+        <LinkRow icon="question" label={t("components.support.questionsLabel")} hint={t("components.support.questionsHint")} onClick={() => openPage(`${REPO_URL}/discussions`)} />
+        <LinkRow icon="shield" label={t("components.privacy.title")} external={false} onClick={() => setPrivacyOpen(true)} />
+      </LinkList>
+      <InfoDialog open={privacyOpen} onOpenChange={setPrivacyOpen} title={t("components.privacy.title")}>
+        <PrivacyNotice />
+        <Hint>{t("pages.settings.aboutSources")}</Hint>
+      </InfoDialog>
+    </div>
   );
 }
 
-/** Einstellungen › Über: Version, Updates, Lizenz, Quellcode, Datenschutz, Quellen. */
+/** Einstellungen › Über & Support: Versionskarte mit Update-Suche, Links und Diagnose. */
 export function AboutTab() {
   const { t } = useI18n();
   const version = useAppVersion();
   return (
     <>
-      <div className="brand-about">
+      <Panel level="raised" className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
         <Buddy mood="hello" size={48} />
-        <div>
+        <div className="grid min-w-0 flex-[1_1_220px] gap-1">
           <BrandWordmark />
-          <div className="text-fg-2">
-            {t("common.version")} {version}
-          </div>
+          <span className="text-ctl-s text-(--fg-2)">{t("common.version")} {version} · {t("components.update.hint")}</span>
         </div>
-      </div>
-      <UpdateRow />
-      <LicenseRows />
-      <div className="my-3.5">
-        <SettingsInfo title={t("components.privacy.title")} label={t("components.privacy.title")}>
-          <PrivacyNotice />
-          <Hint className="mt-3.5">{t("pages.settings.aboutSources")}</Hint>
-        </SettingsInfo>
+        <UpdateChip />
+        <UpdateCheckButton />
+      </Panel>
+      <UpdateDetails />
+      <div className="mt-7 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-x-7 *:min-w-0">
+        <AboutLinks />
+        <SupportSection version={version} />
       </div>
     </>
   );

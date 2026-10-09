@@ -6,20 +6,18 @@ import { useLaunchAccount } from "@/components/accounts/useAccounts";
 import { useCreateInstance } from "@/hooks/useInstances";
 import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS, LOADER_LABELS, type InstanceCandidate, type InstanceSummary, type Invite, type JoinPlan, type ModRef } from "@/lib/types";
-import { Button, Chip, Dialog, DialogActions, ErrorBox, Field, Heading, Hint, Select, Skel, StatusPanel } from "@/ui";
+import { Button, Chip, Dialog, DialogActions, Field, Heading, Hint, Select, Skel, StatusPanel } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { actionAllowed, canJoinWith, chosenCandidate, inviteAction, needsMicrosoftAccount } from "./inviteModel";
 
-const DIALOG_WIDTH_PX = 560;
-/** Fest, damit der Dialog zwischen Laden, Urteil und „Erneut prüfen“ nicht wächst und schrumpft; der Körper scrollt. */
-const DIALOG_HEIGHT_PX = 600;
-const PRIMARY_WIDTH_PX = 200;
-const PLAN_SKELETON_HEIGHT_PX = 96;
+const PRIMARY_WIDTH = "w-[200px]";
+const PLAN_SKELETON_HEIGHT = "h-24";
 
 /** Minecraft-Version, Loader und Zahl der Mods der Welt: was der Gastgeber teilt (Spezifikation 5.5). */
 function SummaryChips({ summary }: { summary: InstanceSummary }) {
   const { t } = useI18n();
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="fr-chips">
       <Chip>{summary.minecraftVersion}</Chip>
       <Chip>{LOADER_LABELS[summary.loader]}</Chip>
       {summary.modCount > 0 && <Chip>{summary.modCount === 1 ? t("friendsInvite.mods.one") : t("friendsInvite.mods.other", { n: summary.modCount })}</Chip>}
@@ -31,14 +29,14 @@ function SummaryChips({ summary }: { summary: InstanceSummary }) {
 function Sender({ invite }: { invite: Invite }) {
   const { t } = useI18n();
   return (
-    <div className="flex items-center gap-3">
+    <div className="fr-person">
       <FriendAvatar friendId={invite.from} name={invite.fromName} />
-      <div className="min-w-0">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <SelfAsserted><b className="vx-trunc">{invite.fromName}</b></SelfAsserted>
+      <div className="fr-person-text">
+        <div className="fr-person-line">
+          <SelfAsserted><b className="truncate">{invite.fromName}</b></SelfAsserted>
           <Fingerprint value={invite.fromFingerprint} />
         </div>
-        <span className="vx-trunc block text-fg-3">{t("friendsInvite.invites", { title: invite.title })}</span>
+        <span className="truncate fr-line-sub">{t("friendsInvite.invites", { title: invite.title })}</span>
       </div>
     </div>
   );
@@ -48,13 +46,13 @@ function Sender({ invite }: { invite: Invite }) {
 function ModList({ title, mods }: { title: string; mods: ModRef[] }) {
   if (mods.length === 0) return null;
   return (
-    <section className="mt-3">
+    <section className="fr-mods">
       <Heading level="card" className="mb-1">{title}</Heading>
-      <ul className="flex flex-col gap-1">
+      <ul className="fr-mods-list">
         {mods.map((mod) => (
-          <li key={mod.fileName} className="min-w-0">
-            <b className="vx-trunc block">{mod.title}</b>
-            {mod.title !== mod.fileName && <span className="vx-trunc block text-fg-3">{mod.fileName}</span>}
+          <li key={mod.fileName}>
+            <b className="truncate fr-line">{mod.title}</b>
+            {mod.title !== mod.fileName && <span className="truncate fr-line-sub">{mod.fileName}</span>}
           </li>
         ))}
       </ul>
@@ -149,8 +147,6 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friendsInvite.title")}
-      width={DIALOG_WIDTH_PX}
-      height={DIALOG_HEIGHT_PX}
       busy={busy}
       footLeft={<Button variant="ghost" tone="bad" disabled={busy} onClick={() => decline.mutate(invite.id, { onSuccess: onClose })}>{t("friendsInvite.decline")}</Button>}
       footer={
@@ -160,12 +156,12 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
           )}
           <DialogActions cancel={{ label: t("friendsInvite.later"), autoFocus: true, disabled: busy }} />
           {action === "join" && (
-            <Button variant="primary" icon="play" width={PRIMARY_WIDTH_PX} disabled={!actionAllowed(action, hasMicrosoftAccount)} onClick={() => candidate && onJoin(candidate.instanceId)}>
+            <Button variant="primary" icon="play" className={PRIMARY_WIDTH} disabled={!actionAllowed(action, hasMicrosoftAccount)} onClick={() => candidate && onJoin(candidate.instanceId)}>
               {t("friendsInvite.join")}
             </Button>
           )}
           {action === "createVanilla" && (
-            <Button variant="primary" width={PRIMARY_WIDTH_PX} disabled={busy} onClick={makeVanillaInstance}>
+            <Button variant="primary" className={PRIMARY_WIDTH} disabled={busy} onClick={makeVanillaInstance}>
               {createVanilla.isPending ? t("friendsInvite.creating") : t("friendsInvite.createVanilla")}
             </Button>
           )}
@@ -175,9 +171,9 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
       <Sender invite={invite} />
       <SummaryChips summary={invite.instance} />
       {!invite.hostOnline && <Hint className="mt-3" tone="warn">{t("friendsInvite.hostOffline")}</Hint>}
-      <div className="mt-4">
+      <div className="fr-plan">
         {plan.isFetching ? (
-          <Skel h={PLAN_SKELETON_HEIGHT_PX} />
+          <Skel className={PLAN_SKELETON_HEIGHT} />
         ) : plan.error ? (
           <ErrorBox title={t("friendsInvite.planFailed")} error={plan.error} onRetry={() => void plan.refetch()} />
         ) : (

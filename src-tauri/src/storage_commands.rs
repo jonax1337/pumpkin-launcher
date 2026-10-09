@@ -61,11 +61,12 @@ pub async fn storage_overview(state: State<'_, AppState>) -> AppResult<StorageOv
     blocking(move |_| storage::overview(&dirs, &instances)).await
 }
 
-/// Löscht die Dateien des Mod-Caches, die keine Instanz braucht, und liefert die freigegebenen Bytes. Wie
-/// Installationen unter der Vorgangssperre: ein laufender Mod-Download könnte seine Datei sonst verlieren.
+/// Löscht die Dateien des Mod-Caches, die keine Instanz braucht, und liefert die freigegebenen Bytes. Unter der Sperre
+/// der ganzen Bibliothek, solange also kein Vorgang an einer Instanz läuft: ein Mod-Download oder -Einbau könnte seine
+/// Datei sonst verlieren, bevor die Instanz sie einträgt.
 #[tauri::command]
 pub async fn storage_clear_cache(state: State<'_, AppState>) -> AppResult<u64> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_library_operation()?;
     let (dirs, instances) = (state.dirs.clone(), state.instances.list());
     let freed = blocking(move |_| storage::clear_unused_cache(&dirs, &instances)).await?;
     tracing::info!(freed, "Mod-Cache aufgeräumt");

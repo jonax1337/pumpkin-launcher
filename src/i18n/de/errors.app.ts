@@ -67,6 +67,14 @@ export const errorsApp = {
   "errors.app.launchArgs.jvm.malformed": "JVM-Argumente dürfen nicht leer sein, keine Steuerzeichen enthalten und höchstens {max} Zeichen lang sein",
   "errors.app.launchArgs.game.tooMany": "Spielargumente: höchstens {max} Argumente",
   "errors.app.launchArgs.game.malformed": "Spielargumente dürfen nicht leer sein, keine Steuerzeichen enthalten und höchstens {max} Zeichen lang sein",
+  "errors.app.launchSettings.env.tooMany": "Umgebungsvariablen: höchstens {max}",
+  "errors.app.launchSettings.env.invalidName": "„{name}“ ist kein gültiger Name für eine Umgebungsvariable. Erlaubt sind Buchstaben, Ziffern und _, nicht als Erstes eine Ziffer, höchstens {chars} Zeichen",
+  "errors.app.launchSettings.env.reserved": "{name} setzt der Launcher selbst. Namen, die mit PUMPKIN_ beginnen, lassen sich nicht einstellen",
+  "errors.app.launchSettings.env.invalidValue": "Wert von {name}: höchstens {chars} Zeichen und kein Nullzeichen",
+  "errors.app.launchSettings.env.duplicate": "Die Umgebungsvariable {name} steht doppelt in der Liste",
+  "errors.app.launchSettings.wrapper.malformed": "Wrapper-Befehl ungültig: Anführungszeichen müssen schließen, höchstens {args} Argumente, keine leeren Argumente oder Steuerzeichen, höchstens {chars} Zeichen",
+  "errors.app.launchSettings.preLaunch.malformed": "Befehl vor dem Start ungültig: Anführungszeichen müssen schließen, höchstens {args} Argumente, keine leeren Argumente oder Steuerzeichen, höchstens {chars} Zeichen",
+  "errors.app.launchSettings.postExit.malformed": "Befehl nach dem Ende ungültig: Anführungszeichen müssen schließen, höchstens {args} Argumente, keine leeren Argumente oder Steuerzeichen, höchstens {chars} Zeichen",
   "errors.app.iconInvalid": "Ungültiges Icon",
   "errors.app.sceneInvalid": "Ungültige Szene",
   "errors.app.providerOnlyPacks": "Dieser Anbieter liefert nur Modpacks",
@@ -87,6 +95,9 @@ export const errorsApp = {
   "errors.app.server.nameMissing": "Gib dem Server einen Namen",
   "errors.app.server.unknownFormat": "servers.dat hat ein unbekanntes Format",
 
+  "errors.app.shortcut.noDesktop": "Der Desktop-Ordner dieses Rechners wurde nicht gefunden",
+  "errors.app.deepLink.registrationFailed": "Das System ließ die Links nicht umstellen. Auf macOS legt nur die installierte App fest, welche Links sie öffnet.",
+
   "errors.app.template.nameLength": "Der Name der Vorlage muss 1 bis {max} Zeichen lang sein",
   "errors.app.template.fileMissing": "Die Vorlagendatei fehlt",
 
@@ -96,4 +107,9 @@ export const errorsApp = {
   "errors.app.import.gameDirGone": "Den Spielordner {dir} gibt es nicht mehr",
   "errors.app.import.packFileMissing": "mmc-pack.json fehlt",
   "errors.app.import.noMinecraftVersion": "Instanz ohne Minecraft-Version",
+
+  "errors.profiles.nameInvalid": "Der Name eines Profils muss 1 bis {max} Zeichen lang sein",
+  "errors.profiles.nameTaken": "Es gibt schon ein Profil namens „{name}“",
+  "errors.profiles.tooMany": "Eine Instanz kann höchstens {max} Profile haben",
+  "errors.profiles.notFound": "Das Profil gibt es nicht (mehr)",
 } satisfies Dict;

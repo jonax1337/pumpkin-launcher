@@ -22,6 +22,7 @@ use crate::services::gamesignal::GameSignals;
 use crate::services::launch::Running;
 use crate::services::modbridge::ModBridge;
 use crate::services::presence::Presence;
+use crate::services::operation_locks::{OperationGuard, OperationLocks};
 use crate::services::progress::{progress, SharedProgress};
 use crate::services::secrets::KeyringSecrets;
 use crate::services::store::JsonStore;
@@ -59,13 +60,11 @@ pub struct AppState {
     running: Mutex<HashMap<String, Option<Running>>>,
     /// Abbrechbare Vorgänge je Instanz- bzw. operationId.
     cancels: Mutex<HashMap<String, CancellationToken>>,
-    /// Eine Sperre für alle Instanzen: Installationen, Inhalte, Starts und Änderungen laufen nacheinander.
-    /// TODO: je Instanz aufteilen, falls parallele Vorgänge auf verschiedenen Instanzen gebraucht werden.
-    operation: tokio::sync::Mutex<()>,
+    /// Welche Vorgänge gerade an welchen Instanzen (oder der ganzen Bibliothek) laufen.
+    operations: OperationLocks,
+    /// Hält die Installation, die in den geteilten Spielcache schreibt (siehe `lock_game_files`).
+    game_files: tokio::sync::Mutex<()>,
 }
-
-/// Hält die Vorgangssperre von `AppState`, bis er fallen gelassen wird.
-pub type OperationGuard<'a> = tokio::sync::MutexGuard<'a, ()>;
 
 impl AppState {
     pub fn load(data_dir: &Path) -> AppResult<Self> {
@@ -110,7 +109,8 @@ impl AppState {
             sessions,
             signals,
             running: Mutex::new(HashMap::new()),
-            operation: tokio::sync::Mutex::new(()),
+            operations: OperationLocks::default(),
+            game_files: tokio::sync::Mutex::new(()),
             cancels: Mutex::new(HashMap::new()),
         })
     }
@@ -120,26 +120,47 @@ impl AppState {
         self.instances.get(id).map(drop)
     }
 
-    /// Beginnt einen Vorgang unter der Sperre (siehe `operation`); läuft schon einer, ist das ein Fehler.
-    pub fn begin_operation(&self) -> AppResult<OperationGuard<'_>> {
-        self.operation.try_lock().map_err(|_| AppError::invalid(coded!("errors.operationRunning")))
-    }
-
-    /// Wie `begin_operation` für eine Instanz, die dabei nicht laufen darf.
+    /// Beginnt einen Vorgang an der Instanz `id`, die dabei nicht laufen darf. Vorgänge an anderen Instanzen laufen
+    /// weiter; an derselben Instanz oder während eines Vorgangs an der ganzen Bibliothek ist es ein Fehler.
     pub fn begin_instance_operation(&self, id: &str) -> AppResult<OperationGuard<'_>> {
-        let guard = self.begin_operation()?;
+        let guard = self.begin_instance_operation_even_if_running(id)?;
         if self.is_running(id) {
             return Err(AppError::invalid(coded!("errors.instance.stillRunning")));
         }
         Ok(guard)
     }
 
+    /// Wie `begin_instance_operation`, doch ihr Spiel darf laufen: für Dateien, die das Spiel nicht anfasst
+    /// (Screenshots, Sicherungen).
+    pub fn begin_instance_operation_even_if_running(&self, id: &str) -> AppResult<OperationGuard<'_>> {
+        self.operations.lock_instance(id)
+    }
+
+    /// Beginnt einen Vorgang, der eine neue Instanz anlegt (Anlegen, Import, Modpack, Vorlage). Er sperrt keine andere
+    /// Instanz; nur ein Vorgang an der ganzen Bibliothek schließt ihn aus.
+    pub fn begin_creation(&self) -> AppResult<OperationGuard<'_>> {
+        self.operations.lock_creation()
+    }
+
+    /// Beginnt einen Vorgang, der alle Instanzen oder den geteilten Mod-Cache anfasst; läuft irgendein anderer
+    /// Vorgang, ist es ein Fehler.
+    pub fn begin_library_operation(&self) -> AppResult<OperationGuard<'_>> {
+        self.operations.lock_library()
+    }
+
+    /// Wie `begin_library_operation`, und es darf kein Spiel laufen oder gerade enden.
     pub fn begin_storage_operation(&self) -> AppResult<OperationGuard<'_>> {
-        let guard = self.begin_operation()?;
+        let guard = self.begin_library_operation()?;
         if !lock(&self.running).is_empty() {
             return Err(AppError::invalid(coded!("errors.instance.stillRunning")));
         }
         Ok(guard)
+    }
+
+    /// Der geteilte Spielcache (Libraries, Assets, Versionen, Java, Loader) hat keine Dateisperren: Installationen
+    /// schreiben ihn nacheinander, eine weitere wartet hier, bis die laufende endet.
+    pub async fn lock_game_files(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.game_files.lock().await
     }
 
     /// Wie `begin_instance_operation` für eine Instanz, die es auch geben muss.
@@ -242,13 +263,56 @@ mod tests {
     fn relocation_rejects_mutations_and_stopping_games() {
         let root = std::env::temp_dir().join(crate::models::new_id());
         let state = AppState::load(&root).unwrap();
-        let guard = state.begin_operation().unwrap();
+        let guard = state.begin_instance_operation("any").unwrap();
         assert!(state.begin_storage_operation().is_err());
         drop(guard);
+        let creation = state.begin_creation().unwrap();
+        assert!(state.begin_storage_operation().is_err());
+        drop(creation);
         lock(&state.running).insert("stopping".into(), None);
         assert!(state.begin_storage_operation().is_err());
         state.take_running("stopping");
         assert!(state.begin_storage_operation().is_ok());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn operations_on_different_instances_run_in_parallel_but_not_on_the_same_one() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        let installing = state.begin_instance_operation("a").unwrap();
+        assert!(state.begin_instance_operation("b").is_ok(), "ein anderer Start darf nebenher laufen");
+        assert_eq!(state.begin_instance_operation("a").unwrap_err().key(), Some("errors.operationRunning"));
+        assert!(state.begin_creation().is_ok(), "eine neue Instanz darf nebenher entstehen");
+        assert!(state.begin_library_operation().is_err(), "ein Vorgang an der Bibliothek braucht Ruhe");
+        drop(installing);
+        assert!(state.begin_library_operation().is_ok());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_running_game_refuses_changes_to_its_instance_only() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        lock(&state.running).insert("playing".into(), None);
+        assert_eq!(state.begin_instance_operation("playing").unwrap_err().key(), Some("errors.instance.stillRunning"));
+        assert!(state.begin_instance_operation("other").is_ok());
+        assert!(
+            state.begin_instance_operation_even_if_running("playing").is_ok(),
+            "die abgewiesene Prüfung hält die Sperre nicht fest"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn installs_of_different_instances_take_turns_on_the_shared_game_files() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        let first = state.lock_game_files().await;
+        let second = tokio::time::timeout(Duration::from_millis(50), state.lock_game_files()).await;
+        assert!(second.is_err(), "die zweite Installation wartet");
+        drop(first);
+        assert!(tokio::time::timeout(Duration::from_millis(50), state.lock_game_files()).await.is_ok());
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -4,6 +4,8 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import type {
   BlockedFile, CatalogType, ContentBlocked, ContentProject, ContentSearch, ContentVersion, ModUpdate, SearchIndex, Source,
 } from "./content-types";
+import type { CrashDiagnosis } from "./crash-types";
+import type { DeepLinkRequest } from "./deep-link-types";
 import type { ContentProgress } from "./progress";
 import type {
   Account, BlockedPeer, ContentAnalysis, Datapack, IngameEvent, IngameFailedEvent, IngameStatus, ExitPayload, ExportSummary, FileCheck, ForeignInstance, Friend, FriendCode,
@@ -14,6 +16,7 @@ import type {
   ModConnectionEvent, ModLoader, ModOpenEvent, MsLoginStart, NetworkStatus, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
   Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, StorageRelocation, Template, VersionEntry, World, WorldBackup,
 } from "./types";
+import { platform } from "./platform";
 
 /** Events des Backends (Tauri-Events bzw. im Browser-Mock der gleiche Name auf einem EventTarget) mit ihrer Nutzlast. */
 export interface BackendEvents {
@@ -25,6 +28,8 @@ export interface BackendEvents {
   "instances-changed": null;
   /** Der Launcher wurde mit einer Pack-Datei geöffnet; `takeOpenedPack` liefert sie. */
   "pack-opened": null;
+  /** Ein Link von außen (`pumpkin://…`, bei Bedarf `modrinth://`, `curseforge://`) ist angekommen; `takeDeepLinks` liefert ihn. */
+  "deep-link-opened": null;
   /** Freunde, Anfragen, Codes, Sperren, Einstellungen oder Hinweise haben sich geändert; die Oberfläche lädt neu. */
   "friends-changed": null;
   "friends-network": NetworkStatus;
@@ -117,6 +122,10 @@ export interface Capabilities {
   nativeWindow: boolean;
   /** Version der installierten App (im Browser gilt die aus der `package.json`). */
   appVersion: boolean;
+  /** Verknüpfungen zu Instanzen auf den Desktop legen (`createShortcut`). */
+  shortcuts: boolean;
+  /** `modrinth://`- und `curseforge://`-Links zur Laufzeit dem Launcher überlassen; auf macOS legt nur das App-Bündel Schemas fest. */
+  foreignSchemes: boolean;
 }
 
 export const allCapabilities = (available: boolean): Capabilities => ({
@@ -126,6 +135,8 @@ export const allCapabilities = (available: boolean): Capabilities => ({
   revealPath: available,
   nativeWindow: available,
   appVersion: available,
+  shortcuts: available,
+  foreignSchemes: available && platform !== "macos",
 });
 
 /**
@@ -189,6 +200,12 @@ export interface Backend {
   setInstanceIcon(instanceId: string, icon: IconChoice | null): Promise<Instance>;
   /** Szene setzen; null = aus der ID abgeleitet. Ändert nichts anderes an der Instanz. */
   setInstanceScene(instanceId: string, scene: InstanceScene | null): Promise<Instance>;
+  /** Speichert, welche Inhalte jetzt an sind, als Profil `name` (ein gleichnamiges wird überschrieben) und macht es aktiv. */
+  modProfileSave(instanceId: string, name: string): Promise<Instance>;
+  /** Schaltet die Inhalte auf den Stand des Profils; Spätere und das Festhalten bleiben. Läuft das Spiel, passiert nichts. */
+  modProfileApply(instanceId: string, profileId: string): Promise<Instance>;
+  modProfileRename(instanceId: string, profileId: string, name: string): Promise<Instance>;
+  modProfileDelete(instanceId: string, profileId: string): Promise<Instance>;
   deleteInstance(id: string): Promise<void>;
   /** Kopie mit Spielordner unter „<Name> (Kopie)“; Fortschritt als `content-progress`. */
   duplicateInstance(instanceId: string, operationId: string): Promise<Instance>;
@@ -233,6 +250,16 @@ export interface Backend {
 
   /** Die `.mrpack`-Datei, mit der der Launcher geöffnet wurde, einmalig; danach `null` bis zur nächsten. */
   takeOpenedPack(): Promise<string | null>;
+  /** Die Links von außen, die auf die Oberfläche warten; jeder wird nur einmal geliefert. */
+  takeDeepLinks(): Promise<DeepLinkRequest[]>;
+  /** Gehören `modrinth://`- und `curseforge://`-Links dem Launcher? Das System weiß es: ein anderes Programm kann sie zurückholen. */
+  foreignLinksEnabled(): Promise<boolean>;
+  /** Überlässt diese Links dem Launcher oder gibt sie frei (nur Windows und Linux); liefert, ob sie ihm danach gehören. */
+  setForeignLinks(enabled: boolean): Promise<boolean>;
+  /** Legt eine Verknüpfung zur Instanz auf den Desktop, die sie ohne Rückfrage startet; liefert den Pfad der Datei. `iconPng` ist ihr Icon als quadratisches PNG (`data:`-URL); ohne trägt sie das des Launchers. */
+  createShortcut(instanceId: string, iconPng: string | null): Promise<string>;
+  /** Das Icon des Modpacks, aus dem die Instanz stammt, als `data:`-URL (das Backend lädt es); null ohne Pack, ohne Icon und bei CurseForge. */
+  packIcon(instanceId: string): Promise<string | null>;
 
   versionsList(): Promise<VersionEntry[]>;
   loaderVersions(loader: ModLoader, mcVersion: string): Promise<LoaderVersion[]>;
@@ -256,6 +283,7 @@ export interface Backend {
   onExit(cb: (p: ExitPayload) => void): Promise<UnlistenFn>;
   onInstancesChanged(cb: () => void): Promise<UnlistenFn>;
   onPackOpened(cb: () => void): Promise<UnlistenFn>;
+  onDeepLinkOpened(cb: () => void): Promise<UnlistenFn>;
   onFriendsChanged(cb: () => void): Promise<UnlistenFn>;
   onFriendsNetwork(cb: (p: NetworkStatus) => void): Promise<UnlistenFn>;
   onFriendPresence(cb: (p: FriendPresenceEvent) => void): Promise<UnlistenFn>;
@@ -289,6 +317,11 @@ export interface Backend {
   /** Gesicherte Protokolle früherer Sitzungen der Instanz, neueste zuerst. */
   logSessions(instanceId: string): Promise<LogSession[]>;
   logSessionRead(instanceId: string, sessionId: string): Promise<string>;
+  /**
+   * Befunde zum letzten Absturz der Instanz (Absturzbericht, sonst Protokoll der letzten Sitzung), wichtigster zuerst.
+   * `defaultMemoryMb` ist der RAM, den Instanzen ohne eigenen Wert bekommen: eine Einstellung des Launchers, die nur das Frontend kennt.
+   */
+  crashDiagnose(instanceId: string, defaultMemoryMb: number): Promise<CrashDiagnosis[]>;
 
   /** Platz je Instanz, im Mod-Cache und in den geteilten Ordnern. */
   storageOverview(): Promise<StorageOverview>;
@@ -447,6 +480,7 @@ export const eventSubscriptions = (on: Subscribe) => ({
   onExit: (cb) => on("instance-exit", cb),
   onInstancesChanged: (cb) => on("instances-changed", cb),
   onPackOpened: (cb) => on("pack-opened", cb),
+  onDeepLinkOpened: (cb) => on("deep-link-opened", cb),
   onFriendsChanged: (cb) => on("friends-changed", cb),
   onFriendsNetwork: (cb) => on("friends-network", cb),
   onFriendPresence: (cb) => on("friend-presence", cb),

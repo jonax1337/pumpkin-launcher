@@ -1,6 +1,7 @@
 // Nur im Browser-Dev-Modus dynamisch geladen (siehe api.ts); im Release-Build nicht enthalten.
 import { t } from "@/i18n";
 import type { Backend } from "./backend";
+import { EMPTY_LAUNCH } from "./launchSettings";
 import { blankInstanceFields, importedMods, mockForeign } from "./mock-data";
 import { clone, findInstance, newId, wait, type MockContext } from "./mock-util";
 import { cancelledError } from "./errors";
@@ -49,8 +50,9 @@ export function createInstanceMock({ db, emit }: MockContext) {
     async updateInstance(instance) {
       await wait();
       findInstance(db, instance.id);
-      // Wie `update_instance`: Icon und Szene ändern nur ihre eigenen Aufrufe.
-      db.instances = db.instances.map((i) => (i.id === instance.id ? { ...clone(instance), icon: i.icon, scene: i.scene } : i));
+      // Wie `update_instance`: Icon und Szene ändern nur ihre eigenen Aufrufe, die Profile nur die Profil-Aufrufe.
+      const kept = (i: Instance) => ({ icon: i.icon, scene: i.scene, modProfiles: i.modProfiles, activeModProfile: i.activeModProfile });
+      db.instances = db.instances.map((i) => (i.id === instance.id ? { ...clone(instance), ...kept(i) } : i));
       return clone(findInstance(db, instance.id));
     },
     async setInstanceGroup(instanceId, group) {
@@ -155,7 +157,8 @@ export function createInstanceMock({ db, emit }: MockContext) {
       await wait(800);
       const found = db.templates.find((saved) => saved.template.id === templateId);
       if (!found) throw new Error(t("hooks.api.templateGone"));
-      const inst = derived(found.instance, { name });
+      // Wie das Backend: eine Vorlage bringt nie Wrapper, Hooks oder Variablen mit.
+      const inst = derived(found.instance, { name, modProfiles: [], activeModProfile: null, launch: { ...EMPTY_LAUNCH } });
       db.instances.push(inst);
       return clone(inst);
     },

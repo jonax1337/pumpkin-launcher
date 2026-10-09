@@ -10,13 +10,13 @@ function UpdateItem({ instance, mod, update, title, icon }: {
 }) {
   const { t } = useI18n();
   return (
-    <li className="grid grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 gap-y-1 py-2">
+    <li className="dc-upd">
       <ProjectIcon url={icon} seed={mod.id} />
-      <div className="min-w-0">
-        <b className="block truncate">{title}</b>
-        <span className="text-fg-3 text-[13px]">{t("detail.content.versionChange", { from: mod.version, to: update.versionNumber })}</span>
+      <div className="dc-upd-body">
+        <b className="dc-upd-name">{title}</b>
+        <span className="dc-upd-ver">{t("detail.content.versionChange", { from: mod.version, to: update.versionNumber })}</span>
       </div>
-      <div className="col-start-2">
+      <div className="dc-upd-log">
         <ChangelogDisclosure instance={instance} mod={mod} versionId={update.versionId} />
       </div>
     </li>
@@ -41,17 +41,16 @@ export function UpdateConfirmDialog({ instance, items, titleOf, iconOf, onConfir
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      width={620}
       title={t(items.length === 1 ? "detail.content.confirmTitle.one" : "detail.content.confirmTitle.other", { n: items.length })}
       sub={t("detail.content.confirmSub")}
-      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("detail.content.updateAction"), icon: "up", onClick: onConfirm }} />}
+      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("detail.content.updateAction"), icon: "update", onClick: onConfirm }} />}
     >
       {fromPack > 0 && (
-        <Hint tone="warn" className="mb-2">
+        <Hint tone="warn" className="dc-panel-hint">
           {t(fromPack === 1 ? "detail.content.confirmPackHint.one" : "detail.content.confirmPackHint.other", { n: fromPack })}
         </Hint>
       )}
-      <ul className="divide-line m-0 list-none divide-y p-0">
+      <ul className="dc-upd-list">
         {items.map(({ mod, update }) => (
           <UpdateItem key={mod.id} instance={instance} mod={mod} update={update} title={titleOf(mod)} icon={iconOf(mod)} />
         ))}

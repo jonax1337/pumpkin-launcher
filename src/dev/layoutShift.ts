@@ -1,6 +1,6 @@
 type LayoutShift = PerformanceEntry & { value: number; hadRecentInput: boolean };
 
-/** Nur Entwicklung: Layoutshift-Summe (PIXELKINO.md §4) in window.__cls. */
+/** Nur Entwicklung: Layoutshift-Summe (siehe „Interaction and state“ in PIXELKINO.md) in window.__cls. */
 export function trackLayoutShift() {
   if (typeof PerformanceObserver === "undefined") return;
   const win = window as Window & { __cls?: number };

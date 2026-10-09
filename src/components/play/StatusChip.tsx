@@ -40,5 +40,5 @@ export function StatusChip({ instance, small, loudOnly }: { instance: Instance; 
   if (loudOnly && !LOUD_PHASES.includes(phase)) return null;
   const [text, tone] = chipLook(phase, percent, t);
   // Text in einem Span: sonst setzt der Chip seinen Flex-Abstand zwischen Wort, Zahl und „%“.
-  return <Chip size={small ? "s" : "m"} dot tone={tone}><span>{text}</span></Chip>;
+  return <Chip size={small ? "s" : "m"} tone={tone}><span>{text}</span></Chip>;
 }

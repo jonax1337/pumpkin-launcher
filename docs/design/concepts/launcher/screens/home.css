@@ -1,0 +1,47 @@
+/* Startseite: Szene füllt die ganze Fläche, Inhalt (Hero + Instanz-Schiene) liegt darüber */
+.s-home { --gut: clamp(16px, 2.6vw, 40px); position: relative; min-height: 100%; display: flex; flex-direction: column; padding: 0 var(--gut) 28px; }
+
+/* Hintergrund-Szene mit hart gestuften Abdunklungsbändern (keine Verläufe) */
+.s-home .hero { position: absolute; inset: 0; z-index: 0; }
+.s-home .hero > canvas { object-position: 50% 100%; }
+.s-home .hero-shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+    transparent 0 45%,
+    color-mix(in srgb, var(--bg) 30%, transparent) 45% 60%,
+    color-mix(in srgb, var(--bg) 58%, transparent) 60% 72%,
+    color-mix(in srgb, var(--bg) 80%, transparent) 72% 84%,
+    color-mix(in srgb, var(--bg) 92%, transparent) 84% 100%);
+}
+
+/* Hero-Inhalt unten links */
+.s-home .hero-body { position: relative; z-index: 1; flex: 1 0 auto; min-height: 380px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; gap: 14px; padding-bottom: 28px; }
+.s-home .hero-title { margin: 0; max-width: 100%; font: 800 clamp(44px, 6vw, 72px)/.95 var(--f-display); letter-spacing: .01em; text-transform: uppercase; color: var(--fg); text-shadow: var(--u2) var(--u2) 0 #000; overflow-wrap: anywhere; }
+.s-home .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 0; font-size: 14px; color: var(--fg); text-shadow: 0 var(--px) 0 #000; }
+.s-home .hero-meta b { font-weight: 800; }
+.s-home .hero-meta .chip { margin-left: 14px; cursor: pointer; }
+.s-home .hero-play { display: flex; align-items: stretch; gap: 12px; }
+
+/* Spielen-Knopf mit Unterzeile */
+.s-home .btn.play { height: 64px; min-width: 240px; justify-content: flex-start; padding: 0 28px 0 20px; }
+.s-home .btn.play .play-t { display: grid; gap: 3px; text-align: left; }
+.s-home .btn.play b { font: 800 26px/1 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
+.s-home .btn.play small { font: 600 13px/1 var(--f-body); letter-spacing: 0; opacity: .85; }
+.s-home .hero-play .btn.ib { height: 64px; width: 64px; }
+
+/* Instanz-Schiene */
+.s-home .rail-wrap { position: relative; z-index: 1; display: grid; gap: 14px; min-width: 0; }
+.s-home .rail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.s-home .rail-head .h2 { font-size: 26px; }
+.s-home .cards { display: flex; gap: 14px; padding: 4px 4px 12px; margin: 0 -4px; }
+.s-home .cards .card { flex: none; width: 256px; align-content: start; }
+.s-home .cards .card .nm b { font-size: 15px; }
+.s-home .pic canvas { width: 100%; height: 100%; object-fit: cover; }
+.s-home .cap2 { min-height: 56px; }
+.s-home .cap2 .tile { --s: 32px; }
+.s-home .card .tag { top: 6px; left: 6px; }
+
+@media (max-width: 760px) {
+  .s-home .hero-body { min-height: 320px; }
+  .s-home .btn.play { min-width: 0; }
+}

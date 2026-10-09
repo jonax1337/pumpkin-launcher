@@ -65,6 +65,8 @@ export const mock: typeof deMock = {
   "hooks.api.shareLogs": "Sharing logs",
   "hooks.api.openFiles": "Opening files",
   "hooks.api.restart": "Restarting",
+  "hooks.api.createShortcut": "Creating shortcuts",
+  "hooks.api.foreignLinks": "Taking over links of other programs",
   "hooks.api.instanceNotFound": "Instance “{id}” not found",
   "hooks.api.duplicateName": "{name} (Copy)",
   "hooks.api.importSourceGone": "The instance no longer exists in the other launcher",

@@ -5,7 +5,9 @@ import { friendCodeBodyGroups } from "@/lib/friendCode";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import { relativeTime } from "@/lib/format";
 import type { FriendCode } from "@/lib/types";
-import { Button, Chip, ErrorBox, Hint, Icon, List, ListRow, RowTitle, SectionHeader, Skel } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Button, Chip, Hint, IconButton, List, ListRow, RowTitle, SectionHeader, Skel, Surface } from "@/ui";
+import { IconTile } from "./IconTile";
 import { activeCodeCount } from "./friendsModel";
 
 const SECOND_MS = 1000;
@@ -22,8 +24,8 @@ export function MyCodeTab({ create }: { create: ReturnType<typeof useCreateFrien
   const fresh = create.data?.code && codes.data?.some((code) => code.id === create.data.id) ? create.data : undefined;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2.5">
+    <div className="friends-mycode">
+      <div className="friends-mycode-create">
         <div>
           <Button variant="primary" icon="link" disabled={atLimit || create.isPending} onClick={() => create.mutate()}>
             {t("friends.myCode.create")}
@@ -34,7 +36,7 @@ export function MyCodeTab({ create }: { create: ReturnType<typeof useCreateFrien
       </div>
       {fresh && <FreshCode code={fresh.code!} />}
       <div>
-        <SectionHeader title={t("friends.myCode.active")} size="card" as="h3" />
+        <SectionHeader title={t("friends.myCode.active")} level="card" />
         <ActiveCodes codes={codes} />
       </div>
     </div>
@@ -45,24 +47,24 @@ export function MyCodeTab({ create }: { create: ReturnType<typeof useCreateFrien
 function FreshCode({ code }: { code: string }) {
   const { t } = useI18n();
   return (
-    <div className="flex flex-col items-start gap-2.5">
-      <div className="code w-full text-[26px] leading-[1.35] tracking-[.05em] select-text">
+    <Surface kind="slot" className="flex w-full items-center justify-between gap-3.5 py-2.5 pr-2.5 pl-[18px]">
+      <div className="flex min-w-0 flex-wrap gap-x-[.45em] gap-y-0 text-[length:calc(24px*var(--tz))] leading-[1.3] font-normal font-(family-name:--f-px) tracking-[.05em] text-(color:--copper) select-text [text-shadow:var(--tsh)]">
         {friendCodeBodyGroups(code).map((group, i) => (
-          <span key={i} className="mr-[.45em] inline-block">{i === 0 ? FRIENDS_LIMITS.codePrefix + group : group}</span>
+          <span key={i} className="whitespace-nowrap">{i === 0 ? FRIENDS_LIMITS.codePrefix + group : group}</span>
         ))}
       </div>
-      <Button icon="copy" onClick={() => copyWithToast(code, t("friends.myCode.copied"))}>{t("common.copy")}</Button>
-    </div>
+      <IconButton variant="secondary" icon="copy" label={t("common.copy")} onClick={() => copyWithToast(code, t("friends.myCode.copied"))} />
+    </Surface>
   );
 }
 
 function ActiveCodes({ codes }: { codes: ReturnType<typeof useFriendCodes> }) {
   const { t } = useI18n();
   if (codes.error) return <ErrorBox title={t("friends.myCode.loadFailed")} error={codes.error} onRetry={() => void codes.refetch()} />;
-  if (!codes.data) return <Skel h={60} />;
+  if (!codes.data) return <Skel className="h-[60px]" />;
   if (codes.data.length === 0) return <Hint>{t("friends.myCode.none")}</Hint>;
   return (
-    <List variant="accounts" aria-label={t("friends.myCode.active")}>
+    <List spaced aria-label={t("friends.myCode.active")}>
       {codes.data.map((code) => (
         <CodeRow key={code.id} code={code} />
       ))}
@@ -74,8 +76,8 @@ function CodeRow({ code }: { code: FriendCode }) {
   const { t } = useI18n();
   const revoke = useRevokeFriendCode();
   return (
-    <ListRow>
-      <span className="vx-av" data-box="32"><Icon name="link" size="l" /></span>
+    <ListRow plate="row">
+      <IconTile icon="key" />
       <RowTitle
         title={t("friends.requests.codeTitle", { tail: code.tail })}
         sub={code.used ? <Chip size="s" icon="check">{t("friends.myCode.used")}</Chip> : t("friends.myCode.expires", { time: relativeTime(code.expiresAt * SECOND_MS) })}

@@ -1,0 +1,62 @@
+/* Leerzustand, Hinweisplatte, Fortschritt (XP-Leiste), laufender Vorgang, Laden. Nur Aussehen; Maße und Anordnung setzt Feedback.tsx per Tailwind.
+   Die Keyframes `ind` (unbestimmter Fortschritt) und `skp` (Platzhalter pulsiert) stehen in ui/motion.css. */
+
+.lk-empty-p { color: var(--fg-2); }
+
+/* ---------- Hinweisplatte: eingelassener Slot (.lk-pit), Icon in der Tonfarbe, Tönung 7–8 % ---------- */
+.lk-status { --s-tone: var(--fg-2); --s-bg: var(--panel); color: var(--fg); background: var(--s-bg); }
+.lk-status[data-tone="bad"] { --s-tone: var(--bad); --s-bg: color-mix(in srgb, var(--bad) 8%, var(--panel)); }
+.lk-status[data-tone="warn"] { --s-tone: var(--warn); --s-bg: color-mix(in srgb, var(--warn) 7%, var(--panel)); }
+.lk-status[data-tone="run"] { --s-tone: var(--run); }
+.lk-status[data-tone="acc"] { --s-tone: var(--acc-hi); --s-bg: color-mix(in srgb, var(--acc) 8%, var(--panel)); }
+.lk-status-i { color: var(--s-tone); }
+.lk-status-t > b { font-weight: 600; text-shadow: var(--tsh); }
+.lk-status[data-tone] .lk-status-t > b { color: var(--s-tone); }
+.lk-status[data-tone="bad"] .lk-status-t > b { color: var(--fg); }
+.lk-status-t > span { color: var(--fg-2); }
+
+/* ---------- Fortschritt: XP-Leiste. Bahn = Slot (als Schatten), Raster-Striche alle 4 Einheiten, Füllung in Akzent mit heller Kopf- und dunkler
+   Fußreihe, Segmentfugen alle 4 Einheiten, Glanzpunkt an der Spitze; Füllung auf ganze Segmente gerundet. Höhe: 5 Einheiten (`h-[…]`), dünn 3 (`h-(--u3)`). ---------- */
+.lk-prog {
+  --pg-on: var(--acc); --pg-bd: var(--px);
+  --pg-hi: color-mix(in oklab, var(--pg-on) 58%, #fff); --pg-lo: color-mix(in oklab, var(--pg-on) 76%, #070A11);
+  --pg-end: calc(round(down, calc(var(--p, 0) * 100%), var(--u4)));
+  position: relative; clip-path: var(--n1);
+  background: repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 3), rgba(255, 255, 255, .05) calc(var(--px) * 3) var(--u4)), var(--sunk);
+  box-shadow: inset var(--px) var(--px) 0 var(--edge), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--ctl);
+}
+.lk-prog::after { content: ""; position: absolute; inset: var(--pg-bd); clip-path: inset(0 calc(100% - var(--pg-end)) 0 0);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 3), var(--sunk) calc(var(--px) * 3) var(--u4)),
+    linear-gradient(var(--pg-hi) 0 var(--px), transparent var(--px) calc(100% - var(--px)), var(--pg-lo) calc(100% - var(--px))),
+    var(--pg-on); }
+.lk-prog::before { content: ""; position: absolute; inset: var(--pg-bd); z-index: 1; pointer-events: none;
+  clip-path: inset(0 calc(100% - var(--pg-end)) 0 calc(var(--pg-end) - var(--px)));
+  background: linear-gradient(color-mix(in oklab, var(--pg-on) 40%, #fff) 0 var(--px), transparent 0); }
+/* dünn: nur 1 Einheit Füllung, keine Kopf- und Fußreihe */
+.lk-prog[data-thin] { --pg-hi: var(--pg-on); --pg-lo: var(--pg-on); }
+.lk-prog[data-tone="bad"] { --pg-on: var(--bad); }
+.lk-prog[data-tone="run"] { --pg-on: var(--run); }
+.lk-prog[data-tone="warn"] { --pg-on: var(--warn); }
+.lk-prog[data-ind]::before { display: none; }
+.lk-prog[data-ind]::after { clip-path: none; -webkit-mask: linear-gradient(90deg, transparent 0 30%, #000 30% 55%, transparent 55%); mask: linear-gradient(90deg, transparent 0 30%, #000 30% 55%, transparent 55%); animation: ind 1.2s steps(10) infinite; }
+
+/* ---------- Laufender Vorgang ---------- */
+.lk-job-l { color: var(--fg-2); font-weight: 600; text-shadow: var(--tsh); }
+.lk-job-l .lk-count { color: var(--fg); }
+.lk-job-s { color: var(--fg-3); }
+
+/* ---------- Laden ---------- */
+.lk-skel { background: var(--panel-3); clip-path: var(--n1); animation: skp 1.4s steps(3) infinite alternate; }
+
+/* ---------- Schritte (Steps): offen = eingelassen, erledigt = Kupfer ---------- */
+.lk-step { background: var(--sunk); border: var(--px) solid var(--slot-bd); box-shadow: var(--slot-sh); }
+.lk-step[data-done] { background: var(--copper); border-color: var(--edge); box-shadow: inset 0 var(--px) 0 var(--line-hi); }
+
+/* ---------- Ablagefläche (DropZone): Fläche auf ::before, gestrichelter Rand auf ::after ---------- */
+.lk-drop { color: var(--fg-2); }
+.lk-drop::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sunk); clip-path: var(--n1); box-shadow: inset 0 0 0 var(--px) var(--sunk); }
+.lk-drop::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: repeating-linear-gradient(90deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) top / 100% var(--px) no-repeat, repeating-linear-gradient(90deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) bottom / 100% var(--px) no-repeat, repeating-linear-gradient(0deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) left / var(--px) 100% no-repeat, repeating-linear-gradient(0deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) right / var(--px) 100% no-repeat; }
+.lk-drop[data-over] { color: var(--fg); }
+.lk-drop[data-over]::before { background: color-mix(in srgb, var(--copper) 10%, var(--sunk)); }
+.lk-drop b { color: var(--fg); font-weight: 600; }

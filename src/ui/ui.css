@@ -1,17 +1,9 @@
-/* Pixel-Kit: sammelt alle Kit-Stile. Eingebunden in src/index.css hinter pixelkino.css (Schicht components).
-   Komponenten importieren kein CSS selbst. */
+/* Kit (src/ui): sammelt alle Kit-Stile. Eingebunden in src/index.css hinter styles/base.css (Schicht components).
+   Komponenten importieren kein CSS selbst. Das Aussehen der Bausteine steht in look.css (importiert look/*.css). */
 @import "./tokens.css";
+@import "./surface.css";
 @import "./icon.css";
-@import "./button.css";
-@import "./chip.css";
-@import "./tabs.css";
-@import "./field.css";
-@import "./toggle.css";
-@import "./card.css";
-@import "./list.css";
-@import "./overlay.css";
-@import "./feedback.css";
-@import "./layout.css";
 @import "./motion.css";
 @import "./prose.css";
 @import "./a11y.css";
+@import "./look.css";

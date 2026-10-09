@@ -67,6 +67,14 @@ export const errorsApp: typeof deErrorsApp = {
   "errors.app.launchArgs.jvm.malformed": "JVM arguments must not be empty, contain control characters or exceed {max} characters",
   "errors.app.launchArgs.game.tooMany": "Game arguments: at most {max} arguments",
   "errors.app.launchArgs.game.malformed": "Game arguments must not be empty, contain control characters or exceed {max} characters",
+  "errors.app.launchSettings.env.tooMany": "Environment variables: at most {max}",
+  "errors.app.launchSettings.env.invalidName": "“{name}” is not a valid environment variable name. Allowed are letters, digits and _, not starting with a digit, at most {chars} characters",
+  "errors.app.launchSettings.env.reserved": "The launcher sets {name} itself. Names starting with PUMPKIN_ cannot be set",
+  "errors.app.launchSettings.env.invalidValue": "Value of {name}: at most {chars} characters and no null character",
+  "errors.app.launchSettings.env.duplicate": "The environment variable {name} is listed twice",
+  "errors.app.launchSettings.wrapper.malformed": "Invalid wrapper command: quotes must be closed, at most {args} arguments, no empty arguments or control characters, at most {chars} characters",
+  "errors.app.launchSettings.preLaunch.malformed": "Invalid command before launch: quotes must be closed, at most {args} arguments, no empty arguments or control characters, at most {chars} characters",
+  "errors.app.launchSettings.postExit.malformed": "Invalid command after exit: quotes must be closed, at most {args} arguments, no empty arguments or control characters, at most {chars} characters",
   "errors.app.iconInvalid": "Invalid icon",
   "errors.app.sceneInvalid": "Invalid scene",
   "errors.app.providerOnlyPacks": "This provider only offers modpacks",
@@ -87,6 +95,9 @@ export const errorsApp: typeof deErrorsApp = {
   "errors.app.server.nameMissing": "Give the server a name",
   "errors.app.server.unknownFormat": "servers.dat has an unknown format",
 
+  "errors.app.shortcut.noDesktop": "This computer's desktop folder was not found",
+  "errors.app.deepLink.registrationFailed": "The system did not let the links be changed. On macOS only the installed app decides which links it opens.",
+
   "errors.app.template.nameLength": "The template name must be 1 to {max} characters long",
   "errors.app.template.fileMissing": "The template file is missing",
 
@@ -96,4 +107,9 @@ export const errorsApp: typeof deErrorsApp = {
   "errors.app.import.gameDirGone": "The game folder {dir} no longer exists",
   "errors.app.import.packFileMissing": "mmc-pack.json is missing",
   "errors.app.import.noMinecraftVersion": "Instance without a Minecraft version",
+
+  "errors.profiles.nameInvalid": "A profile name must be 1 to {max} characters long",
+  "errors.profiles.nameTaken": "A profile named “{name}” already exists",
+  "errors.profiles.tooMany": "An instance can have at most {max} profiles",
+  "errors.profiles.notFound": "The profile no longer exists",
 };

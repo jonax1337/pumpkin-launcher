@@ -72,7 +72,11 @@ export function useExportMany() {
         return api.getInstance(last.id);
       },
       label,
-      { cancellable: true, doneLabel: t("pages.instances.exportManyDone", { n: instances.length }) },
+      {
+        cancellable: true,
+        doneLabel: t("pages.instances.exportManyDone", { n: instances.length }),
+        instanceIds: instances.map((instance) => instance.id),
+      },
     );
     const reportDone = () =>
       toast.success(t("pages.instances.exportManyDone", { n: instances.length }), {

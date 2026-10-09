@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "@/i18n";
-import { Button, SearchField, Segmented, Select, Spacer, Toolbar } from "@/ui";
+import { Actions, Button, SearchField, SectionHeader, Segmented, Select, Spacer, Toolbar } from "@/ui";
 import { askShareLog, DebugInfoButton } from "@/components/support";
 import { useLogDigest } from "@/hooks/useLogDigest";
 import { useLogSessions } from "@/hooks/useLogSessions";
@@ -19,9 +19,11 @@ const CURRENT_SESSION = "current";
 
 /**
  * Ausgabe des Spiels mit Filter, Suche und Mitscrollen (solange man unten ist): live, oder eine gesicherte frühere
- * Sitzung. Ein neuer Start wechselt zurück zur laufenden.
+ * Sitzung. Ein neuer Start wechselt zurück zur laufenden. Nach einem Absturz steht der Absturzassistent darüber;
+ * `onAddContent` öffnet dessen Suche nach fehlenden Mods.
  */
-export function LogConsole({ instance }: { instance: Instance }) {
+export function LogConsole({ instance, onAddContent }: { instance: Instance; onAddContent: (query: string) => void }) {
+  const { t } = useI18n();
   const live = useGame((s) => s.logs[instance.id]);
   const startedAt = useGame((s) => s.started[instance.id]);
   const [chosenSession, setChosenSession] = useState<string | null>(null);
@@ -38,8 +40,9 @@ export function LogConsole({ instance }: { instance: Instance }) {
   }, [startedAt]);
 
   return (
-    <>
-      <LogStat instance={instance} session={sessions.find((session) => session.id === sessionId)} />
+    <div className="log-tab">
+      <SectionHeader title={t("components.log.ariaLabel")} actions={<LogFileActions instance={instance} lines={lines} />} />
+      <LogStat instance={instance} session={sessions.find((session) => session.id === sessionId)} onAddContent={onAddContent} />
       <LogToolbar
         instance={instance}
         lines={lines}
@@ -53,7 +56,7 @@ export function LogConsole({ instance }: { instance: Instance }) {
       />
       <LogView lines={lines} shown={shown} highlight={highlight} />
       <span className="sr" role="status">{digest}</span>
-    </>
+    </div>
   );
 }
 
@@ -70,11 +73,23 @@ type LogToolbarProps = {
   onSession: (sessionId: string | null) => void;
 };
 
+/** Kopieren und Logordner: Handgriffe am Protokoll selbst, daher im Kopf des Reiters. */
+function LogFileActions({ instance, lines }: { instance: Instance; lines: LogLine[] | undefined }) {
+  const { t } = useI18n();
+  const logFile = useGame((s) => s.crashes[instance.id])?.logFile;
+  const copy = () => copyWithToast((lines ?? []).map((l) => l.line).join("\n"), t("components.log.copySuccess"));
+  return (
+    <Actions>
+      <Button size="s" icon="copy" disabled={!lines?.length} onClick={copy}>{t("common.copy")}</Button>
+      {logFile && <Button size="s" icon="folder" onClick={() => openLocalPath(logFile)}>{t("components.log.logFile")}</Button>}
+    </Actions>
+  );
+}
+
 function LogToolbar({ instance, lines, filter, onFilter, query, onQuery, sessions, sessionId, onSession }: LogToolbarProps) {
   const { t } = useI18n();
   const clearLog = useGame((s) => s.clearLog);
   const crash = useGame((s) => s.crashes[instance.id]);
-  const logFile = crash?.logFile;
   const hasLines = !!lines?.length;
   const archived = sessionId != null;
   const sessionOptions = [
@@ -83,10 +98,9 @@ function LogToolbar({ instance, lines, filter, onFilter, query, onQuery, session
   ];
   // Hochgeladen wird die Logdatei auf dem Datenträger: es gibt sie nach einem Absturz oder sobald die Instanz einmal lief.
   const hasLogToShare = hasLines || !!crash || instance.lastPlayedAt != null;
-  const copy = () => copyWithToast((lines ?? []).map((l) => l.line).join("\n"), t("components.log.copySuccess"));
 
   return (
-    <Toolbar search="s" className="mb-2.5">
+    <Toolbar height={32} search="s">
       <SearchField size="s" value={query} onChange={onQuery} placeholder={t("components.log.searchPlaceholder")} />
       <Segmented
         size="s"
@@ -105,14 +119,10 @@ function LogToolbar({ instance, lines, filter, onFilter, query, onQuery, session
         />
       )}
       <Spacer />
-      <Button size="s" icon="copy" disabled={!hasLines} onClick={copy}>{t("common.copy")}</Button>
-      <Button size="s" icon="ul" disabled={archived || !hasLogToShare} onClick={() => askShareLog(instance.id, crash)}>
+      <Button size="s" icon="share" disabled={archived || !hasLogToShare} onClick={() => askShareLog(instance.id, crash)}>
         {t("components.game.shareLog")}
       </Button>
       <DebugInfoButton size="s" icon="info" instanceId={instance.id} />
-      {logFile && (
-        <Button size="s" icon="folder" onClick={() => openLocalPath(logFile)}>{t("components.log.logFile")}</Button>
-      )}
       <Button size="s" icon="trash" disabled={!hasLines || archived} onClick={() => clearLog(instance.id)}>
         {t("components.log.clear")}
       </Button>

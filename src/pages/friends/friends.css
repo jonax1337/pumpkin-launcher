@@ -1,14 +1,12 @@
 .friends-page .friends-rail {
   min-width: 0;
-  padding: 16px;
 }
 
-.friends-page .friends-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+/* Schmal steht die Freundesliste vor den Anfragen */
+@media (max-width: 960px) {
+  .friends-page .friends-rail {
+    order: 1;
+  }
 }
 
 .friends-page .friends-online {
@@ -16,77 +14,64 @@
   font-size: calc(13px * var(--tz));
 }
 
-.friends-page .friends-rail .vx-list .vx-row {
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 0;
-  --r-bv: none;
-  border-bottom: 1px solid var(--line);
-}
-
-.friends-page .friends-rail .vx-list .vx-row > .vx-rt {
-  flex: 1 1 calc(100% - 48px);
-}
-
-.friends-page .friends-rail :is(.vx-rt-1, .vx-rt-s > span) {
-  flex-wrap: wrap;
-}
-
-.friends-page .friends-rail :is(.vx-rt-s, .vx-rt-a, .vx-rt-m) {
+/* Karten in der Leiste (Anfragen): Layout und Umbruch stehen in RequestsSection (`RAIL_CARD`, `RowTitle wrap`); nur der Fingerabdruck bricht hier um */
+.friends-page .friends-rail .fr-fingerprint {
   white-space: normal;
-  overflow-wrap: anywhere;
 }
 
-.friends-page .friends-rail .vx-rt-m {
+/* Aktivität im Spiel: unter der Liste, aufgeklappt in fester Höhe scrollbar */
+.friends-page .friends-activity {
+  margin-top: var(--pg-gap-l);
+}
+
+.friends-page .friends-activity-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.friends-page .friends-block-note {
+  margin: 4px 0 10px;
+}
+
+.friends-page .friends-checked {
+  display: inline-flex;
   flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
 }
 
-.friends-page .friends-content {
-  container: friends-list / inline-size;
+.friends-page .friends-notice {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-2);
+  font-size: calc(13px * var(--tz));
 }
 
-.friends-page .friends-content .vx-toolbar {
+.friends-page .friends-toolbar {
+  margin-block: 8px 12px;
+}
+
+/* Dialog „Freund hinzufügen“: die Reiter teilen eine Mindesthöhe, damit der Dialog beim Wechseln nicht springt */
+.friends-add-panel {
+  min-height: 220px;
+  margin-top: 16px;
+}
+
+.friends-add-hint {
+  margin-top: 12px;
+}
+
+.friends-mycode {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.friends-mycode-create {
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
-}
-
-.friends-page .vx-status {
-  flex-wrap: wrap;
-}
-
-@container friends-list (max-width: 640px) {
-  .friends-page .vx-list[data-variant="friends"] .vx-row {
-    grid-template-columns: 40px minmax(0, 1fr) 36px;
-    gap: 8px;
-    padding-block: 12px;
-  }
-
-  .friends-page .vx-list[data-variant="friends"] .vx-row > :nth-child(3) {
-    grid-column: 2;
-    grid-row: 2;
-    flex-wrap: wrap;
-  }
-
-  .friends-page .vx-list[data-variant="friends"] .vx-row > :nth-child(4) {
-    grid-column: 2;
-    grid-row: 3;
-    justify-content: flex-start;
-  }
-
-  .friends-page .vx-list[data-variant="friends"] .vx-row > :nth-child(5) {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .friends-page .vx-list[data-variant="friends"] .vx-row[data-note] > :first-child {
-    display: none;
-  }
-
-  .friends-page .vx-list[data-variant="friends"] .vx-row[data-note] > :nth-child(2) {
-    grid-column: 1 / -1;
-  }
-
-  .friends-page .vx-list[data-variant="friends"] .vx-row[data-note] > :nth-child(3) {
-    grid-column: 1 / -1;
-    justify-content: flex-start;
-  }
+  gap: 10px;
 }

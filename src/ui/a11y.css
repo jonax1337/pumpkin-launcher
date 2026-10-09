@@ -1,120 +1,96 @@
-/* Barrierefreiheit: Textgröße, Bewegung aus, Sprunglink, Tastenkürzel-Übersicht, Kontrast auf hellen Szenen und der
+/* Barrierefreiheit: Textgröße, Bewegung aus, Fokusring, Kontrast auf hellen Szenen und der
    Windows-Kontrastmodus (forced-colors). Die Pixel-Optik besteht aus Flächen, Kerben (clip-path) und Schatten; der
    Kontrastmodus ersetzt Flächenfarben und entfernt Schatten, deshalb zeichnet der Block unten Rahmen und Zustände neu. */
 
 /* ---------- Textgröße: --tz setzt app/useAppearance.ts (Normal 1, Groß 1,125, Größer 1,25); Schriftgrößen im Kit rechnen damit ---------- */
 :root { --tz: 1; }
 
-/* Größerer Text braucht mehr Platz: Leisten brechen um, statt über den Rand zu laufen (ohne Umbruch bleibt es eine Zeile, die Höhe ist dann dieselbe) */
-.vx-toolbar:not([data-alt]) { flex-wrap: wrap; row-gap: 8px; height: auto; min-height: var(--tb-h); }
-
-/* ---------- Bewegung aus (Einstellungen › Darstellung): wie prefers-reduced-motion in pixelkino.css ---------- */
+/* ---------- Bewegung aus (Einstellungen › Darstellung): wie prefers-reduced-motion in styles/base.css ---------- */
 :root[data-motion="off"] *, :root[data-motion="off"] *::before, :root[data-motion="off"] *::after {
   animation-duration: 0s !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; transition-delay: 0s !important;
 }
 
-/* ---------- Sprunglink: erstes Bedienelement, nur bei Tastaturfokus sichtbar ---------- */
-.skip { position: absolute; z-index: 100; left: var(--gut); top: 8px; height: var(--vx-h-s); padding: 0 14px; background: var(--panel-3); color: var(--fg); font-weight: 600; box-shadow: var(--bv-raised); translate: 0 -200%; }
-.skip:focus-visible { translate: none; outline: var(--u2) solid var(--focus); outline-offset: var(--px); }
+/* ---------- Fokusring für Elemente mit `.fx` (styles/base.css) ohne eigenen Ring: gestuft, 1 Einheit breit, 1 Einheit Abstand, Farbe wie der Ring der Kit-Bausteine (--ring-i).
+   Knöpfe, Leistenknöpfe, Reiter und Chips (Steinplatten/Slots mit Kerbe) zeichnen --ring-i selbst: der Außenring würde von ihrer Kerbe abgeschnitten. ---------- */
+.fx:where(:not(.lk-btn, .lk-bar, .lk-tab, .lk-chip)):focus-visible::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
 
-/* ---------- Übersicht der Tastenkürzel (components/ShortcutsDialog.tsx) ---------- */
-.vx-keys { margin: 0; }
-.vx-keys > div { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
-.vx-keys dt { color: var(--fg-2); }
-.vx-keys dd { display: flex; gap: 8px; margin: 0; }
-.vx-keys kbd { position: relative; isolation: isolate; padding: 2px 8px; color: var(--fg); font: 600 calc(13px * var(--tz)) var(--f-body); white-space: nowrap; }
-.vx-keys kbd::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sunk); box-shadow: inset 0 0 0 var(--px) var(--ctl); clip-path: var(--n1); }
+/* ---------- Bedienelemente ziehen nie das Fenster (die Fensterleiste der App ist ein Ziehbereich) ---------- */
+:is(button, a, input, select, textarea, [role="button"]) { -webkit-app-region: no-drag; }
 
 /* ---------- Windows-Kontrastmodus ---------- */
-.brand-wordmark-text { display: none; }
 @media (forced-colors: active) {
-  /* Wortmarke: das Bild trägt helle Buchstaben und wäre auf hellem Grund unsichtbar; der Text daneben folgt den Systemfarben */
-  .brand-wordmark:is(img) { display: none; }
-  .brand-wordmark-text { display: block; font: 800 20px/1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; white-space: nowrap; }
-  @media (max-width: 820px) { .wm .brand-wordmark-text { display: none; } }
-
   /* Szenen hinter Text sind Dekor und nähmen ihm den Kontrast: weg, der Grund bleibt Canvas */
-  .home > .scene, .dhead .scene, .onb .scene, :is(.shade-home, .shade-head, .shade-onb) { display: none; }
+  .lk-shade { display: none; }
 
-  /* Fokus: die gestuften Ringe sind Flächen, deren Farbe das System ersetzt; mit Systemfarbe behalten sie Form und Größe */
-  :is(.fx, .winbtn, .vx-pick.fx, .vx-choice.fx, .vx-toast, .vx-slider):focus-visible::after,
-  .vx-input:has(:focus-visible)::after, .vx-card:has(> .hit:focus-visible)::after, .vx-fring {
+  /* Fokus: die gestuften Ringe sind Flächen, deren Farbe das System ersetzt; mit Systemfarbe behalten sie Form und Größe (Karten: look/card.css) */
+  .fx:focus-visible::after {
     background: Highlight;
   }
-  .vx-card[data-pressed]::after { background: CanvasText; }
-  .vx-card[data-pressed]:has(> .hit:focus-visible)::after { background: Highlight; }
-  .skip:focus-visible { outline-color: Highlight; }
+  /* Slots (Felder, Auswahl, Kästchen, Bahnen): der doppelte Ring ist ein Schatten und entfällt; Rahmen und Kontur in Highlight */
+  :is(.lk-slot:is(:focus-within, :focus-visible), .lk-sw input:focus-visible ~ .lk-sw-tr, .lk-cb input:focus-visible ~ .lk-cb-box, .lk-radio input:focus-visible + .lk-rb, .lk-slider:focus-visible .lk-sl-trk) {
+    border-color: Highlight; outline: 2px solid Highlight; outline-offset: -2px;
+  }
+  .lk-card[data-pressed]::after { background: CanvasText; }
+  .lk-card[data-pressed]:has(> .hit:focus-visible)::after { background: Highlight; }
+  .lk-skip:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   :is(a, summary):focus-visible:not(.fx) { outline: 2px solid Highlight; outline-offset: 2px; }
 
-  /* Platten, Knöpfe, Felder, Karten: Rahmen statt Schatten (die Kerben bleiben, die Ecken fehlen wie im Original) */
-  :is(.plate, .vx-panel, .vx-btn[data-variant="secondary"], .vx-btn[data-variant="primary"], .vx-btn[data-variant="danger"], .vx-input, .vx-select, .vx-chip, .vx-status, .vx-pick, .vx-add, .vx-choice, .vx-dlg, .vx-sheet, .vx-pop, .vx-tip, .vx-toast, .vx-row, .drop, .code, .vx-keys kbd)::before {
+  /* Karten, Auswahl, Dialoge, Zeilen: Rahmen statt Schatten auf der Flächenebene (die Kerben bleiben, die Ecken fehlen wie im Original) */
+  :is(.lk-panel, .lk-pick, .lk-add, .lk-choice, .lk-dlg, .lk-row, .lk-drop)::before {
     border: 1px solid CanvasText;
   }
-  .vx-btn:is([data-variant="ghost"], .vx-btn--ghost):is(:hover, :focus-visible)::before, .vx-bar:is(:hover, [aria-expanded="true"])::before, .vx-tab:hover::before { border: 1px solid CanvasText; }
-  :is(.vx-btn, .vx-select, .vx-choice, .vx-pick, .vx-add, .vx-row)[aria-disabled="true"]::before, :is(.vx-btn, .vx-select, .vx-choice):disabled::before { border-style: dashed; border-color: GrayText; }
-  .vx-card-frame, .vx-art { border: 1px solid CanvasText; }
+  .lk-bar:is(:hover, [aria-expanded="true"])::before { border: 1px solid CanvasText; }
+  :is(.lk-choice, .lk-pick, .lk-add, .lk-row)[aria-disabled="true"]::before, .lk-choice:disabled::before { border-style: dashed; border-color: GrayText; }
+  /* Knöpfe tragen ihren Rahmen selbst (.lk-stone): aus = gestrichelt */
+  .lk-btn:is([aria-disabled="true"], :disabled) { border-style: dashed; border-color: GrayText; }
+  :is(.lk-select[data-disabled], .lk-input:has(:disabled), .lk-sw input:disabled ~ .lk-sw-tr, .lk-cb input:disabled ~ .lk-cb-box, .lk-radio input:disabled + .lk-rb) { border-style: dashed; border-color: GrayText; }
   /* Aufzählungspunkte der Prosa sind Flächen: ohne Systemfarbe ersetzt das System sie durch den Grund */
   .desc li::before { background: CanvasText; }
-  /* Primär und Gefahr: die Fläche (.vx-bf) deckt den Rahmen des Sockels ab und trüge nur Systemfarbe; sie entfällt, der Rahmen zeigt die Hauptaktion */
-  .vx-bf, .play .bf { display: none; }
-  .vx-btn:is([data-variant="primary"], [data-variant="danger"])::before { border-width: 2px; }
-  .vx-btn[data-variant="danger"]::before { border-color: Mark; }
-  .vx-status[data-tone="bad"]::before { border-color: Mark; border-width: 2px; }
-  .vx-input:has([aria-invalid="true"])::before, .vx-select[aria-invalid="true"]::before { border-width: 2px; border-style: double; }
+  /* Primär und Gefahr: dickerer Rahmen zeigt die Hauptaktion, Gefahr in Warnfarbe */
+  .lk-btn:is([data-variant="primary"], [data-variant="danger"]) { border-width: 2px; }
+  .lk-btn[data-variant="danger"] { border-color: Mark; }
+  .lk-status[data-tone="bad"] { border-color: Mark; border-width: 2px; }
+  .lk-input:has([aria-invalid="true"]), .lk-select[aria-invalid="true"] { border-width: 2px; border-style: double; border-color: Mark; }
 
   /* Gewählt und aktuell: Highlight statt Kupfer */
-  .vx-pick[aria-pressed="true"]::before, .vx-choice[data-selected]::before, .vx-card[data-pressed] .vx-card-frame { border: 2px solid Highlight; }
-  .vx-bar[aria-current="page"]::before { border: 2px solid Highlight; }
-  .vx-bar > .vx-tick, .vx-tab > .vx-tab-tick, .vx-card[data-cur]::before { background: Highlight; }
-  .vx-selitem[data-highlighted]::before, .vx-mi:is([data-highlighted], :focus-visible)::before { border: 2px solid Highlight; }
-  .vx-tab:is([aria-selected="true"], [aria-checked="true"], [aria-current="page"])::before { border: 2px solid Highlight; }
-  .vx-tabs[data-variant="underline"] { border-bottom: 1px solid CanvasText; }
+  .lk-pick[aria-pressed="true"]::before, .lk-choice[data-selected]::before, .lk-card[data-pressed] .lk-card-frame { border: 2px solid Highlight; }
+  .lk-bar[aria-current="page"]::before { border: 2px solid Highlight; }
+  .lk-card[data-cur]::before { background: Highlight; }
+  .lk-selitem[data-highlighted] { outline: 2px solid Highlight; outline-offset: -2px; }
+  .lk-tabs[data-variant="underline"] { border-bottom: 1px solid CanvasText; }
 
-  /* Schalter */
-  .vx-sw-tr { border: 2px solid ButtonText; background: Canvas; }
-  .vx-sw-kn { background: ButtonText; box-shadow: none; }
-  .vx-sw input:checked ~ .vx-sw-tr { background: Highlight; border-color: Highlight; }
-  .vx-sw input:checked ~ .vx-sw-kn { background: HighlightText; }
-  .vx-sw input:disabled ~ :is(.vx-sw-tr, .vx-sw-kn) { opacity: 1; border-color: GrayText; }
-  .vx-sw input:disabled ~ .vx-sw-kn { background: GrayText; }
+  /* Schalter: Bahn und Knauf sind Flächen; Knauf in Systemfarbe, an = Highlight (Knauf rechts zeigt den Zustand zusätzlich) */
+  .lk-sw-kn { background: ButtonText; box-shadow: none; }
+  .lk-sw input:checked ~ .lk-sw-tr { background: Highlight; border-color: Highlight; }
+  .lk-sw input:checked ~ .lk-sw-kn { background: HighlightText; }
+  .lk-sw input:disabled ~ .lk-sw-kn { background: GrayText; }
 
-  /* Checkbox */
-  .vx-cb-box { border: 2px solid ButtonText; background: Canvas; }
-  .vx-cb input:is(:checked, :indeterminate) ~ .vx-cb-box { background: Highlight; border-color: Highlight; }
-  .vx-cb > .vx-ico { color: HighlightText; }
-  .vx-cb-dash { background: HighlightText; }
-  .vx-cb input:disabled ~ .vx-cb-box { opacity: 1; border-color: GrayText; }
+  /* Checkbox: Haken/Strich auf Highlight */
+  .lk-cb input:is(:checked, :indeterminate) ~ .lk-cb-box { background: Highlight; border-color: Highlight; }
+  .lk-cb > .lk-cb-ico { color: HighlightText; }
+  .lk-cb-dash { background: HighlightText; }
 
-  /* Radio: der Ring besteht aus Verläufen und einer Fläche; hier ein echter Rahmen innerhalb der Kerben */
-  .vx-rb::before { background: Canvas; border: var(--u2) solid ButtonText; }
-  .vx-radio input:checked + .vx-rb::before { border-color: Highlight; }
-  .vx-rb::after { background: Highlight; }
-  .vx-radio input:disabled + .vx-rb { opacity: 1; }
-  .vx-radio input:disabled + .vx-rb::before { border-color: GrayText; }
+  /* Radio: die Raute ist eine Fläche in Systemfarbe */
+  .lk-rb::after { background: Highlight; }
+  .lk-radio input:checked + .lk-rb { border-color: Highlight; }
+  .lk-radio input:disabled + .lk-rb::after { background: GrayText; }
 
   /* Regler und Fortschritt; der Regler braucht mehr Gewicht, weil seine gesperrte Form (aria-disabled) spezifischer ist */
-  .vx-slider[class] .vx-sl-trk { border: 1px solid CanvasText; background: Canvas; }
-  .vx-slider[class] .vx-sl-trk i { background: Canvas; border: 1px solid GrayText; }
-  .vx-slider[class] .vx-sl-trk i[data-on] { background: Highlight; border-color: Highlight; }
-  .vx-slider[class][aria-disabled="true"] .vx-sl-trk i[data-on] { background: GrayText; border-color: GrayText; }
-  .vx-slider[class] .vx-sl-th { background: ButtonText; }
-  .vx-slider[class][aria-disabled="true"] .vx-sl-th { background: GrayText; }
-  .vx-prog { background: repeating-linear-gradient(90deg, GrayText 0 var(--u2), transparent var(--u2) var(--u3)); }
-  .vx-prog::after { background: repeating-linear-gradient(90deg, Highlight 0 var(--u2), transparent var(--u2) var(--u3)); }
+  .lk-slider[class] .lk-sl-trk i { background: Canvas; border: 1px solid GrayText; }
+  .lk-slider[class] .lk-sl-trk i[data-on] { background: Highlight; border-color: Highlight; }
+  .lk-slider[class][aria-disabled="true"] .lk-sl-trk i[data-on] { background: GrayText; border-color: GrayText; }
+  .lk-slider[class] .lk-sl-th { background: ButtonText; }
+  .lk-slider[class][aria-disabled="true"] .lk-sl-th { background: GrayText; }
+  .lk-prog { background: repeating-linear-gradient(90deg, GrayText 0 var(--px), transparent var(--px) var(--u4)); outline: 1px solid CanvasText; outline-offset: -1px; }
+  .lk-prog::after { background: repeating-linear-gradient(90deg, Highlight 0 calc(var(--px) * 3), transparent calc(var(--px) * 3) var(--u4)); }
+  .lk-prog::before { display: none; }
 
-  /* Spielen-Knopf, Status und Zähler */
-  .play::before { border: 2px solid ButtonText; }
-  .play[data-st="run"]::before, .play[data-st="error"]::before { border-color: Highlight; }
-  .vx-bar-badge { background: Highlight; color: HighlightText; }
-  .vx-dot { background: ButtonText; }
-  .vx-meta-i + .vx-meta-i::before { background: GrayText; }
+  /* Zähler der Leistenknöpfe und Trenner der Metazeile */
+  .lk-bar-badge { background: Highlight; color: HighlightText; }
+  .lk-meta-i + .lk-meta-i::before { background: GrayText; }
 
   /* Trennlinien */
-  .vx-fsec, .vx-keys > div { border-bottom: 1px solid GrayText; }
-  .vx-fsec:last-child { border-bottom: 0; }
-  .side { border-right: 1px solid CanvasText; }
-  .bar { border-bottom: 1px solid CanvasText; }
-  .winbtn:hover { outline: 1px solid ButtonText; outline-offset: -2px; }
-  .vx-scrim { background: Canvas; opacity: .8; }
-  .vthumb { background: ButtonText; }
+  .lk-fsec { border-bottom: 1px solid GrayText; }
+  .lk-fsec:last-child { border-bottom: 0; }
+  .lk-scrim { background: Canvas; opacity: .8; }
 }

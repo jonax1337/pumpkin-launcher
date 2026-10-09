@@ -43,7 +43,7 @@ export function Sidebar() {
                 current={tab.match(pathname)}
                 badge={badge}
               >
-                <Icon name={tab.icon} />
+                <Icon name={tab.icon} size="l" />
               </BarButton>
             </Tip>
           );
@@ -59,7 +59,7 @@ export function Sidebar() {
             aria-keyshortcuts={SHORTCUT.settings}
             current={pathname.startsWith("/settings")}
           >
-            <Icon name="gear" />
+            <Icon name="settings" size="l" />
           </BarButton>
         </Tip>
       </div>

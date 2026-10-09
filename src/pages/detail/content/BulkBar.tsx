@@ -11,7 +11,7 @@ export function BulkBar() {
   const updatable = pickedLive.filter((id) => model.updateFor.has(id));
   return (
     <>
-      <span><Count value={pickedLive.length} minDigits={2} /> {t("detail.content.selectedCount", { n: pickedLive.length })}</span>
+      <span><Count value={pickedLive.length} minDigits={2} /> {t("detail.content.selectedWord")}</span>
       <Button
         size="s"
         disabled={!switchable.length}
@@ -28,7 +28,7 @@ export function BulkBar() {
       </Button>
       <Button
         size="s"
-        icon="up"
+        icon="update"
         disabled={model.locked || !updatable.length}
         onClick={() => model.askUpdates(updatable)}
       >

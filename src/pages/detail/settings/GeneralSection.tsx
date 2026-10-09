@@ -1,4 +1,4 @@
-import { Actions, Button, CardGrid, FormRow, FormSection, Menu, TextField, ThumbCard } from "@/ui";
+import { Actions, Button, CardGrid, FormRow, FormSection, Menu, Input, ThumbCard } from "@/ui";
 import { IconPicker } from "@/components/IconPicker";
 import { InstanceIcon } from "@/components/InstanceIcon";
 import { NAME_MAX_LENGTH, useGroupMenu } from "@/components/instance";
@@ -19,9 +19,9 @@ export function GeneralSection({ instance, form, locked }: { instance: Instance;
   const groupItems = useGroupMenu(instance);
   const groupText = instance.group ?? t("detail.settings.noGroup");
   return (
-    <FormSection title={t("detail.settings.generalSection")}>
+    <FormSection plate title={t("detail.settings.generalSection")}>
       <FormRow label={t("common.name")} htmlFor="inst-name">
-        <TextField
+        <Input
           id="inst-name"
           value={form.name}
           disabled={locked}
@@ -37,7 +37,7 @@ export function GeneralSection({ instance, form, locked }: { instance: Instance;
             align="start"
             items={groupItems}
             trigger={
-              <Button iconEnd="chevd" disabled={locked} aria-label={t("detail.settings.groupAria", { name: groupText })}>
+              <Button iconEnd="chev-down" disabled={locked} aria-label={t("detail.settings.groupAria", { name: groupText })}>
                 {groupText}
               </Button>
             }

@@ -57,9 +57,10 @@ type Options = {
  * und letzten Element. Das Element mit dem Fokus (zunächst das erste) behält alle seine Bedienelemente in der Tab-Reihenfolge;
  * die Bedienelemente der übrigen Elemente sind nur noch per Pfeiltaste erreichbar (tabindex -1).
  *
- * Verwendung: `const roving = useRovingItems<HTMLDivElement>({ item: ".vx-card" })`, dann `<div {...roving}>` um das Raster
- * bzw. die Liste. Keine Änderung an den Elementen selbst nötig; Pfeiltasten in Feldern und Menüs bleiben unberührt, weil
- * nur die Taste auf dem Element `primary` zählt.
+ * Verwendung: `const roving = useRovingItems<HTMLDivElement>({ item: "[data-kit-item=card]" })`, dann `<div {...roving}>` um das Raster
+ * bzw. die Liste. Die Kit-Bausteine kennzeichnen sich dafür selbst: `data-kit-item="row"` (ListRow), `"card"` (SceneCard, ThumbCard),
+ * `"pick"` (PickCard); eigene Selektoren auf `lk-*`-Klassen gibt es nicht. Keine Änderung an den Elementen selbst nötig; Pfeiltasten
+ * in Feldern und Menüs bleiben unberührt, weil nur die Taste auf dem Element `primary` zählt.
  */
 export function useRovingItems<E extends HTMLElement>({ item, primary = ".hit" }: Options) {
   const ref = useRef<E>(null);

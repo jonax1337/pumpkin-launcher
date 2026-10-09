@@ -1,14 +1,13 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useView } from "@/app/Layout";
 import { useI18n } from "@/i18n";
-import { ChipButton, ContextMenu, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, WorkspaceContent, type MenuEntry } from "@/ui";
+import { ContextMenu, Page, PageHeader, SearchField, Select, TabPanel, Tabs, Toolbar, Workspace, WorkspaceContent, type MenuEntry } from "@/ui";
 import { ContentDetail } from "@/components/catalog/ContentDetail";
 import { ContentResults } from "@/components/catalog/ContentResults";
-import { searchPlaceholder, typeLabel } from "@/components/catalog/labels";
+import { searchPlaceholder, TYPE_ICONS, typeLabel } from "@/components/catalog/labels";
 import { OtherTypeHits } from "@/components/catalog/OtherTypeHits";
 import { SourceSelect } from "@/components/catalog/SourceSelect";
-import { StarterResults } from "@/components/catalog/StarterResults";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useVersions } from "@/hooks/useInstances";
 import { usePersistedState } from "@/hooks/usePersistedState";
@@ -17,7 +16,6 @@ import {
 } from "@/lib/content-types";
 import type { SearchRequest } from "@/lib/catalogSearch";
 import { discoverParams, readDiscoverParams } from "@/lib/routes";
-import { hasStarter } from "@/lib/starter";
 import { ALL_LOADERS, LOADER_LABELS, type VersionEntry } from "@/lib/types";
 import "./discover.css";
 
@@ -39,11 +37,9 @@ interface Filters {
   loader: string;
   /** Kategorie des Anbieters, auf die die Treffer eingegrenzt sind. */
   category: string | null;
-  /** „Zum Einstieg“: statt der Suche die feste Auswahl der Art. */
-  starter: boolean;
 }
 
-const NO_FILTERS: Filters = { query: "", version: ALL, loader: ALL, category: null, starter: false };
+const NO_FILTERS: Filters = { query: "", version: ALL, loader: ALL, category: null };
 
 /** Alle Release-Versionen, die jüngsten zuerst; „Ältere Versionen“ ist ein Trenner, nur wenn es ältere gibt. */
 function versionOptions(versions: VersionEntry[], allLabel: string, olderLabel: string) {
@@ -78,20 +74,27 @@ export function DiscoverPage() {
   const projectId = requested.project;
   const projectSource = SOURCE_KEYS.find((s) => s === requested.projectSource) ?? (source === ALL_SOURCES ? "modrinth" : source);
   const [hit, setHit] = useState<CatalogHit | null>(null);
-  const [filters, setFilters] = useState(NO_FILTERS);
+  const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, query: requested.query ?? "" }));
   const [sortChoice, setSortChoice] = usePersistedState("discover.sort", SORT_CHOICES);
   const sort = sortChoice === "auto" ? null : sortChoice;
   const query = filters.query.trim();
   const settledQuery = useDebounced(query);
   const versions = useVersions();
   const hasLoaderFilter = (tab: CatalogType) => info.filters && (tab === "mod" || tab === "modpack");
-  const starterAvailable = hasStarter(type) && (source === ALL_SOURCES || source === "modrinth");
-  const showStarter = filters.starter && starterAvailable && !query;
   const view = useView();
   const listScroll = useRef(0);
 
   const change = (patch: Partial<Filters>) => setFilters((current) => ({ ...current, ...patch }));
   const reset = () => setFilters(NO_FILTERS);
+
+  // Ein Suchbegriff in der Adresse (aus der Befehlspalette) füllt das Suchfeld einmalig und verschwindet wieder aus ihr;
+  // danach gehört die Eingabe dem Feld.
+  const handoffQuery = requested.query;
+  useEffect(() => {
+    if (handoffQuery === null) return;
+    setFilters((current) => ({ ...current, query: handoffQuery }));
+    setParams(discoverParams({ tab: type, source }), { replace: true });
+  }, [handoffQuery, type, source, setParams]);
 
   const mc = filters.version === ALL ? null : filters.version;
   const loaderFor = (tab: CatalogType) => (hasLoaderFilter(tab) && filters.loader !== ALL ? filters.loader : null);
@@ -113,7 +116,7 @@ export function DiscoverPage() {
   };
 
   const openTab = (tab: CatalogType) => {
-    change({ loader: hasLoaderFilter(tab) ? filters.loader : ALL, category: null, starter: false });
+    change({ loader: hasLoaderFilter(tab) ? filters.loader : ALL, category: null });
     rememberTab(tab);
     setParams(discoverParams({ tab, source }), { replace: true });
   };
@@ -131,11 +134,12 @@ export function DiscoverPage() {
     <>
       {projectId && (
         <ContextMenu items={[{
-          id: "back", text: t("common.back"), icon: "back",
+          id: "back", text: t("common.back"), icon: "arrow-left",
           onSelect: () => setParams(discoverParams({ tab: type, source })),
         }, "-", ...tabMenu]}>
-        <div className="page disc-proj">
+        <Page>
           <ContentDetail
+            layout="page"
             key={`${projectSource}-${projectId}`}
             source={projectSource}
             projectId={projectId}
@@ -144,29 +148,30 @@ export function DiscoverPage() {
             backLabel={typeLabel(type)}
             onBack={() => setParams(discoverParams({ tab: type, source }))}
           />
-        </div>
+        </Page>
         </ContextMenu>
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
       <ContextMenu items={listMenu}>
-      <section className="page disc" hidden={!!projectId}>
-        <PageHeader title={t("ui.nav.discover")}>
-          {tabs.length > 1 && (
+      <Page className="disc" hidden={!!projectId}>
+        <div className="disc-sticky">
+        <PageHeader
+          title={t("ui.nav.discover")}
+          tabs={
             <Tabs
-              variant="segment"
               idBase="disc"
               label={t("pages.discover.categoryLabel")}
               value={type}
               onChange={openTab}
-              items={tabs.map((tab) => ({ value: tab, label: typeLabel(tab) }))}
+              items={tabs.map((tab) => ({ value: tab, label: typeLabel(tab), icon: TYPE_ICONS[tab] }))}
             />
-          )}
-        </PageHeader>
+          }
+        />
         {/* Suchfeld bewusst breiter als in der Bibliothek */}
-        <Toolbar search="l" label={t("pages.discover.searchFilterLabel")} className="mt-4 mb-3.5">
+        <Toolbar search="l" label={t("pages.discover.searchFilterLabel")}>
           <SearchField
             value={filters.query}
-            onChange={(next) => change({ query: next, ...(next.trim() && { starter: false }) })}
+            onChange={(next) => change({ query: next })}
             placeholder={searchPlaceholder(type)}
           />
           <SourceSelect
@@ -180,7 +185,6 @@ export function DiscoverPage() {
             <Select
               label={t("common.version")}
               value={filters.version}
-              disabled={showStarter}
               onChange={(version) => change({ version })}
               options={versionOptions(versions.data ?? [], t("common.all"), t("pages.discover.olderVersions"))}
             />
@@ -189,53 +193,48 @@ export function DiscoverPage() {
             <Select
               label={t("components.common.loader")}
               value={filters.loader}
-              disabled={showStarter}
               onChange={(loader) => change({ loader })}
               options={[{ value: ALL, label: t("common.all") }, ...ALL_LOADERS.filter((l) => l !== "vanilla").map((l) => ({ value: l, label: LOADER_LABELS[l] }))]}
             />
           )}
         </Toolbar>
+        </div>
+        <Workspace>
         <WorkspaceContent className="disc-results">
         <TabPanel idBase="disc" value={type}>
-          <div className="mb-2 flex flex-wrap items-center gap-x-3 empty:hidden">
-            {starterAvailable && (
-              <ChipButton pressed={showStarter} onClick={() => change({ starter: !showStarter })}>{t("pages.discover.starter")}</ChipButton>
-            )}
-            {!showStarter && <OtherTypeHits source={source} types={tabs.filter((tab) => tab !== type)} requestFor={requestFor} onPick={openTab} />}
+          <div className="disc-extras">
+            <OtherTypeHits source={source} types={tabs.filter((tab) => tab !== type)} requestFor={requestFor} onPick={openTab} />
           </div>
-          {showStarter ? (
-            <StarterResults type={type} onOpen={open} />
-          ) : (
-            <ContentResults
-              key={`${source}-${type}`}
-              source={source}
-              type={type}
-              filter={{ query: filters.query, mc, loader: loaderFor(type), category: filters.category, sort }}
-              onReset={reset}
-              onOpen={open}
-              onCategory={(category) => change({ category })}
-              sortSelect={
-                info.filters && (
-                  <Select
-                    size="s"
-                    label={t("pages.instances.sortLabel")}
-                    value={sort ?? defaultSort(query)}
-                    onChange={(next) => setSortChoice(next as SearchIndex)}
-                    options={[
-                      { value: "relevance", label: t("pages.discover.sortRelevance") },
-                      { value: "downloads", label: t("pages.discover.sortDownloads") },
-                      { value: "follows", label: t("pages.discover.sortFollows") },
-                      { value: "newest", label: t("pages.discover.sortNewest") },
-                      { value: "updated", label: t("components.sort.updated") },
-                    ]}
-                  />
-                )
-              }
-            />
-          )}
+          <ContentResults
+            key={`${source}-${type}`}
+            source={source}
+            type={type}
+            filter={{ query: filters.query, mc, loader: loaderFor(type), category: filters.category, sort }}
+            onReset={reset}
+            onOpen={open}
+            onCategory={(category) => change({ category })}
+            sortSelect={
+              info.filters && (
+                <Select
+                  size="s"
+                  label={t("pages.instances.sortLabel")}
+                  value={sort ?? defaultSort(query)}
+                  onChange={(next) => setSortChoice(next as SearchIndex)}
+                  options={[
+                    { value: "relevance", label: t("pages.discover.sortRelevance") },
+                    { value: "downloads", label: t("pages.discover.sortDownloads") },
+                    { value: "follows", label: t("pages.discover.sortFollows") },
+                    { value: "newest", label: t("pages.discover.sortNewest") },
+                    { value: "updated", label: t("components.sort.updated") },
+                  ]}
+                />
+              )
+            }
+          />
         </TabPanel>
         </WorkspaceContent>
-      </section>
+        </Workspace>
+      </Page>
       </ContextMenu>
     </>
   );

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EmptyState } from "@/components/EmptyState";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import { dequeueContent } from "@/hooks/contentQueue";
@@ -10,7 +11,10 @@ import { progressLabel, progressShare } from "@/lib/progress";
 import { installStepLabel } from "@/lib/types";
 import { useContentQueue, type QueuedContent } from "@/store/contentQueue";
 import { useTasks, type DoneTask } from "@/store/tasks";
-import { BarButton, Button, Cell, Empty, Icon, IconButton, JobProgress, List, ListRow, Popover, RowTitle, SectionHeader } from "@/ui";
+import { BarButton, Button, Cell, Chip, Icon, IconButton, JobProgress, List, ListRow, Popover, RowTitle, SectionHeader, type ListLayout } from "@/ui";
+
+/** Aufgabenliste: 64 px hohe Zeilen mit voller Trennlinie. */
+const TASK_LIST: ListLayout = { cols: "32px minmax(0,1fr) 44px 32px", gap: 8, pad: "0 4px 0 6px", rowHeight: 64 };
 
 type LiveTask = { id: string; label: string; sub: string; p: number | null; cancel?: () => void };
 
@@ -43,11 +47,11 @@ function useLiveTasks(): LiveTask[] {
 function QueuedRow({ job }: { job: QueuedContent }) {
   const { t } = useI18n();
   return (
-    <ListRow>
-      <Icon name="clock" tone="muted" />
-      <RowTitle title={job.label} sub={t("ui.tasks.queuedSub")} />
+    <ListRow still>
+      <Icon name="hourglass" tone="muted" />
+      <RowTitle size="s" className="gap-[5px]" title={job.label} sub={t("ui.tasks.queuedSub")} />
       <Cell align="end" flex>
-        <IconButton size="s" icon="x" label={t("ui.tasks.unqueueAria", { label: job.label })} onClick={() => dequeueContent(job.id)} />
+        <IconButton size="s" icon="close" label={t("ui.tasks.unqueueAria", { label: job.label })} onClick={() => dequeueContent(job.id)} />
       </Cell>
     </ListRow>
   );
@@ -77,7 +81,6 @@ export function TasksButton() {
       onOpenChange={setOpen}
       label={t("ui.tasks.title")}
       tip={t("ui.tasks.title")}
-      width={400}
       side="right"
       trigger={
         // Feste Glyphe; Zähler und Mini-Balken liegen daneben bzw. darunter, nie darauf
@@ -86,7 +89,7 @@ export function TasksButton() {
           activity={{ count: pending, p: averageProgress(live) }}
           aria-label={pending > 0 ? runningAria : t("ui.tasks.title")}
         >
-          <Icon name="tasks" />
+          <Icon name="tasks" size="l" />
         </BarButton>
       }
     >
@@ -94,15 +97,17 @@ export function TasksButton() {
       <SectionHeader
         title={t("ui.tasks.title")}
         as="h2"
-        size="card"
+        level="card"
+        info={pending > 0 && <Chip tone="acc">{t("ui.tasks.activeCount", { count: pending })}</Chip>}
         actions={history.length > 0 && <Button variant="ghost" size="s" bleed="end" onClick={clear}>{t("ui.tasks.clearDone")}</Button>}
       />
       {pending || history.length ? (
-        <List variant="tasks" divided aria-label={t("ui.tasks.title")}>
+        <List divided="strong" {...TASK_LIST} aria-label={t("ui.tasks.title")}>
           {live.map((job) => (
-            <ListRow key={job.id}>
-              <Icon name="dl" tone="acc" />
+            <ListRow key={job.id} still>
+              <Icon name="download" tone="acc" />
               <JobProgress
+                full
                 label={job.label}
                 sub={job.sub}
                 p={job.p}
@@ -119,7 +124,7 @@ export function TasksButton() {
           ))}
         </List>
       ) : (
-        <Empty size="pane" mood="sleep" title={t("ui.tasks.emptyTitle")}>{t("ui.tasks.emptyBody")}</Empty>
+        <EmptyState size="pane" mood="sleep" title={t("ui.tasks.emptyTitle")}>{t("ui.tasks.emptyBody")}</EmptyState>
       )}
     </Popover>
   );
@@ -129,11 +134,12 @@ export function TasksButton() {
 function DoneRow({ task, onOpen }: { task: DoneTask; onOpen: (to: string) => void }) {
   const { t } = useI18n();
   const { to } = task;
+  const fail = task.state === "fail";
   return (
-    <ListRow data-fail={task.state === "fail" ? "" : undefined}>
-      <Icon name={task.state === "done" ? "check" : "warn"} tone={task.state === "done" ? "run" : "bad"} />
-      <RowTitle title={task.label} sub={<span title={task.sub}>{task.sub}</span>} />
-      <Cell align="end" flex>
+    <ListRow still tone={fail ? "bad" : undefined} bar={fail} className={fail ? "py-2" : undefined}>
+      <Icon name={task.state === "done" ? "success" : "warn"} tone={task.state === "done" ? "run" : "bad"} />
+      <RowTitle size="s" wrap={fail} clamp={fail ? 3 : undefined} className="gap-[5px]" title={task.label} sub={<span title={task.sub}>{task.sub}</span>} />
+      <Cell align="end" flex className="col-[3/-1]">
         {to && <Button size="s" onClick={() => onOpen(to)}>{t("common.open")}</Button>}
       </Cell>
     </ListRow>

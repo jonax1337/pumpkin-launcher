@@ -128,7 +128,7 @@ type JobLabels = { label: string; doneLabel: string };
 export function useWorldJobs(instance: Instance) {
   const qc = useQueryClient();
   const job = async <R,>(target: string, labels: JobLabels, run: (operationId: string) => Promise<R>) => {
-    const tracked = withTarget(target, run, labels.label, { doneLabel: labels.doneLabel });
+    const tracked = withTarget(target, run, labels.label, { doneLabel: labels.doneLabel, instanceIds: [instance.id] });
     const result = await trackContent(qc, tracked, (_, label) => ({ label, sub: instance.name, to: instanceUrl(instance.id, "worlds") }));
     if (result == null) throw new Error(t("hooks.world.operationRunning"));
     return result;

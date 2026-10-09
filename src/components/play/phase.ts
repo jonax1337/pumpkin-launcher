@@ -1,4 +1,6 @@
+import type { UseQueryResult } from "@tanstack/react-query";
 import { useInstanceStatus } from "@/hooks/useInstances";
+import type { InstanceStatus } from "@/lib/types";
 import { useGame } from "@/store/game";
 
 export type Phase = "loading" | "preparing" | "starting" | "running" | "crashed" | "installed" | "missing";
@@ -12,11 +14,15 @@ export const isBusy = (phase: Phase) => phase === "preparing" || isGameLive(phas
 /** Zustände, die auffallen sollen; „Bereit“ und „Nicht installiert“ sind der ruhige Normalfall. */
 export const LOUD_PHASES: Phase[] = ["preparing", "starting", "running", "crashed"];
 
-export function usePhase(instanceId: string): Phase {
-  const status = useInstanceStatus(instanceId);
-  const preparing = useGame((s) => !!s.installs[instanceId]);
-  const launching = useGame((s) => !!s.launching[instanceId]);
-  const crashed = useGame((s) => !!s.crashes[instanceId]);
+/** Was über eine Instanz bekannt ist; `derivePhase` macht daraus die eine Phase, die Spielen-Knopf und Palette zeigen. */
+export interface PhaseSignals {
+  preparing: boolean;
+  launching: boolean;
+  crashed: boolean;
+  status: Pick<UseQueryResult<InstanceStatus>, "data" | "isPending">;
+}
+
+export function derivePhase({ preparing, launching, crashed, status }: PhaseSignals): Phase {
   if (preparing) return "preparing";
   if (status.data?.running) return "running";
   if (launching) return "starting";
@@ -24,4 +30,12 @@ export function usePhase(instanceId: string): Phase {
   // Schlägt die Statusabfrage fehl, gilt die Instanz als nicht installiert; „Spielen“ installiert sie dann.
   if (status.isPending) return "loading";
   return status.data?.installed ? "installed" : "missing";
+}
+
+export function usePhase(instanceId: string): Phase {
+  const status = useInstanceStatus(instanceId);
+  const preparing = useGame((s) => !!s.installs[instanceId]);
+  const launching = useGame((s) => !!s.launching[instanceId]);
+  const crashed = useGame((s) => !!s.crashes[instanceId]);
+  return derivePhase({ preparing, launching, crashed, status });
 }

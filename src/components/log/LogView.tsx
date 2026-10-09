@@ -1,12 +1,25 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Empty } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { Button, Surface } from "@/ui";
 import { cn } from "@/lib/utils";
 import type { LogLine } from "@/store/game";
 import { LogRow } from "./LogRow";
 
 /** So nah am unteren Rand (px) gilt die Ansicht als „unten“ und läuft mit neuen Zeilen mit. */
 const FOLLOW_TOLERANCE_PX = 24;
+
+/** Der Körper der Konsole füllt den Rahmen und scrollt; die Zeilen stehen unumbrochen (lange Zeilen scrollen waagerecht). */
+const BODY = "absolute inset-0 overflow-auto px-3.5 py-3 text-ctl-s leading-[1.65] font-mono whitespace-pre select-text [scrollbar-gutter:stable] forced-colors:[border:1px_solid_CanvasText] forced-colors:[clip-path:none]";
+/** Fokusring um den Rahmen: der Körper ist gekerbt und schnitte einen eigenen Ring ab, deshalb zeichnet ihn der Rahmen. */
+const RING = [
+  "has-[>[role=log]:focus-visible]:after:absolute has-[>[role=log]:focus-visible]:after:inset-[calc(var(--u2)*-1)] has-[>[role=log]:focus-visible]:after:z-5",
+  "has-[>[role=log]:focus-visible]:after:pointer-events-none has-[>[role=log]:focus-visible]:after:bg-(--focus) has-[>[role=log]:focus-visible]:after:[clip-path:var(--ring)]",
+  "forced-colors:has-[>[role=log]:focus-visible]:after:bg-[Highlight]",
+].join(" ");
+/** Der Knopf „Nach unten“ blendet sich ein, sobald die Ansicht nicht mehr unten ist. */
+const HIDDEN = "invisible opacity-0 [transition:opacity_.15s_var(--ease),visibility_0s_linear_.15s]";
+const SHOWN = "visible opacity-100 [transition:opacity_.15s_var(--ease),visibility_0s]";
 
 /** Die Ausgabe selbst: scrollt mit, solange man unten ist; `lines` sind alle, `shown` die gefilterten Zeilen. */
 export function LogView({ lines, shown, highlight }: { lines: LogLine[] | undefined; shown: LogLine[]; highlight: RegExp | null }) {
@@ -20,10 +33,12 @@ export function LogView({ lines, shown, highlight }: { lines: LogLine[] | undefi
   }, [shown, follow]);
 
   return (
-    <div className="console">
-      <div
+    <div className={cn("console relative min-h-[260px] flex-1", RING)}>
+      <Surface
+        kind="pit"
+        deep
         ref={body}
-        className="cbody"
+        className={BODY}
         tabIndex={0}
         role="log"
         aria-live="off"
@@ -34,18 +49,20 @@ export function LogView({ lines, shown, highlight }: { lines: LogLine[] | undefi
         }}
       >
         {shown.map((line) => <LogRow key={line.id} line={line} highlight={highlight} />)}
-      </div>
-      <div className="none" style={{ visibility: shown.length ? "hidden" : "visible" }}>
-        {lines?.length ? (
-          <Empty size="pane" title={t("components.log.noMatches")}>{t("components.log.noLinesForFilter")}</Empty>
-        ) : (
-          <Empty size="pane" mood="sleep" title={t("components.log.noOutputYet")}>{t("components.log.startInstanceHint")}</Empty>
-        )}
-      </div>
+      </Surface>
+      {shown.length === 0 && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          {lines?.length ? (
+            <EmptyState size="pane" title={t("components.log.noMatches")}>{t("components.log.noLinesForFilter")}</EmptyState>
+          ) : (
+            <EmptyState size="pane" mood="sleep" title={t("components.log.noOutputYet")}>{t("components.log.startInstanceHint")}</EmptyState>
+          )}
+        </div>
+      )}
       <Button
         size="s"
-        icon="down"
-        className={cn("down", !follow && "show")}
+        icon="arrow-down"
+        className={cn("absolute right-[22px] bottom-3.5", follow ? HIDDEN : SHOWN)}
         onClick={() => setFollow(true)}
       >
         {t("components.log.scrollDown")}

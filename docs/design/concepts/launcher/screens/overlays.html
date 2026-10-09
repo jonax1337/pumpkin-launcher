@@ -1,0 +1,401 @@
+<!-- Overlays: Dialoge, Menüs, Aufgaben-Popover, Toasts, Befehlspalette (Präfix .s-ov) -->
+
+<!-- ===== Neue Instanz ===== -->
+<div class="overlay" id="ov-new" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-new-t" data-w="l">
+    <header><h3 id="ov-new-t">Neue Instanz</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody s-ov-split">
+      <div class="tabs" data-o="v" role="tablist" aria-orientation="vertical" aria-label="Quelle" data-tabs="new">
+        <button role="tab" data-tab="own" aria-selected="true"><svg class="ico" aria-hidden="true"><use href="#i-grass"/></svg><span>Eigene Instanz</span></button>
+        <button role="tab" data-tab="pack" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-modpack"/></svg><span>Modpack</span></button>
+        <button role="tab" data-tab="file" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg><span>Datei</span></button>
+        <button role="tab" data-tab="tpl" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-book"/></svg><span>Vorlage</span></button>
+        <button role="tab" data-tab="other" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Anderer Launcher</span></button>
+      </div>
+
+      <section class="s-ov-pane" data-panel-of="new" data-panel="own">
+        <div class="fld"><label for="new-name">Name</label><input id="new-name" class="in" value="Meine neue Welt" autocomplete="off"><small>So erscheint die Instanz in der Bibliothek. Du kannst den Namen jederzeit ändern.</small></div>
+        <div class="fld">
+          <label>Minecraft-Version</label>
+          <button class="sel" aria-haspopup="listbox"><span>1.21.4 · Neueste Version</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+          <label class="chk"><input type="checkbox"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Vorabversionen zeigen</span></label>
+          <small>Snapshots und Release Candidates erscheinen zusätzlich in der Liste. Sie können instabil sein.</small>
+        </div>
+        <div class="fld">
+          <label id="new-loader-l">Mod-Loader</label>
+          <div class="seg" role="group" aria-labelledby="new-loader-l"><button aria-pressed="false">Vanilla</button><button aria-pressed="true">Fabric</button><button aria-pressed="false">Quilt</button><button aria-pressed="false">Forge</button><button aria-pressed="false">NeoForge</button></div>
+          <small>Fabric ist leichtgewichtig und hat die größte Auswahl an Mods für aktuelle Versionen.</small>
+        </div>
+        <div class="fld">
+          <label id="new-icon-l">Icon</label>
+          <div class="s-ov-icon">
+            <span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-grass"/></svg></span>
+            <div class="seg" role="group" aria-labelledby="new-icon-l"><button aria-pressed="true">Automatisch</button><button aria-pressed="false">Pixel-Icon</button><button aria-pressed="false">Eigenes Bild</button></div>
+          </div>
+          <small>Automatisch passt das Icon zum gewählten Mod-Loader.</small>
+        </div>
+      </section>
+
+      <section class="s-ov-pane" data-panel-of="new" data-panel="pack" hidden>
+        <label class="field-ico"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><input class="in" placeholder="Modpack suchen …" aria-label="Modpack suchen" value="Create"></label>
+        <div class="s-ov-items">
+          <div class="slot s-ov-item"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-modpack"/></svg></span><span class="nm"><b>Create: Above and Beyond</b><small>Forge 1.20.1 · 186 Mods · 2,4 Mio. Downloads</small></span><span class="chip" data-t="acc">Modrinth</span><button class="btn" data-v="secondary" data-s="s"><span class="bt">Anlegen</span></button></div>
+          <div class="slot s-ov-item"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-modpack"/></svg></span><span class="nm"><b>Create Live</b><small>Fabric 1.20.1 · 94 Mods · 610 Tsd. Downloads</small></span><span class="chip" data-t="acc">Modrinth</span><button class="btn" data-v="secondary" data-s="s"><span class="bt">Anlegen</span></button></div>
+          <div class="slot s-ov-item"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-modpack"/></svg></span><span class="nm"><b>Create: Astral</b><small>Forge 1.18.2 · 142 Mods · 380 Tsd. Downloads</small></span><span class="chip">CurseForge</span><button class="btn" data-v="secondary" data-s="s"><span class="bt">Anlegen</span></button></div>
+        </div>
+      </section>
+
+      <section class="s-ov-pane" data-panel-of="new" data-panel="file" hidden>
+        <div class="slot s-ov-drop">
+          <svg class="ico ico-xl" aria-hidden="true"><use href="#i-upload"/></svg>
+          <b>Modpack-Datei hierher ziehen</b>
+          <small>.mrpack, .zip (CurseForge) oder .pumpkin</small>
+          <button class="btn" data-v="secondary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-folder-open"/></svg><span class="bt">Datei wählen</span></button>
+        </div>
+      </section>
+
+      <section class="s-ov-pane" data-panel-of="new" data-panel="tpl" hidden>
+        <div class="s-ov-cards">
+          <div class="plate s-ov-card"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-grass"/></svg></span><b class="h3">Vanilla</b><p class="muted sm">Das reine Spiel ohne Mods. Ideal für Server und Freunde.</p><button class="btn" data-v="secondary" data-s="s"><span class="bt">Verwenden</span></button></div>
+          <div class="plate s-ov-card"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-bolt"/></svg></span><b class="h3">Leistung</b><p class="muted sm">Fabric mit Sodium, Lithium und Iris für hohe Bildraten.</p><button class="btn" data-v="secondary" data-s="s"><span class="bt">Verwenden</span></button></div>
+          <div class="plate s-ov-card"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-sword"/></svg></span><b class="h3">PvP</b><p class="muted sm">Fabric 1.21 mit schlanken Kampf- und Anzeige-Mods.</p><button class="btn" data-v="secondary" data-s="s"><span class="bt">Verwenden</span></button></div>
+        </div>
+      </section>
+
+      <section class="s-ov-pane" data-panel-of="new" data-panel="other" hidden>
+        <p class="muted sm">Gefundene Launcher auf diesem Computer. Wähle die Instanzen, die kopiert werden sollen. Die Originale bleiben unverändert.</p>
+        <div class="s-ov-items">
+          <div class="slot s-ov-item"><label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Prism Launcher</span></label><span class="sp"></span><span class="faint sm">7 Instanzen</span></div>
+          <div class="slot s-ov-item"><label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Modrinth App</span></label><span class="sp"></span><span class="faint sm">3 Instanzen</span></div>
+          <div class="slot s-ov-item"><label class="chk"><input type="checkbox"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">CurseForge</span></label><span class="sp"></span><span class="faint sm">12 Instanzen</span></div>
+          <div class="slot s-ov-item"><label class="chk"><input type="checkbox"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Offizieller Launcher</span></label><span class="sp"></span><span class="faint sm">1 Profil</span></div>
+        </div>
+        <div class="row"><button class="btn" data-v="secondary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span class="bt">Importieren</span></button></div>
+      </section>
+    </div>
+    <footer><span class="s-ov-hint">Das Spiel lädt beim ersten Start.</span><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Abbrechen</span></button><button class="btn" data-v="primary" data-s="m" data-close><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Anlegen</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Befehlspalette ===== -->
+<div class="overlay s-ov-top" id="ov-palette" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-palette-t" data-w="m">
+    <header><h3 id="ov-palette-t">Befehlspalette</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody s-ov-pal">
+      <label class="field-ico"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><input class="in" autofocus placeholder="Befehle, Instanzen oder Seiten suchen …" aria-label="Befehle, Instanzen oder Seiten suchen"></label>
+      <div class="menu" role="menu">
+        <div class="s-ov-gl eyebrow">Instanzen</div>
+        <button role="menuitem" data-hl><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span class="grow">Survival 1.21 spielen</span><span class="kbd">Eingabe</span></button>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-box"/></svg><span class="grow">Survival 1.21 öffnen</span></button>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span class="grow">PvP Training spielen</span></button>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span class="grow">Create-Fabrik spielen</span></button>
+        <div class="s-ov-gl eyebrow">Seiten</div>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-home"/></svg><span class="grow">Start</span><span class="kbd">Ctrl+1</span></button>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-library"/></svg><span class="grow">Bibliothek</span><span class="kbd">Ctrl+2</span></button>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-discover"/></svg><span class="grow">Entdecken</span><span class="kbd">Ctrl+3</span></button>
+        <div class="s-ov-gl eyebrow">Befehle</div>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="grow">Neue Instanz</span><span class="kbd">Ctrl+N</span></button>
+        <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-settings"/></svg><span class="grow">Einstellungen</span><span class="kbd">Ctrl+,</span></button>
+        <button role="menuitem" data-open="ov-shortcuts"><svg class="ico" aria-hidden="true"><use href="#i-keyboard"/></svg><span class="grow">Tastenkürzel anzeigen</span><span class="kbd">?</span></button>
+      </div>
+    </div>
+    <footer><span class="s-ov-hint">Pfeiltasten wählen, Eingabe führt aus.</span><span class="kbd">Esc</span></footer>
+  </div>
+</div>
+
+<!-- ===== Instanz löschen ===== -->
+<div class="overlay" id="ov-delete" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="alertdialog" aria-modal="true" aria-labelledby="ov-delete-t" data-w="s">
+    <header><h3 id="ov-delete-t">Instanz löschen?</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <p>„Survival 1.21“ mit allen Mods, Einstellungen und Screenshots wird entfernt. Das lässt sich nicht rückgängig machen.</p>
+      <label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Welten behalten</span></label>
+      <div class="note" data-t="warn"><svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg><span class="tx">4 Welten · 1,8 GB<small>Sie werden in „Gelöschte Welten“ verschoben.</small></span></div>
+    </div>
+    <footer><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Abbrechen</span></button><button class="btn" data-v="danger" data-s="m" data-close><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span class="bt">Löschen</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Mit Microsoft anmelden ===== -->
+<div class="overlay" id="ov-login" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-login-t" data-w="m">
+    <header><h3 id="ov-login-t">Mit Microsoft anmelden</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <div class="s-ov-codebox">
+        <span class="eyebrow">Dein Code</span>
+        <div class="slot s-ov-code"><b class="s-ov-bigcode" aria-label="A B C D Strich 1 2 3 4">ABCD-1234</b><button class="btn" data-v="secondary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span class="bt">Kopieren</span></button></div>
+      </div>
+      <ol class="s-ov-steps">
+        <li><span class="n">1</span><span>Öffne <b>microsoft.com/link</b> in deinem Browser.</span></li>
+        <li><span class="n">2</span><span>Gib den Code oben ein und bestätige.</span></li>
+        <li><span class="n">3</span><span>Melde dich mit dem Konto an, das Minecraft besitzt.</span></li>
+      </ol>
+      <div class="prog" role="progressbar" aria-label="Warten auf Anmeldung" aria-valuetext="Warte auf Anmeldung" style="--v:42%"><span class="fill"></span><span class="pl">Warte auf Anmeldung im Browser …</span></div>
+      <small class="faint">Der Code ist noch 14:32 Minuten gültig. Dein Passwort sieht der Launcher nie.</small>
+    </div>
+    <footer><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Abbrechen</span></button><button class="btn" data-v="primary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-external"/></svg><span class="bt">Seite öffnen</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Offline-Profil ===== -->
+<div class="overlay" id="ov-offline-name" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-offline-t" data-w="s">
+    <header><h3 id="ov-offline-t">Offline-Profil</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <div class="fld"><label for="off-name">Spielername</label><input id="off-name" class="in" value="Steve" autocomplete="off" maxlength="16"><small>3 bis 16 Zeichen: Buchstaben, Zahlen und Unterstrich.</small></div>
+      <div class="note"><svg class="ico" aria-hidden="true"><use href="#i-info"/></svg><span class="tx">Nur ohne Anmeldung spielbar<small>Server mit Online-Modus lehnen Offline-Profile ab.</small></span></div>
+    </div>
+    <footer><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Abbrechen</span></button><button class="btn" data-v="primary" data-s="m" data-close><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span class="bt">Speichern</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Instanz teilen ===== -->
+<div class="overlay" id="ov-share" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-share-t" data-w="m">
+    <header><h3 id="ov-share-t">Instanz teilen</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <div class="fld"><label>Link zu „Survival 1.21“</label>
+        <div class="slot s-ov-code"><span class="s-ov-link trunc">pumpkin.gg/i/k7Qx-92Fm</span><button class="btn" data-v="secondary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span class="bt">Kopieren</span></button></div>
+        <small>Jeder mit dem Link kann beitreten. Mods und Einstellungen werden automatisch geladen.</small>
+      </div>
+      <div class="stack-s">
+        <span class="eyebrow">Gäste · 3</span>
+        <div class="s-ov-items">
+          <div class="slot s-ov-item"><span class="avatar"><canvas data-head="#5A3A22|#C8906A"></canvas></span><span class="nm"><b>Alex_Bauer</b><small>Seit gestern · zuletzt online</small></span><span class="chip" data-t="run">Online</span><button class="btn ib" data-v="ghost" data-s="s" aria-label="Alex_Bauer entfernen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+          <div class="slot s-ov-item"><span class="avatar"><canvas data-head="#2B2B3A|#E0AC82"></canvas></span><span class="nm"><b>Kiwi99</b><small>Seit 3 Tagen</small></span><span class="chip">Offline</span><button class="btn ib" data-v="ghost" data-s="s" aria-label="Kiwi99 entfernen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+          <div class="slot s-ov-item"><span class="avatar"><canvas data-head="#B5532C|#C8906A"></canvas></span><span class="nm"><b>RedstoneRitter</b><small>Seit 2 Wochen</small></span><span class="chip">Offline</span><button class="btn ib" data-v="ghost" data-s="s" aria-label="RedstoneRitter entfernen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+        </div>
+      </div>
+      <label class="sw"><input type="checkbox" role="switch"><span class="t"><span class="k"></span></span><span class="lb">Gäste dürfen Mods hinzufügen</span><span class="st"><span class="on">An</span><span class="off">Aus</span></span></label>
+    </div>
+    <footer><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Schließen</span></button><button class="btn" data-v="primary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg><span class="bt">Link kopieren</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Freund hinzufügen ===== -->
+<div class="overlay" id="ov-friend-add" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-fa-t" data-w="m">
+    <header><h3 id="ov-fa-t">Freund hinzufügen</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <div class="tabs" role="tablist" aria-label="Methode" data-tabs="fa">
+        <button role="tab" data-tab="name" aria-selected="true"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>Name</span></button>
+        <button role="tab" data-tab="code" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-key"/></svg><span>Code eingeben</span></button>
+        <button role="tab" data-tab="mine" aria-selected="false"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg><span>Mein Code</span></button>
+      </div>
+      <section class="s-ov-fa" data-panel-of="fa" data-panel="name">
+        <div class="fld"><label for="fa-name">Spielername</label><label class="field-ico"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><input id="fa-name" class="in" value="Kiwi" autocomplete="off"></label><small>Gib den Minecraft-Namen deines Freundes ein.</small></div>
+        <div class="slot s-ov-item"><span class="avatar"><canvas data-head="#2B2B3A|#E0AC82"></canvas></span><span class="nm"><b>Kiwi99</b><small>Zuletzt online: vor 2 Std.</small></span><button class="btn" data-v="secondary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Anfrage senden</span></button></div>
+        <div class="slot s-ov-item"><span class="avatar"><canvas data-head="#C8A050|#C8906A"></canvas></span><span class="nm"><b>KiwiKrieger</b><small>Zuletzt online: vor 5 Tagen</small></span><button class="btn" data-v="secondary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Anfrage senden</span></button></div>
+      </section>
+      <section class="s-ov-fa" data-panel-of="fa" data-panel="code" hidden>
+        <div class="fld"><label for="fa-code">Freundescode</label><input id="fa-code" class="in s-ov-codein" placeholder="XXXX-XXXX" maxlength="9" autocomplete="off"><small>Den Code findest du bei deinem Freund unter „Mein Code“.</small></div>
+      </section>
+      <section class="s-ov-fa s-ov-mine" data-panel-of="fa" data-panel="mine" hidden>
+        <div class="s-ov-qr" role="img" aria-label="QR-Code für PUMP-7K2Q"><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span></span><span></span><span></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span></span><span class="o"></span><span></span><span></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span></span><span></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span class="o"></span><span></span><span></span><span></span><span class="o"></span><span></span><span class="o"></span><span class="o"></span><span></span></div>
+        <div class="stack-s">
+          <span class="eyebrow">Dein Code</span>
+          <div class="slot s-ov-code"><b class="s-ov-bigcode">PUMP-7K2Q</b><button class="btn ib" data-v="secondary" data-s="m" aria-label="Code kopieren"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+          <small class="faint">Teile ihn oder lass deinen Freund den QR-Code scannen.</small>
+        </div>
+      </section>
+    </div>
+    <footer><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Schließen</span></button><button class="btn" data-v="primary" data-s="m" data-close><svg class="ico" aria-hidden="true"><use href="#i-friends"/></svg><span class="bt">Hinzufügen</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Mod-Details ===== -->
+<div class="overlay" id="ov-modinfo" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-mod-t" data-w="m">
+    <header><h3 id="ov-mod-t">Mod-Details</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <div class="s-ov-modhead">
+        <span class="tile" data-s="xl"><svg class="ico ico-xl" aria-hidden="true"><use href="#i-mod"/></svg></span>
+        <div class="nm"><b class="h2">Sodium</b><span class="muted sm">von JellySquid &amp; IMS · 48 Mio. Downloads</span></div>
+        <span class="chip" data-t="acc">Modrinth</span>
+      </div>
+      <div class="fld"><label>Version</label><button class="sel" aria-haspopup="listbox"><span>0.6.0 · Fabric 1.21.4 · Release</span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button></div>
+      <p>Moderne Rendering-Engine für Minecraft. Sodium beschleunigt die Bildrate deutlich, behebt Grafikfehler und lässt sich vollständig im Videomenü einstellen.</p>
+      <div class="stack-s">
+        <span class="eyebrow">Abhängigkeiten · 2</span>
+        <div class="s-ov-items">
+          <div class="slot s-ov-item"><span class="tile" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-mod"/></svg></span><span class="nm"><b>Fabric API</b><small>Wird automatisch mitinstalliert</small></span><span class="chip" data-t="warn">Erforderlich</span></div>
+          <div class="slot s-ov-item"><span class="tile" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-mod"/></svg></span><span class="nm"><b>Indium</b><small>Nur für Mods mit eigener Darstellung</small></span><span class="chip">Optional</span></div>
+        </div>
+      </div>
+      <div class="s-ov-shots">
+        <div class="scenebox"><canvas data-scene="plains" data-seed="21" data-w="160" data-h="9"></canvas></div>
+        <div class="scenebox"><canvas data-scene="coast" data-seed="22" data-w="160" data-h="9"></canvas></div>
+        <div class="scenebox"><canvas data-scene="dusk" data-seed="23" data-w="160" data-h="9"></canvas></div>
+      </div>
+    </div>
+    <footer><span class="s-ov-hint">In „Survival 1.21“ installieren</span><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Schließen</span></button><button class="btn" data-v="primary" data-s="m" data-close><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Hinzufügen</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Instanz exportieren ===== -->
+<div class="overlay" id="ov-export" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-export-t" data-w="m">
+    <header><h3 id="ov-export-t">Instanz exportieren</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <div class="fld"><label id="exp-f">Format</label>
+        <div class="s-ov-opts" role="radiogroup" aria-labelledby="exp-f">
+          <label class="rad"><input type="radio" name="exp" checked><span class="box"><i></i></span><span class="lb">.mrpack <small class="faint">Modrinth-Modpack, mit anderen Launchern kompatibel</small></span></label>
+          <label class="rad"><input type="radio" name="exp"><span class="box"><i></i></span><span class="lb">.zip <small class="faint">Vollständiger Ordner, auch mit Welten und Einstellungen</small></span></label>
+        </div>
+      </div>
+      <div class="fld"><label id="exp-i">Enthalten</label>
+        <div class="s-ov-opts" role="group" aria-labelledby="exp-i">
+          <label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Mods und Konfiguration</span></label>
+          <label class="chk"><input type="checkbox" checked><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Ressourcenpakete und Shader</span></label>
+          <label class="chk"><input type="checkbox"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Welten <small class="faint">(+ 1,8 GB)</small></span></label>
+          <label class="chk"><input type="checkbox"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span><span class="lb">Screenshots</span></label>
+        </div>
+      </div>
+      <div class="prog" role="progressbar" aria-valuenow="58" aria-valuemin="0" aria-valuemax="100" style="--v:58%"><span class="fill"></span><span class="pl">Wird gepackt · 58 %</span></div>
+    </div>
+    <footer><span class="s-ov-hint">Geschätzte Größe: 214 MB</span><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Abbrechen</span></button><button class="btn" data-v="primary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg><span class="bt">Exportieren</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Tastenkürzel ===== -->
+<div class="overlay" id="ov-shortcuts" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-sc-t" data-w="m">
+    <header><h3 id="ov-sc-t">Tastenkürzel</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody s-ov-sc">
+      <div class="stack-s">
+        <span class="eyebrow">Allgemein</span>
+        <div class="r"><span>Befehlspalette</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">K</span></span></div>
+        <div class="r"><span>Neue Instanz</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">N</span></span></div>
+        <div class="r"><span>Einstellungen</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">,</span></span></div>
+        <div class="r"><span>Tastenkürzel</span><span class="keys"><span class="kbd">?</span></span></div>
+        <div class="r"><span>Schließen</span><span class="keys"><span class="kbd">Esc</span></span></div>
+      </div>
+      <div class="stack-s">
+        <span class="eyebrow">Bereiche</span>
+        <div class="r"><span>Start</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">1</span></span></div>
+        <div class="r"><span>Bibliothek</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">2</span></span></div>
+        <div class="r"><span>Entdecken</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">3</span></span></div>
+        <div class="r"><span>Skins</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">4</span></span></div>
+        <div class="r"><span>Freunde</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">5</span></span></div>
+        <div class="r"><span>Neuigkeiten</span><span class="keys"><span class="kbd">Ctrl</span><span class="kbd">6</span></span></div>
+      </div>
+    </div>
+    <footer><button class="btn" data-v="primary" data-s="m" data-close><span class="bt">Schließen</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== App-Update ===== -->
+<div class="overlay" id="ov-update" hidden>
+  <div class="scrim" data-close></div>
+  <div class="dialog s-ov" role="dialog" aria-modal="true" aria-labelledby="ov-up-t" data-w="m">
+    <header><h3 id="ov-up-t">App-Update verfügbar</h3><button class="btn ib" data-v="ghost" data-s="s" data-close aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></header>
+    <div class="dbody">
+      <div class="row"><span class="tile" data-s="l"><svg class="ico ico-l" aria-hidden="true"><use href="#i-update"/></svg></span><div class="nm s-ov-nm"><b class="h3">Version 0.3.4</b><span class="muted sm">Du verwendest 0.3.2 · 38 MB</span></div></div>
+      <ul class="s-ov-log">
+        <li><svg class="ico ico-s" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Neue Befehlspalette mit Instanz-Suche (Ctrl+K)</span></li>
+        <li><svg class="ico ico-s" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Instanzen lassen sich per Link mit Freunden teilen</span></li>
+        <li><svg class="ico ico-s" aria-hidden="true"><use href="#i-bug"/></svg><span>Behoben: Start hing bei fehlender Java-Version</span></li>
+        <li><svg class="ico ico-s" aria-hidden="true"><use href="#i-bolt"/></svg><span>Mod-Updates werden bis zu 3× schneller geprüft</span></li>
+      </ul>
+      <div class="prog" role="progressbar" aria-valuenow="18" aria-valuemin="0" aria-valuemax="100" style="--v:18%"><span class="fill"></span><span class="pl">Wird heruntergeladen · 18 %</span></div>
+    </div>
+    <footer><button class="btn" data-v="ghost" data-s="m" data-close><span class="bt">Später</span></button><button class="btn" data-v="primary" data-s="m"><svg class="ico" aria-hidden="true"><use href="#i-update"/></svg><span class="bt">Jetzt aktualisieren</span></button></footer>
+  </div>
+</div>
+
+<!-- ===== Popup-Menüs ===== -->
+<div class="pop" id="m-account" hidden>
+  <div class="menu" role="menu">
+    <div class="s-ov-mh"><span class="avatar" data-s="l"><canvas data-head="#5A3A22|#C8906A"></canvas></span><span class="nm"><b>Steve</b><small>Microsoft-Konto</small></span></div>
+    <hr>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-swap"/></svg><span>Konto wechseln</span></button>
+    <button role="menuitem" data-open="ov-offline-name"><svg class="ico" aria-hidden="true"><use href="#i-offline"/></svg><span>Offline-Profil</span></button>
+    <button role="menuitem" data-go="skins"><svg class="ico" aria-hidden="true"><use href="#i-skins"/></svg><span>Skins ändern</span></button>
+    <hr>
+    <button role="menuitem" data-go="settings"><svg class="ico" aria-hidden="true"><use href="#i-user"/></svg><span>Konten verwalten</span></button>
+    <button role="menuitem" data-bad><svg class="ico" aria-hidden="true"><use href="#i-logout"/></svg><span>Abmelden</span></button>
+  </div>
+</div>
+
+<div class="pop" id="m-tasks" data-wide data-side="right" hidden>
+  <div class="plate s-ov-tasks">
+    <div class="row"><b class="h3">Aufgaben</b><span class="sp"></span><span class="chip" data-t="acc">2 aktiv</span></div>
+    <div class="prog" role="progressbar" aria-valuenow="64" aria-valuemin="0" aria-valuemax="100" style="--v:64%"><span class="fill"></span><span class="pl">Fabric 1.21.4 wird installiert · 64 %</span></div>
+    <div class="prog" role="progressbar" aria-valuenow="27" aria-valuemin="0" aria-valuemax="100" style="--v:27%"><span class="fill"></span><span class="pl">Lithium aktualisieren · 27 %</span></div>
+    <div class="s-ov-done"><svg class="ico ico-s" aria-hidden="true"><use href="#i-check"/></svg><span class="nm"><b>Java 21 installiert</b><small>vor 4 Minuten</small></span></div>
+    <button class="btn" data-v="secondary" data-s="s"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span class="bt">Abgeschlossene entfernen</span></button>
+  </div>
+</div>
+
+<div class="pop" id="m-instance" hidden>
+  <div class="menu" role="menu">
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-folder-open"/></svg><span>Ordner öffnen</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-link"/></svg><span>Verknüpfung erstellen</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span>Duplizieren</span></button>
+    <button role="menuitem" data-open="ov-export"><svg class="ico" aria-hidden="true"><use href="#i-upload"/></svg><span>Exportieren</span></button>
+    <button role="menuitem" data-open="ov-share"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg><span>Teilen</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-backup"/></svg><span>Sicherungen</span></button>
+    <hr>
+    <button role="menuitem" data-bad data-open="ov-delete"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span>Löschen</span></button>
+  </div>
+</div>
+
+<div class="pop" id="m-row" hidden>
+  <div class="menu" role="menu">
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg><span>Spielen</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-folder-open"/></svg><span>Ordner öffnen</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-copy"/></svg><span>Duplizieren</span></button>
+    <button role="menuitem" data-open="ov-share"><svg class="ico" aria-hidden="true"><use href="#i-share"/></svg><span>Teilen</span></button>
+    <hr>
+    <button role="menuitem" data-bad data-open="ov-delete"><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span>Löschen</span></button>
+  </div>
+</div>
+
+<div class="pop" id="m-add" hidden>
+  <div class="menu" role="menu">
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-mod"/></svg><span>Mods</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-shader"/></svg><span>Shader</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-resourcepack"/></svg><span>Ressourcenpakete</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-datapack"/></svg><span>Datenpakete</span></button>
+    <hr>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-file"/></svg><span>Datei hinzufügen …</span></button>
+  </div>
+</div>
+
+<div class="pop" id="m-sort" hidden>
+  <div class="menu" role="menu">
+    <button role="menuitem"><span class="s-ov-chk"></span><span>Name</span></button>
+    <button role="menuitem" aria-checked="true"><span class="s-ov-chk"><svg class="ico ico-s" aria-hidden="true"><use href="#i-check"/></svg></span><span>Zuletzt gespielt</span></button>
+    <button role="menuitem"><span class="s-ov-chk"></span><span>Spielzeit</span></button>
+    <button role="menuitem"><span class="s-ov-chk"></span><span>Erstellt</span></button>
+  </div>
+</div>
+
+<div class="pop" id="m-skin" hidden>
+  <div class="menu" role="menu">
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-edit"/></svg><span>Umbenennen</span></button>
+    <button role="menuitem"><svg class="ico" aria-hidden="true"><use href="#i-download"/></svg><span>Als Datei speichern</span></button>
+    <hr>
+    <button role="menuitem" data-bad><svg class="ico" aria-hidden="true"><use href="#i-trash"/></svg><span>Löschen</span></button>
+  </div>
+</div>
+
+<!-- ===== Toasts (nur per ?open=ov-toasts sichtbar) ===== -->
+<div class="overlay s-ov-toasts" id="ov-toasts" hidden>
+  <div class="scrim"></div>
+  <div class="s-ov-tstack" aria-live="polite">
+    <div class="toast" role="status" data-t="acc"><svg class="ico" aria-hidden="true"><use href="#i-success"/></svg><span class="tx"><b>Instanz angelegt</b><small>„Quilt Kreativ“ ist bereit zum Spielen.</small></span><button class="btn ib" data-v="ghost" data-s="s" aria-label="Schließen"><svg class="ico" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <div class="toast" role="status" data-t="warn"><svg class="ico" aria-hidden="true"><use href="#i-warn"/></svg><span class="tx"><b>Update verfügbar</b><small>Pumpkin Launcher 0.3.4 steht bereit.</small></span><button class="btn" data-v="secondary" data-s="s" data-open="ov-update"><span class="bt">Ansehen</span></button></div>
+    <div class="toast" role="alert" data-t="bad"><svg class="ico" aria-hidden="true"><use href="#i-error"/></svg><span class="tx"><b>Start fehlgeschlagen</b><small>„Create-Fabrik“: Java wurde nicht gefunden.</small></span><button class="btn" data-v="secondary" data-s="s"><span class="bt">Details</span></button></div>
+  </div>
+</div>

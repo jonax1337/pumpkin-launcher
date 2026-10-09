@@ -22,12 +22,14 @@ const PX_TARGETS: Record<PxSize, number> = { s: 2, m: 3, l: 4 };
 const ICON_UNIT_CSS = 3;
 /** Rundungsspielraum, damit eine Zelle, die knapp in die Box passt, nicht herausfällt. */
 const FIT_TOLERANCE = 0.01;
-/** Feste Boxen (CSS-px) für Avatar (--avs) und großen Avatar (--av-32) sowie der Icon-Slot m (7×7 nur, wenn er hineinpasst). */
+/** Feste Boxen (CSS-px) für Avatar (--avs) und großen Avatar (--av-32). */
 const AVATAR_BOX = 28;
 const AVATAR_BOX_LARGE = 32;
-const ICON_SLOT_M_BOX = 24;
 const AVATAR_CELLS = 8;
 const GLYPH_CELLS = 10;
+/** Icon-Slots des Kits (ui/Icon): Box in CSS-px, gleiche Werte wie --lk-ico-* in ui/tokens.css; Raster 8×8. */
+const ICON_SLOT_BOXES = { s: 16, m: 24, l: 32, xl: 48 } as const;
+const ICON_CELLS = 8;
 /** Boxgrößen der Kit-Glyphen (--gl-<Box>); dieselbe Liste steht in ui/icon.css und ui/Icon.tsx. */
 export const GLYPH_BOXES = [40, 52, 64, 72, 104] as const;
 
@@ -51,8 +53,11 @@ function applyIconUnit(style: CSSStyleDeclaration, eff: number) {
   style.setProperty("--avs", fitCells(AVATAR_BOX, AVATAR_CELLS, iu));
   style.setProperty("--av-32", fitCells(AVATAR_BOX_LARGE, AVATAR_CELLS, iu));
   for (const box of GLYPH_BOXES) style.setProperty(`--gl-${box}`, fitCells(box, GLYPH_CELLS, iu));
-  // Kit (src/ui): Icon-Slot m zeichnet 7×7 nur, wenn 7 Einheiten hineinpassen, sonst 5×5.
-  document.documentElement.dataset.icoM = 7 * iu <= ICON_SLOT_M_BOX + FIT_TOLERANCE ? "7" : "5";
+  // Kit (src/ui): Zelle je Icon-Slot (--ic-<Slot>) = ganze Gerätepixel, der Box am nächsten (halbe Pixel abwärts; 100 %: 2 / 3 / 4 / 6 px).
+  for (const [slot, box] of Object.entries(ICON_SLOT_BOXES)) {
+    const dev = Math.max(1, Math.ceil((box * eff) / ICON_CELLS - 0.5 - FIT_TOLERANCE));
+    style.setProperty(`--ic-${slot}`, `${dev / eff}px`);
+  }
 }
 
 export function applyPx(size: PxSize) {

@@ -1,0 +1,68 @@
+/* Überlagerungen (Tooltip, Menü, Popover, Auswahlliste, Seitenpanel). Nur Aussehen; Maße, Lage, Abstände und Schriftgrößen
+   setzen Tooltip.tsx, Menu.tsx, Popover.tsx und Sheet.tsx per Tailwind. Tooltip, Menü, Popover und Auswahlliste teilen den Item-Tooltip-Rahmen
+   (violett, doppelt, harter Schlagschatten); das Seitenpanel ist wie der Dialog eine Steinplatte (Fläche auf ::before) mit eingelassenem Körper.
+   Einblenden kurz, Ausblenden in Stufen (Radix wartet auf die Animation). Die Keyframes (fade, fadeout, popin, popinup, popout, sheetin,
+   sheetout) stehen in ui/motion.css. */
+
+/* ---------- Item-Tooltip-Rahmen: Grund --tip-bg, Rand --tip-a, innerer Ring --tip-b, Schlagschatten 2 Einheiten ---------- */
+.lk-tip, .lk-pop {
+  background: var(--tip-bg); border: var(--px) solid var(--tip-a);
+  box-shadow: inset 0 0 0 var(--px) var(--tip-b), var(--u2) var(--u2) 0 #000;
+}
+
+/* ---------- Tooltip ---------- */
+.lk-tip { color: var(--fg); animation: fade .1s var(--ease); }
+.lk-tip[data-state="closed"] { animation: fadeout .08s steps(2, end) forwards; }
+/* Voller Text abgeschnittener Namen (Trunc): liegt oft über dem Wirt (Poster), darf den Zeiger nicht abfangen */
+.lk-tip[data-pass], [data-radix-popper-content-wrapper]:has(> .lk-tip[data-pass]) { pointer-events: none; }
+/* Inhalt reicher Tooltips (TipTitle, TipLine): Name, Wert und Hinweis, Update, Warnung, Beschreibung; den Abstand der Beschreibung setzt Tooltip.tsx */
+.lk-tip-n { font-weight: 700; color: var(--fg-strong); }
+.lk-tip-v { color: var(--fg-2); }
+.lk-tip-u { color: var(--warn); }
+.lk-tip-w { color: var(--bad); }
+.lk-tip-d { color: var(--tip-label); }
+
+/* ---------- Menü, Kontextmenü, Popover, Auswahlliste ---------- */
+.lk-pop { animation: popin .14s var(--ease); }
+.lk-pop[data-side="top"] { animation-name: popinup; }
+.lk-pop[data-state="closed"] { animation: popout .1s steps(2, end) forwards; }
+
+/* Eintrag. Markiert (Hover, Pfeiltasten) = Zeile --hl + Fokusbalken 2 Einheiten links.
+   Druck: Zeile dunkler, Inhalt 1 Einheit tiefer. Gefahr in --bad. */
+.lk-mi { color: var(--fg); font-weight: 600; cursor: pointer; outline: none; user-select: none; }
+.lk-mi .lk-ico { color: var(--fg-2); }
+/* Auf --hl (1,6:1 zum Grund) reicht --fg-3 nicht (3,5:1): gedämpfter Text rückt dort eine Stufe auf */
+.lk-mi:is(:hover, :focus-visible, [data-highlighted], [data-state="open"]) { --fg-3: var(--fg-2); background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--focus); }
+.lk-mi:is(:hover, :focus-visible, [data-highlighted], [data-state="open"]) .lk-ico { color: var(--fg); }
+.lk-mi:active:not([data-disabled]) { background: var(--tip-b); }
+.lk-mi:active:not([data-disabled]) > * { translate: 0 var(--px); }
+.lk-mi[data-tone="bad"], .lk-mi[data-tone="bad"] .lk-ico { color: var(--bad); }
+.lk-mi[data-tone="bad"]:is(:hover, :focus-visible, [data-highlighted]) { background: color-mix(in oklab, var(--bad-fill) 30%, var(--tip-bg)); box-shadow: inset var(--u2) 0 0 var(--bad); }
+.lk-mi[data-disabled] { color: var(--fg-3); cursor: default; background: none; box-shadow: none; }
+.lk-mi[data-disabled] .lk-ico { color: var(--fg-3); }
+/* Zweite Zeile (Größe: Menu.tsx) und Häkchen */
+.lk-mi-t2 > span { color: var(--fg-3); font-weight: 400; }
+.lk-mi .lk-mi-ck { color: var(--acc); }
+
+.lk-msep { background: var(--tip-b); }
+.lk-mlabel { color: var(--tip-label); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+/* Kopfzeile (MenuHead): Name und Zusatz */
+.lk-mhead-n { color: var(--fg); font-family: var(--f-body); font-weight: 700; text-shadow: var(--tsh); font-variant-numeric: normal; }
+.lk-mhead-s { color: var(--fg-2); }
+/* Leiser Hinweis (MenuNote) */
+.lk-mnote { color: var(--fg-3); }
+
+/* ---------- Seitenpanel rechts (nicht modal): Steinplatte wie der Dialog (look/dialog.css), eingelassener Körper (.lk-pit) ---------- */
+.lk-sheet { isolation: isolate; outline: none; transform: none; visibility: visible; }
+.lk-sheet::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--panel-2); clip-path: var(--n1);
+  box-shadow: inset 0 0 0 var(--px) var(--edge), inset var(--u3) var(--u3) 0 var(--line-2), inset calc(var(--u3) * -1) calc(var(--u3) * -1) 0 var(--bg-2); }
+.lk-sheet[data-state="open"] { animation: sheetin .26s var(--ease); }
+.lk-sheet[data-state="closed"] { animation: sheetout .2s var(--ease) forwards; }
+.lk-sheet-h h2 { letter-spacing: .02em; }
+.lk-sheet-sub { color: var(--fg-2); }
+
+/* Windows-Kontrastmodus: markierter Eintrag als Umriss in Systemfarbe, Panel mit Rahmen statt Schatten */
+@media (forced-colors: active) {
+  .lk-mi:is([data-highlighted], :focus-visible) { outline: 2px solid Highlight; outline-offset: -2px; }
+  .lk-sheet::before { border: 1px solid CanvasText; }
+}

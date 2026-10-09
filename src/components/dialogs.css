@@ -1,0 +1,10 @@
+/* ---------- Dialog-Inhalte ---------- */
+/* Neue Instanz, Export und Import aus anderen Launchern liegen als Tailwind in ihren Komponenten; hier nur, was andere Dateien noch über Klassen ansprechen. */
+
+/* ---------- Icon-Wahl ---------- */
+.ip { display: flex; align-items: flex-start; gap: 16px; }
+.ip-side { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 12px; }
+.ip-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Deep-Link-Dialog: Zusatzzeile unter dem Text */
+.dl-note { margin-top: 8px; }

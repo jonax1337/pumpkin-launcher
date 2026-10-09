@@ -3,7 +3,7 @@ import { hash, rng } from "./random";
 import { rowRuns } from "./rows";
 
 /*
- * Glyphen (10×10, farbig) und Spielerkopf. Die UI-Icons (7×7/5×5) liegen in
+ * Glyphen (10×10, farbig) und Spielerkopf. Die UI-Icons (8×8, einfarbig) liegen in
  * icon-data.ts und werden über `Icon` aus "@/ui" gerendert (Größen-Slots s/m/l/xl).
  */
 const GLYPHS = {
@@ -276,13 +276,20 @@ function rowsToRects(rows: readonly string[], colors: Record<string, string>) {
 const isGlyphName = (name: string): name is GlyphName => Object.hasOwn(GLYPHS, name);
 const isGlyphPalette = (pal: string): pal is GlyphPalette => Object.hasOwn(GLYPH_PALETTES, pal);
 
+/** Die Rechtecke einer Glyphe im 10×10-Raster, je ein Lauf gleicher Farbe; SVG und Canvas zeichnen dasselbe Bild. */
+export function glyphRects(name: GlyphName, pal: GlyphPalette) {
+  const p = GLYPH_PALETTES[isGlyphPalette(pal) ? pal : PALETTE_NAMES[0]];
+  const colors: Record<string, string> = { k: GLYPH_OUTLINE, w: GLYPH_WHITE, a: p.a, b: p.b, h: p.h, c: p.c };
+  return rowRuns(GLYPHS[isGlyphName(name) ? name : GLYPH_NAMES[0]]).map(({ x, y, length, cell }) => ({ x, y, length, fill: colors[cell] }));
+}
+
 /** Nur das SVG der Glyphe (Kit: `Glyph` in @/ui). */
 export const GlyphSvg = memo(function GlyphSvg({ name, pal }: { name: GlyphName; pal: GlyphPalette }) {
-  const p = GLYPH_PALETTES[isGlyphPalette(pal) ? pal : PALETTE_NAMES[0]];
-  const colors = { k: GLYPH_OUTLINE, w: GLYPH_WHITE, a: p.a, b: p.b, h: p.h, c: p.c };
   return (
     <svg viewBox="0 0 10 10" className="gl" aria-hidden>
-      {rowsToRects(GLYPHS[isGlyphName(name) ? name : GLYPH_NAMES[0]], colors)}
+      {glyphRects(name, pal).map(({ x, y, length, fill }) => (
+        <rect key={`${x}-${y}`} x={x} y={y} width={length} height={1} fill={fill} />
+      ))}
     </svg>
   );
 });

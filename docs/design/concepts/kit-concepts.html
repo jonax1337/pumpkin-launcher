@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kit-Konzepte · Pumpkin Launcher</title>
+<link rel="stylesheet" href="base.css">
+<style>
+.pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 28px; margin-top: 12px; }
+.pick a { display: grid; gap: 10px; color: inherit; text-decoration: none; }
+.pick .frame { position: relative; height: 300px; overflow: hidden; background: var(--bg-2); box-shadow: inset 0 0 0 var(--px) var(--line); clip-path: var(--n1); }
+.pick iframe { width: 1240px; height: 1000px; border: 0; transform: scale(.29); transform-origin: 0 0; pointer-events: none; position: absolute; inset: 0; }
+.pick b { font: 800 30px/1 var(--f-display); text-transform: uppercase; }
+.pick small { color: var(--fg-3); font: 400 17px/1 var(--f-px); letter-spacing: .05em; }
+.pick a:hover b { color: var(--copper); }
+</style>
+</head>
+<body><main class="spec">
+<header class="spec-head"><span class="no">PUMPKIN LAUNCHER · UI-KIT</span><h1>Inventar + 3 Varianten</h1>
+<p>Gleiche Palette, gleiche Schriften, gleiches Pixelraster wie Pixelkino. Verschieden ist nur die Komponentensprache. Alle gehen vom Inventar-Konzept aus (Spiel-GUI, Slots, Bevel). Jede Seite zeigt dieselben Bausteine: Knöpfe, Tabs, Menü, Formular, Umschalter, Regler, Status, Dialog, Liste und Karten.</p></header>
+<p style="margin:0 0 8px"><a href="launcher/launcher.html" style="font:400 22px/1 var(--f-px);color:var(--copper);letter-spacing:.05em">▶ KOMPLETT-MOCKUP ÖFFNEN: alle Bildschirme in allen vier Stilen</a></p>
+<div class="pick"><a href="kit-slots.html"><div class="frame"><iframe src="kit-slots.html" title="Inventar" loading="lazy" scrolling="no" tabindex="-1"></iframe></div><small>Slots & Steinplatten</small><b>Inventar</b></a><a href="kit-schiefer.html"><div class="frame"><iframe src="kit-schiefer.html" title="Schiefer" loading="lazy" scrolling="no" tabindex="-1"></iframe></div><small>Kühl, flach, ruhig</small><b>Schiefer</b></a><a href="kit-sandstein.html"><div class="frame"><iframe src="kit-sandstein.html" title="Sandstein" loading="lazy" scrolling="no" tabindex="-1"></iframe></div><small>Warmer Stein</small><b>Sandstein</b></a><a href="kit-klassik.html"><div class="frame"><iframe src="kit-klassik.html" title="Klassik" loading="lazy" scrolling="no" tabindex="-1"></iframe></div><small>Vanilla-Grau</small><b>Klassik</b></a></div>
+</main></body></html>

@@ -14,6 +14,7 @@ import { useDeleteInstance, useGroups, useRenameInstance, useSetGroup } from "@/
 import { usePlay } from "@/hooks/usePlay";
 import { askStop } from "@/store/stopAsk";
 import { useSaveTemplate } from "@/hooks/useTemplates";
+import { useCreateShortcut } from "@/hooks/useCreateShortcut";
 import { api } from "@/lib/api";
 import type { ExportRequest } from "@/lib/backend";
 import { revealLocalPath } from "@/lib/links";
@@ -54,6 +55,7 @@ function useDuplicate() {
   return (instance: Instance) =>
     run({
       key: `duplicate:${instance.id}`,
+      instanceId: instance.id,
       label: t("components.instance.duplicateTask", { name: instance.name }),
       doneLabel: t("components.instance.duplicateTaskDone", { name: instance.name }),
       cancellable: true,
@@ -75,6 +77,7 @@ function useExport() {
   return (instance: Instance, request: ExportRequest, path: string) =>
     run({
       key: `export:${instance.id}`,
+      instanceId: instance.id,
       label: t("components.instance.exportTask", { name: instance.name }),
       doneLabel: t("components.instance.exportTaskDone", { name: instance.name }),
       cancellable: true,
@@ -103,7 +106,7 @@ export function useGroupMenu(instance: Instance): MenuEntry[] {
     ...(groups.length ? ["-" as const] : []),
     { id: "group-new", text: t("components.instance.newGroupMenu"), icon: "plus", onSelect: () => askNewGroup(instance) },
     ...(instance.group
-      ? [{ id: "group-none", text: t("components.instance.removeFromGroup"), icon: "x" as const, onSelect: () => assign(null) }]
+      ? [{ id: "group-none", text: t("components.instance.removeFromGroup"), icon: "close" as const, onSelect: () => assign(null) }]
       : []),
   ];
 }
@@ -117,6 +120,7 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
   const phase = usePhase(instance.id);
   const play = usePlay();
   const duplicate = useDuplicate();
+  const createShortcut = useCreateShortcut();
   const contentBusy = useContentState((s) => !!s.active);
   const navigate = useNavigate();
   const groupItems = useGroupMenu(instance);
@@ -131,17 +135,17 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
           {
             id: "open",
             text: t("components.instance.openInstance"),
-            icon: "chev" as const,
+            icon: "chev-right" as const,
             onSelect: () => navigate(instanceUrl(instance.id)),
           },
         ]
       : []),
-    { id: "settings", text: t("common.settings"), icon: "gear", onSelect: () => navigate(instanceUrl(instance.id, "settings")) },
-    { id: "log", text: t("components.log.ariaLabel"), icon: "term", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
+    { id: "settings", text: t("common.settings"), icon: "settings", onSelect: () => navigate(instanceUrl(instance.id, "settings")) },
+    { id: "log", text: t("components.log.ariaLabel"), icon: "terminal", onSelect: () => navigate(instanceUrl(instance.id, "console")) },
     { id: "dir", text: t("components.instance.openFolder"), icon: "folder", onSelect: () => openInstanceFolder(instance) },
     "-",
-    { id: "rename", text: t("common.rename"), icon: "file", disabled: locked, onSelect: () => askRename(instance) },
-    { id: "group", text: t("components.instance.group"), icon: "box", disabled: locked, items: groupItems },
+    { id: "rename", text: t("common.rename"), icon: "edit", disabled: locked, onSelect: () => askRename(instance) },
+    { id: "group", text: t("components.instance.group"), icon: "tag", disabled: locked, items: groupItems },
     {
       id: "dup",
       text: t("components.instance.duplicate"),
@@ -152,11 +156,14 @@ export function useInstanceMenu(instance: Instance, { showOpen = true }: { showO
     {
       id: "exp",
       text: t("components.instance.exportEllipsis"),
-      icon: "ul",
+      icon: "upload",
       disabled: locked || contentBusy,
       onSelect: () => askExport(instance),
     },
     { id: "tpl", text: t("components.instance.saveAsTemplate"), icon: "save", onSelect: () => askSaveTemplate(instance) },
+    ...(api.capabilities.shortcuts
+      ? [{ id: "shortcut", text: t("deepLinks.shortcut.menu"), icon: "link" as const, onSelect: () => createShortcut.mutate(instance) }]
+      : []),
     "-",
     { id: "del", text: t("common.delete"), icon: "trash", bad: true, disabled: locked, onSelect: () => askDelete(instance) },
   ];
@@ -170,10 +177,12 @@ type MenuButtonProps = {
   /** Über einer Szene (Grundplatte, harter Schatten). */
   onScene?: boolean;
   showOpen?: boolean;
+  /** Platzierung des Knopfes in der Umgebung (Tailwind, z. B. Spalte und Zeile im Raster). */
+  className?: string;
 };
 
 /** Symbolknopf „Weitere Aktionen“ mit dem Instanz-Menü. */
-export function InstanceMenuButton({ instance, size = "m", variant = "secondary", onScene, showOpen }: MenuButtonProps) {
+export function InstanceMenuButton({ instance, size = "m", variant = "secondary", onScene, showOpen, className }: MenuButtonProps) {
   const { t } = useI18n();
   const items = useInstanceMenu(instance, { showOpen });
   return (
@@ -185,6 +194,7 @@ export function InstanceMenuButton({ instance, size = "m", variant = "secondary"
           size={size}
           onScene={onScene}
           icon="more"
+          className={className}
           label={t("components.instance.moreActionsFor", { name: instance.name })}
           tip={t("components.instance.moreActions")}
         />

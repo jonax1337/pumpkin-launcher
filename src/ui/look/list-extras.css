@@ -1,0 +1,16 @@
+/* Platzhalterzeilen (GhostRow = entfernt, SkelRow = lädt). Nur Aussehen; Spalten, Maße und Abstände setzt ListExtras.tsx per Tailwind.
+   Beide liegen auf `.lk-row` (look/list.css) und haben keinen Hover. */
+
+.lk-row[data-ghost], .lk-row[data-skel] { --r-hv: var(--r-bg); }
+
+/* Inhaltszeile: gestrichelte Linie unten (auch bei Hover/Fokus im Knopf, daher die stärkere Zeile) */
+.lk-row[data-ghost="content"]::before,
+.lk-row[data-ghost="content"]:is(:hover, :focus-within, [data-force="hover"])::before {
+  background: repeating-linear-gradient(90deg, var(--line) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) left bottom / 100% var(--px) no-repeat;
+}
+.lk-ghost-m { opacity: .35; filter: grayscale(.8); }
+.lk-ghost-t { font-weight: 500; color: var(--fg-2); }
+
+/* Trenner der Liste überspringen Platzhalter */
+.lk-list[data-divided] .lk-row + .lk-row[data-ghost],
+.lk-list[data-divided] .lk-row[data-ghost] + .lk-row { box-shadow: none; }

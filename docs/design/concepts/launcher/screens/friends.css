@@ -1,0 +1,28 @@
+/* Freunde: vertikale Tabs, Listenzeilen mit Online-Punkt, Aktivitäts-Zeitleiste */
+.s-friends .note { margin-bottom: 20px; }
+.s-friends .fr-ws { grid-template-columns: 220px minmax(0, 1fr); }
+@media (max-width: 960px) { .s-friends .fr-ws { grid-template-columns: minmax(0, 1fr); } }
+.s-friends .tabs[data-o=v] .badge { margin-left: auto; }
+.s-friends .fr-ph { padding: 16px 16px 0; margin-bottom: 8px; }
+.s-friends .fr-ph .grow { flex: 0 1 260px; }
+.s-friends .panel:not([data-flush]) .tbl .tr:last-child, .s-friends .tbl .tr:last-child { border-bottom: 0; }
+.s-friends .fr-row { min-height: 64px; grid-template-columns: minmax(0, 1fr) auto; padding: 8px 16px; }
+.s-friends .fr-act { display: flex; align-items: center; gap: 6px; }
+.s-friends .fr-av { --s: 40px; position: relative; overflow: visible; }
+.s-friends .fr-av canvas { position: absolute; inset: 0; }
+/* Online-Punkt: eckiges Quadrat mit Rand, unten rechts */
+.s-friends .fr-av::after { content: ""; position: absolute; right: -4px; bottom: -4px; width: 12px; height: 12px; background: var(--fg-3); border: var(--u2) solid var(--panel); }
+.s-friends .fr-av[data-on]::after { background: var(--run); }
+.s-friends .fr-st[data-on] { color: var(--run); }
+.s-friends .fr-st .chip { height: 22px; }
+.s-friends .panel[data-panel]:not([data-flush]) { padding-bottom: 12px; }
+.s-friends .panel[data-panel="req"] .tbl .tr { padding-inline: 0; }
+/* Zeitleiste */
+.s-friends .fr-tl { list-style: none; margin: 0; padding: 0; display: grid; }
+.s-friends .fr-tl li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 88px; align-items: center; gap: 12px; padding: 10px 0; border-bottom: var(--px) solid var(--line); }
+.s-friends .fr-tl li:last-child { border-bottom: 0; }
+.s-friends .fr-tl .tx { display: grid; gap: 2px; min-width: 0; }
+.s-friends .fr-tl .tx b { font: 700 15px/1.25 var(--f-body); }
+.s-friends .fr-tl time { text-align: right; }
+.s-friends .fr-tl li > time:nth-last-child(2) { grid-column: 3; }
+@media (max-width: 720px) { .s-friends .fr-tl li { grid-template-columns: auto minmax(0, 1fr) auto; } .s-friends .fr-tl time { display: none; } }

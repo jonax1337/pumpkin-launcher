@@ -21,6 +21,7 @@ use crate::{
         download, duplicate, forge,
         limits::PLAN_LIMIT,
         loader,
+        mod_profiles,
         modrinth::{self, Version},
         mods,
         mojang::{VersionEntry, VersionManifest, MANIFEST_URL},
@@ -415,7 +416,8 @@ impl Plan {
 }
 
 /// Lädt die neuen Dateien und speichert Inhaltsliste, Minecraft-Version und Loader; `sync` legt dabei ab und räumt
-/// weg, und scheitert das Speichern, ist alles wie vorher. Eine Instanz mit neuem Spiel gehört zu keinem Pack mehr.
+/// weg, und scheitert das Speichern, ist alles wie vorher. Eine Instanz mit neuem Spiel gehört zu keinem Pack mehr, und
+/// ihre Profile der Inhalte beschreiben das alte Spiel.
 async fn finish(
     state: &AppState,
     instance: &Instance,
@@ -435,6 +437,9 @@ async fn finish(
             i.loader = target.loader;
             i.loader_version = target.loader_version.clone();
             i.mods = mods;
+            if game_changed {
+                mod_profiles::forget_all(i);
+            }
             if game_changed && i.modpack.take().is_some() {
                 i.mods.iter_mut().for_each(|m| m.pack_managed = false);
             }

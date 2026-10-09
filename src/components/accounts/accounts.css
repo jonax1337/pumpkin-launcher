@@ -1,0 +1,69 @@
+/* ---------- Konten: Zeilen in den Einstellungen, Dialoge Microsoft-Anmeldung und Spielername ---------- */
+
+/* Hinweise unter der Kontenliste */
+.accounts-note {
+  margin-top: 16px;
+  max-width: 70ch;
+}
+
+/* ---------- Microsoft-Anmeldung ---------- */
+.ms-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+
+.ms-info {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.ms-info-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ms-starting {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.ms-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ms-address {
+  font-family: var(--f-mono);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.ms-done {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.ms-offline {
+  margin-top: 12px;
+}
+
+/* ---------- Spielername hinzufügen ---------- */
+.add-offline-note {
+  margin-top: 4px;
+}
+
+.add-offline-hint {
+  margin-top: 8px;
+}

@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react";
 import { Dialog as D } from "radix-ui";
-import { Actions, Button, Count, IconButton } from "@/ui";
+import { Actions, Button, Count, Heading, IconButton, Scrim, cssVars } from "@/ui";
 import { copyScreenshot, useTrashScreenshots } from "@/hooks/useScreenshots";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
@@ -64,7 +64,7 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
   return (
     <D.Root open onOpenChange={(open) => !open && onClose()}>
       <D.Portal>
-        <D.Overlay className="vx-scrim" />
+        <Scrim />
         <D.Content
           className="shot-lb"
           data-ctx="overlay"
@@ -77,11 +77,11 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
         >
           <header className="shot-lb-bar">
             <div className="shot-lb-title">
-              <D.Title asChild><h2>{title}</h2></D.Title>
+              <D.Title asChild><Heading level="dialog" as="h2" plain className="tracking-[.01em]">{title}</Heading></D.Title>
               <p>{`${current.fileName} · ${formatSize(current.size)}`}</p>
             </div>
             <D.Close asChild>
-              <IconButton icon="x" label={t("common.close")} tip={false} />
+              <IconButton icon="close" label={t("common.close")} tip={false} />
             </D.Close>
           </header>
           <p id="shot-zoom-hint" className="sr">{t("detail.screenshots.zoomHint")}</p>
@@ -98,15 +98,16 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
               src={api.screenshotSrc(current)}
               alt={t("detail.screenshots.shotAria", { date: title })}
               draggable={false}
-              style={zoom.size ?? { visibility: "hidden" }}
+              data-ready={zoom.size ? "" : undefined}
+              style={zoom.size ? cssVars({ "--w": `${zoom.size.width}px`, "--h": `${zoom.size.height}px` }) : undefined}
               onLoad={zoom.onLoad}
             />
           </div>
           <footer className="shot-lb-bar">
             <Actions>
-              <IconButton icon="back" label={t("detail.screenshots.prevAria")} disabled={!prev} onClick={() => onShow(prev)} />
+              <IconButton icon="chev-left" label={t("detail.screenshots.prevAria")} disabled={!prev} onClick={() => onShow(prev)} />
               <Count value={`${index + 1} / ${shots.length}`} size={16} />
-              <IconButton icon="chev" label={t("detail.screenshots.nextAria")} disabled={!next} onClick={() => onShow(next)} />
+              <IconButton icon="chev-right" label={t("detail.screenshots.nextAria")} disabled={!next} onClick={() => onShow(next)} />
             </Actions>
             <div className="shot-zoom" role="group" aria-label={t("detail.screenshots.zoomGroup")}>
               <IconButton icon="minus" label={t("detail.screenshots.zoomOut")} disabled={!zoom.canZoomOut} onClick={zoom.zoomOut} />
@@ -124,7 +125,7 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
                 {t("detail.screenshots.copy")}
               </Button>
               <Button icon="folder" compactBelow={COMPACT_BELOW} onClick={() => revealLocalPath(current.path)}>{t("components.instance.revealInFolder")}</Button>
-              <Button variant="primary" icon="ext" compactBelow={COMPACT_BELOW} onClick={() => openLocalPath(current.path)}>{t("common.open")}</Button>
+              <Button variant="primary" icon="external" compactBelow={COMPACT_BELOW} onClick={() => openLocalPath(current.path)}>{t("common.open")}</Button>
             </Actions>
           </footer>
         </D.Content>

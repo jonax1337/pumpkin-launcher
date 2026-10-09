@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useI18n, type TKey } from "@/i18n";
-import { Checkbox, Dialog, DialogActions, Field, Hint, Skel, TextArea, TextField } from "@/ui";
+import { Checkbox, Dialog, DialogActions, Field, Hint, Skel, TextArea, Input } from "@/ui";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useExportEntries, useExportSummary } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -69,14 +69,14 @@ export function ExportDialog({ instance, onExport, onClose }: {
       onOpenChange={(o) => !o && onClose()}
       title={t("components.instance.export")}
       sub={instance.name}
-      width={520}
+      height="l"
       footLeft={api.capabilities.exportInstance ? undefined : t("components.export.appOnly")}
       footer={
         <DialogActions
           cancel={t("common.cancel")}
           confirm={{
             label: t("components.instance.export"),
-            width: 150,
+            className: "w-[150px]",
             disabled: !api.capabilities.exportInstance || !entries.data || !name.trim() || !version.trim(),
             onClick: () => void submit().catch(toastError),
           }}
@@ -86,10 +86,10 @@ export function ExportDialog({ instance, onExport, onClose }: {
       <div className="flex flex-col gap-4">
         <div className="flex gap-3">
           <Field label={t("components.export.packName")} className="min-w-0 flex-1">
-            <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={MAX_NAME_LENGTH} />
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={MAX_NAME_LENGTH} />
           </Field>
           <Field label={t("components.export.packVersion")} className="w-36 flex-none">
-            <TextField value={version} onChange={(e) => setVersion(e.target.value)} maxLength={MAX_VERSION_LENGTH} />
+            <Input value={version} onChange={(e) => setVersion(e.target.value)} maxLength={MAX_VERSION_LENGTH} />
           </Field>
         </div>
         <Field label={t("components.export.packDescription")} optional>
@@ -111,7 +111,7 @@ function ExportEntries({ entries, chosen, onToggle }: {
 }) {
   const { t } = useI18n();
   if (entries.error) return <Hint tone="bad">{entries.error.message}</Hint>;
-  if (!entries.data) return <Skel h={120} />;
+  if (!entries.data) return <Skel className="h-[120px]" />;
   if (!entries.data.length) return <Hint>{t("components.export.folderEmpty")}</Hint>;
   return (
     <div className="flex flex-col gap-2">

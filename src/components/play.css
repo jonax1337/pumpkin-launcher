@@ -1,119 +1,26 @@
-/* Spielen: der große Knopf (PlayButton in play/PlayButton.tsx) mit seinen Zuständen, der Balken darin (PlayBar, .prog),
-   die Statuszeile darunter (PlayStatus) und die Protokoll-Konsole (LogConsole).
-   Domänen-Baustein außerhalb des Kits: eigene Maße und Farben (.play .pbar nutzt die Knopffarben).
+/* Spielen: der Balken im Spielen-Knopf (PlayBar, .prog) und die Protokoll-Konsole (LogConsole).
+   Der Knopf selbst (PlayPlate) ist ein Kit-Button mit Tailwind-Maßen, die Statuszeile (PlayStatus) Tailwind im TSX.
+   Domänen-Baustein außerhalb des Kits: eigene Maße und Farben. Die Konsole ist ein tiefer Slot.
    Eingebunden in src/index.css hinter dem Kit (gleiche Schicht). */
-
-/* ---------- Spielen-Knopf: Gerüst (feste Größe in allen Zuständen) ---------- */
-.play { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: flex-start; width: 272px; height: var(--h-l); padding: 0; font-weight: 600; font-size: 14px; white-space: nowrap; color: var(--ink); flex: none; user-select: none; }
-.play .bc { position: relative; display: inline-flex; align-items: center; width: 100%; height: 100%; padding: 0 16px 0 10px; gap: 12px; transform: translateY(round(calc(var(--px) * -.5), 1px)); }
-
-/* Primärfläche: Sockel (::before) + Fläche (.bf, Licht oben/links, Schatten unten/rechts).
-   Hover hebt die Fläche um 1 Einheit, gedrückt sinkt sie und das Bevel kehrt sich um (alles transform). */
-.play::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--acc-lo); clip-path: var(--n1); }
-.play .bf { position: absolute; inset: 0 0 var(--px) 0; z-index: -1; background: var(--acc); clip-path: var(--n1); box-shadow: inset var(--px) var(--px) 0 var(--acc-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--acc-mid); }
-.play:hover:not(:disabled):not([aria-disabled="true"]) .bf { transform: translateY(calc(var(--px) * -1)); }
-.play:hover:not(:disabled):not([aria-disabled="true"]) .bc { transform: translateY(round(calc(var(--px) * -1.5), 1px)); }
-.play:active:not(:disabled):not([aria-disabled="true"]) .bf { transform: translateY(var(--px)); box-shadow: inset var(--px) var(--px) 0 var(--acc-mid), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--acc-hi); }
-.play:active:not(:disabled):not([aria-disabled="true"]) .bc { transform: translateY(round(calc(var(--px) * .5), 1px)); }
-.play:disabled, .play[aria-disabled="true"] { color: var(--fg-3); cursor: default; }
-/* Aus: flach und neutral (kein Bevel, keine Akzentfarbe), aber mit gestricheltem Steuerrahmen
-   (2 Einheiten Strich, 1 Lücke) – bleibt als „Hauptaktion, noch gesperrt“ lesbar. */
-.play:disabled::before, .play[aria-disabled="true"]::before {
-  box-shadow: none;
-  background:
-    repeating-linear-gradient(90deg, var(--ctl) 0 var(--u2), transparent var(--u2) var(--u3)) 0 0 / 100% var(--px) no-repeat,
-    repeating-linear-gradient(90deg, var(--ctl) 0 var(--u2), transparent var(--u2) var(--u3)) 0 100% / 100% var(--px) no-repeat,
-    repeating-linear-gradient(180deg, var(--ctl) 0 var(--u2), transparent var(--u2) var(--u3)) 0 0 / var(--px) 100% no-repeat,
-    repeating-linear-gradient(180deg, var(--ctl) 0 var(--u2), transparent var(--u2) var(--u3)) 100% 0 / var(--px) 100% no-repeat,
-    var(--panel-2);
-}
-.play:disabled .bf, .play[aria-disabled="true"] .bf { opacity: 0; }
-.play:disabled .bc, .play[aria-disabled="true"] .bc { transform: none; }
-.play[aria-disabled="true"]:hover .bf, .play[aria-disabled="true"]:hover .bc { transform: none; }
-
-/* ---------- Spielen-Knopf: Inhalt und Zustände ---------- */
-.play .pic { width: 36px; height: 36px; display: grid; place-items: center; background: var(--ink); color: var(--acc); flex: none; clip-path: var(--n1); }
-.play .lab { display: flex; flex-direction: column; justify-content: center; min-width: 0; flex: 1; text-align: left; }
-.play .l1 { font: 800 25px/1 var(--f-display); letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.play .l2 { font-size: calc(13px * var(--tz)); font-weight: 600; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
-.play .pct { font: 400 26px/1 var(--f-px); width: 3.2ch; text-align: right; flex: none; display: none; visibility: visible; }
-.play .pbar { position: absolute; left: 58px; right: 16px; bottom: 12px; height: var(--u2); --prog-on: var(--ink); --prog-off: rgba(18,12,7,.2); visibility: hidden; }
-.play[data-st="run"] { color: var(--acc-hi); }
-.play[data-st="run"] .bf { background: #0B111B; box-shadow: inset 0 0 0 var(--px) var(--acc), inset var(--u2) var(--u2) 0 var(--hi-2); }
-.play[data-st="run"] .pic { background: var(--acc); color: var(--ink); }
-.play[data-st="error"] { --acc: var(--bad); color: var(--bad); }
-.play[data-st="error"] .bf { background: #1A0E10; box-shadow: inset 0 0 0 var(--px) var(--bad), inset var(--u2) var(--u2) 0 var(--hi-2); }
-.play[data-st="error"] .pic { background: var(--bad); color: var(--ink); }
-.play.m { width: 176px; height: var(--h-m); }
-.play.m .bc { padding: 0 10px 0 6px; gap: 8px; }
-.play.m .pic { width: 28px; height: 28px; }
-.play.m .l1 { font-size: 19px; }
-.play.m .l2 { display: none; }
-.play.m .pct { font-size: 20px; }
-.play.m .pbar { left: 40px; right: 10px; bottom: 6px; height: var(--px); }
-.play.i { width: var(--h-s); height: var(--h-s); color: var(--acc); }
-.play.i .bc { padding: 0; justify-content: center; }
-.play.i .pic { background: none; color: inherit; width: 28px; height: 28px; }
-.play.i .lab, .play.i .pct { display: none; }
-.play.i .pbar { left: 4px; right: 4px; bottom: 3px; height: var(--px); }
-
-/* Prozent nur beim Vorbereiten; Fortschritt ersetzt die Unterzeile an fester Stelle */
-.play[data-st="prep"] .pct { display: block; }
-.play[data-st="prep"] .pbar, .play[data-st="start"] .pbar { visibility: visible; }
-.play[data-st="prep"] .l2, .play[data-st="start"] .l2 { visibility: hidden; }
-/* „Wird installiert“ passt mit Prozent in 272 px (m: „Installiert“) */
-.play[data-st="prep"]:not(.m) .l1 { font-size: 21px; }
-/* Laufzeit in der Unterzeile: Zahl in Pixelschrift */
-.play .l2 .num { font: 400 16px/1 var(--f-px); letter-spacing: .02em; opacity: 1; }
-/* Wird installiert / Startet: Vorgang, kein Knopf. Akzentfläche bleibt, aber flach (ohne Bevel, Hover, Druck); Abbrechen steht in der Statuszeile */
-.play:is([data-st="prep"], [data-st="start"]) { cursor: progress; }
-.play:is([data-st="prep"], [data-st="start"]):not(.i) { color: var(--ink); }
-.play:is([data-st="prep"], [data-st="start"]):not(.i)::before { background: var(--acc-lo); box-shadow: none; }
-.play:is([data-st="prep"], [data-st="start"]) .bf { opacity: 1; transform: none; box-shadow: none; }
-.play:is([data-st="prep"], [data-st="start"]) .bc { transform: none; }
-.play.i:is([data-st="prep"], [data-st="start"]) .bf { box-shadow: inset 0 0 0 var(--px) var(--line-2); }
-/* Spielen in Listen (Symbolknopf): dunkle Platte, Akzent nur im Symbol; deutlich aktiv, aber neutral (helle Glyphe auf Platte), Akzent erst beim Überfahren */
-.play.i::before { background: var(--edge); }
-.play.i .bf { background: var(--panel-2); box-shadow: inset 0 0 0 var(--px) var(--line-2), inset var(--px) var(--px) 0 var(--hi); }
-.play.i:hover:not([aria-disabled="true"]) { color: var(--ink); }
-.play.i:hover:not([aria-disabled="true"]) .bf { background: var(--acc); box-shadow: inset var(--px) var(--px) 0 var(--acc-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--acc-mid); }
-.play.i[data-st="run"] .bf { background: #0B111B; box-shadow: inset 0 0 0 var(--px) var(--acc); }
-/* Zustandswechsel färben in Stufen um statt hart */
-.play .bf, .play .pic { transition: background-color .15s steps(3, end), box-shadow .15s steps(3, end); }
 
 /* ---------- Balken im Knopf (PlayBar): Zellen 2 Einheiten, Lücke 1; Füllung auf ganze Zellen gerundet ---------- */
 .prog { position: relative; height: var(--u3); background: repeating-linear-gradient(90deg, var(--prog-off, #1C2536) 0 var(--u2), transparent var(--u2) var(--u3)); }
 .prog::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, var(--prog-on, var(--acc)) 0 var(--u2), transparent var(--u2) var(--u3)); clip-path: inset(0 calc(100% - round(down, calc(var(--p, 0) * 100%), var(--u3))) 0 0); }
-.prog.thin { height: var(--u2); }
 .prog.ind::after { clip-path: none; -webkit-mask: linear-gradient(90deg, transparent 0 30%, #000 30% 55%, transparent 55%); mask: linear-gradient(90deg, transparent 0 30%, #000 30% 55%, transparent 55%); animation: ind 1.2s steps(10) infinite; }
-.prog.bad { --prog-on: var(--bad); }
 
-/* ---------- Statuszeile unter dem Spielen-Knopf (32 px, feste Höhe) ---------- */
-.pstat { height: 32px; display: flex; align-items: center; gap: 6px; color: var(--fg-2); font-size: calc(13px * var(--tz)); min-width: 0; }
-.pstat .ptxt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.pstat .ptxt b { font-weight: 600; color: var(--fg); }
-/* Laufzeit in Pixelschrift: Mindestgröße 18 px, Zeile bleibt 32 px */
-.pstat .ptxt .num { font: 400 18px/1 var(--f-px); color: var(--fg); letter-spacing: .02em; }
-/* Abbrechen / Protokoll: eigener Knopf mit Abstand, nicht Fließtext */
-.pstat .ptxt + .pcancel { margin-left: 8px; }
-/* Läuft: nur „Protokoll ansehen“; die Zustandsmeldung ist nur für Screenreader und nimmt keinen Platz */
-.pstat.run .ptxt { position: absolute; }
-.hero .pstat.run { margin-left: -8px; }
-
-/* ---------- Protokoll (Konsole) ---------- */
-.console { position: relative; height: max(260px, calc(calc(var(--vh1, 1vh) * 100) - var(--bar) - var(--dc) - 48px - 44px - 22px - 50px - 32px)); }
-.console .cbody { position: absolute; inset: 0; overflow: auto; padding: 12px 14px; font: calc(13px * var(--tz))/1.65 var(--f-mono); background: #05080D; box-shadow: var(--bv-sunk); clip-path: var(--n1); white-space: pre; scrollbar-gutter: stable; }
-.console .ln { display: block; color: #B9C3D4; }
-.console .ln.w { color: var(--warn); }
-.console .ln.e { color: var(--bad); }
+/* ---------- Protokoll (Konsole): Zeilen der Ausgabe; Zeitstempel gedimmt, Warnung gelb, Fehler rot (Rahmen und Körper: log/LogView.tsx) ---------- */
+/* Meldung, Werkzeugleiste und Konsole stehen im Abstand --pg-gap-m untereinander; die Konsole füllt, was unter der kompakten Kopfzeile und den Reitern vom Fenster bleibt (mindestens 260) */
+.log-tab { display: flex; flex-direction: column; gap: var(--pg-gap-m); min-width: 0; min-height: calc(calc(var(--vh1, 1vh) * 100) - var(--bar) - var(--dc) - var(--dt) - var(--pg-gap-m) - var(--pg-bottom)); }
+.console .ln { display: block; width: max-content; min-width: 100%; padding-left: calc(var(--u2) * 3); color: var(--fg); }
+.console .ln .ts, .console .ln .lv { color: var(--fg-3); }
+/* Warnung/Fehler: Zeile in der Farbe der Stufe, links ein Balken (2 Einheiten) im Einzug aller Zeilen; Thread/Stufe trägt dieselbe Farbe */
+.console .ln.w { color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); box-shadow: inset var(--u2) 0 0 var(--warn); }
+.console .ln.e { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); box-shadow: inset var(--u2) 0 0 var(--bad); }
+.console .ln:is(.w, .e) .lv { color: inherit; }
 .console .ln mark { background: color-mix(in srgb, var(--copper) 45%, transparent); color: inherit; }
-.console .down { position: absolute; right: 22px; bottom: 14px; opacity: 0; visibility: hidden; transition: opacity .15s var(--ease), visibility 0s linear .15s; }
-.console .down.show { opacity: 1; visibility: visible; transition: opacity .15s var(--ease), visibility 0s; }
-.console .none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--fg-3); pointer-events: none; }
-/* Ring am Rahmen (der Körper selbst ist gekerbt und schneidet ::after ab) */
-.console:has(> .cbody:focus-visible)::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
-/* Kontrastmodus: steht hier, weil dieselbe Regel in ui/a11y.css vor der Basisregel oben geladen wird und ihr unterliegt */
+
+/* Kontrastmodus: Spielen-Knopf mit Rahmen; laufend und Fehler in Highlight */
 @media (forced-colors: active) {
-  .console .cbody { border: 1px solid CanvasText; }
-  .console:has(> .cbody:focus-visible)::after { background: Highlight; }
+  .play { border: 2px solid ButtonText; }
+  .play[data-st="run"], .play[data-st="error"] { border-color: Highlight; }
 }

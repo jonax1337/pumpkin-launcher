@@ -20,9 +20,9 @@ export function OtherTypeHits({ source, types, requestFor, onPick }: {
   const found = types.flatMap((type, i) => ((totals[i].data ?? 0) > 0 ? [{ type, total: totals[i].data ?? 0 }] : []));
   if (found.length === 0) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-1" aria-live="polite">
+    <div className="cat-also" aria-live="polite">
       {found.map(({ type, total }) => (
-        <Button key={type} variant="ghost" size="s" icon="chev" onClick={() => onPick(type)}>
+        <Button key={type} variant="ghost" size="s" icon="chev-right" onClick={() => onPick(type)}>
           {t(total === 1 ? "pages.discover.alsoIn.one" : "pages.discover.alsoIn.other", { n: formatCount(total), kind: typeLabel(type) })}
         </Button>
       ))}

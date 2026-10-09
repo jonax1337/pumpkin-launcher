@@ -8,13 +8,13 @@ import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import type { HostSession, Instance, LanStatus } from "@/lib/types";
 import { friendLabels, friendsActive } from "@/pages/friends/friendsModel";
-import { Button, Field, SectionHeader, StatusPanel, TextField } from "@/ui";
+import { Button, Field, Input, SectionHeader, StatusPanel } from "@/ui";
 import { FriendsModRow } from "./FriendsModRow";
 import { GuardedButton } from "./guards";
 import { ShareDialog } from "./ShareDialog";
 import { ShareGuests } from "./ShareGuests";
 
-const PORT_FIELD_WIDTH = 160;
+const PORT_FIELD_CLASS = "w-[160px]";
 
 /** Der Port, mit dem der Dialog teilt: `null` = der vom Backend geprüfte. */
 type ShareRequest = { port: number | null };
@@ -37,9 +37,9 @@ function ShareBody({ instance, busy }: { instance: Instance; busy: string | null
   const state = shareState({ instanceId: instance.id, versionSupported, running, lan, session });
   const [request, setRequest] = useState<ShareRequest | null>(null);
   return (
-    <section className="mb-8" aria-labelledby="share-h">
+    <section aria-labelledby="share-h">
       <SectionHeader id="share-h" title={t("friendsHost.share.title")} />
-      <div className="mt-3 flex flex-col gap-3">
+      <div className="sh-share-body">
         <ShareStatus state={state} onShare={(port) => setRequest({ port })} />
         <FriendsModRow instance={instance} busy={busy} />
       </div>
@@ -114,8 +114,8 @@ function ManualPortForm({ onContinue }: { onContinue: (port: number) => void }) 
         error={text.trim() !== "" && port === null && t("friendsHost.share.portInvalid", range)}
         reserveLines={1}
       >
-        <div className="flex items-center gap-2">
-          <TextField width={PORT_FIELD_WIDTH} inputMode="numeric" maxLength={5} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
+        <div className="sh-port">
+          <Input className={PORT_FIELD_CLASS} inputMode="numeric" maxLength={5} value={text} onChange={(e) => setText(e.target.value)} autoFocus />
           <Button type="submit" disabled={port === null}>{t("friendsHost.share.portContinue")}</Button>
         </div>
       </Field>

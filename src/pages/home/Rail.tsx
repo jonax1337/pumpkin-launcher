@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { AddCard, IconButton, SceneCard } from "@/ui";
+import { AddCard, CardStrip, SceneCard, SceneCardSkel } from "@/ui";
 import { loaderLine } from "@/components/common";
 import { InstanceIcon } from "@/components/InstanceIcon";
 import { useInstanceMenu } from "@/components/instance";
@@ -13,18 +13,6 @@ import { instanceUrl } from "@/lib/routes";
 import type { Instance } from "@/lib/types";
 import { motionOff } from "@/pixel/scene";
 import { useLook } from "@/store/look";
-
-/**
- * Wallpaper-Karten und Abstand in der Leiste „Deine Instanzen“;
- * wie in ui/card.css und .rail (styles/pixelkino.css).
- */
-export const TILE_W = 256;
-export const TILE_H = 144;
-const TILE_GAP = 12;
-const TILE_STEP = TILE_W + TILE_GAP;
-
-/** Rundung beim Messen der Scrollposition (px). */
-const SCROLL_EDGE_TOLERANCE_PX = 1;
 
 const scrollBehavior = () => (motionOff() ? "auto" : "smooth");
 
@@ -44,12 +32,13 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
         look={look}
         art={<InstanceIcon instance={instance} bio={look.bio} />}
         title={instance.name}
-        sub={`${loaderLine(instance)} · ${relativeTime(instance.lastPlayedAt)}`}
+        sub={`${loaderLine(instance)} · ${relativeTime(instance.lastPlayedAt, true)}`}
         current={current}
         status={current ? undefined : <StatusChip instance={instance} small loudOnly />}
         primary={<PlayButton instance={instance} size="i" />}
         menu={items}
         tip={t("pages.home.miniCardTip")}
+        tipSide="bottom"
         hit={{
           onClick: onPick,
           onDoubleClick: open,
@@ -66,25 +55,17 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
   );
 }
 
-/** Ob links und rechts der Leiste noch etwas wartet (für die Pfeile); misst bei jeder Größen- und Scrolländerung. */
-function useRailEdges(rail: RefObject<HTMLUListElement | null>, itemCount: number) {
-  const [edge, setEdge] = useState({ left: false, right: false });
-  const measure = () => {
-    const el = rail.current;
-    if (!el) return;
-    const left = el.scrollLeft > SCROLL_EDGE_TOLERANCE_PX;
-    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - SCROLL_EDGE_TOLERANCE_PX;
-    setEdge((e) => (e.left === left && e.right === right ? e : { left, right }));
-  };
-  useLayoutEffect(() => {
-    measure();
-    const el = rail.current;
-    if (!el) return;
-    const resizes = new ResizeObserver(measure);
-    resizes.observe(el);
-    return () => resizes.disconnect();
-  }, [itemCount]);
-  return { edge, measure };
+/** Platzhalter einer Karte beim Laden: dieselbe Platte wie die echte Karte (Bild, Namensschild), damit die Seite nicht springt. */
+export function RailSkeleton({ n }: { n: number }) {
+  return (
+    <CardStrip aria-hidden>
+      {Array.from({ length: n }, (_, k) => (
+        <li key={k}>
+          <SceneCardSkel />
+        </li>
+      ))}
+    </CardStrip>
+  );
 }
 
 /** Hält die gewählte Miniatur sichtbar (nicht beim ersten Anzeigen: die zuletzt gespielte steht ohnehin vorn). */
@@ -110,20 +91,17 @@ function useKeepVisible(rail: RefObject<HTMLUListElement | null>, currentId: str
 export function Rail({ instances, current, onPick }: { instances: Instance[]; current: string; onPick: (id: string) => void }) {
   const { t } = useI18n();
   const rail = useRef<HTMLUListElement>(null);
-  const { edge, measure } = useRailEdges(rail, instances.length);
   useKeepVisible(rail, current);
 
-  // Blättert um ganze Kacheln, mindestens eine.
-  function page(direction: 1 | -1) {
-    const el = rail.current;
-    if (!el) return;
-    const step = Math.max(1, Math.floor(el.clientWidth / TILE_STEP) - 1) * TILE_STEP;
-    el.scrollBy({ left: direction * step, behavior: scrollBehavior() });
-  }
-
   return (
-    <div className="railwrap" data-l={edge.left || undefined} data-r={edge.right || undefined}>
-      <ul className="rail" aria-labelledby="cont-h" ref={rail} onScroll={measure}>
+    <>
+      <CardStrip
+        listRef={rail}
+        itemCount={instances.length}
+        prevLabel={t("pages.home.scrollBack")}
+        nextLabel={t("pages.home.scrollForward")}
+        aria-labelledby="cont-h"
+      >
         {instances.map((i) => (
           <MiniCard key={i.id} instance={i} current={i.id === current} onPick={() => onPick(i.id)} hintId="rail-hint" />
         ))}
@@ -132,30 +110,8 @@ export function Rail({ instances, current, onPick }: { instances: Instance[]; cu
             <AddCard label={t("components.newInstance.title")} />
           </NewInstanceDialog>
         </li>
-      </ul>
+      </CardStrip>
       <span id="rail-hint" className="sr">{t("pages.home.railHint")}</span>
-      {/* Nur für die Maus: per Tastatur scrollt die Leiste mit dem Fokus mit.
-          „absolute“ schlägt die Kit-Position (.rarr legt die Lage fest). */}
-      <IconButton
-        onScene
-        icon="back"
-        label={t("pages.home.scrollBack")}
-        tip={false}
-        className="rarr l absolute"
-        tabIndex={-1}
-        aria-hidden
-        onClick={() => page(-1)}
-      />
-      <IconButton
-        onScene
-        icon="chev"
-        label={t("pages.home.scrollForward")}
-        tip={false}
-        className="rarr r absolute"
-        tabIndex={-1}
-        aria-hidden
-        onClick={() => page(1)}
-      />
-    </div>
+    </>
   );
 }

@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { usePackIconUrl } from "@/hooks/usePackIconUrl";
+import { chooseIcon } from "@/lib/instanceIcon";
 import type { IconChoice, Instance } from "@/lib/types";
-import { glyphFor, GlyphSvg } from "@/pixel/icons";
+import { GlyphSvg } from "@/pixel/icons";
 import { BIOMES, type Biome } from "@/pixel/scene";
-import { cssVars } from "@/ui/util";
+import { ArtGlyph, ArtImage } from "@/ui";
 
 /** Kleine Bilder (Pixel-Art von Modpacks) zeigen schon bei jeder Vergrößerung harte Pixel, größere erst ab dieser Vergrößerung; sonst glättet der Browser. */
 const SMALL_SOURCE_WIDTH = 128;
@@ -14,7 +15,7 @@ const isEnlarged = ({ naturalWidth, clientWidth }: HTMLImageElement) =>
 
 /**
  * Ein Icon, es füllt seine Fläche: Bild in voller Auflösung oder Pixel-Icon auf dem Grund des Bioms.
- * Größe der Glyphe und Zuschnitt legt der Rahmen fest (card.css, `.vx-icon`). Ein Bild, das nicht lädt, zeigt `fallback`.
+ * Größe der Glyphe und Zuschnitt legt der Rahmen fest (`ArtFrame`, `[--icon-k:2]`). Ein Bild, das nicht lädt, zeigt `fallback`.
  */
 export function IconView({ icon, bio, fallback }: { icon: IconChoice; bio: Biome; fallback: IconChoice }) {
   const [broken, setBroken] = useState<string | null>(null);
@@ -22,11 +23,9 @@ export function IconView({ icon, bio, fallback }: { icon: IconChoice; bio: Biome
   const shown = icon.type === "image" && broken === icon.src ? fallback : icon;
   if (shown.type === "image")
     return (
-      <img
-        className="vx-icon"
-        data-crisp={crisp || undefined}
+      <ArtImage
+        crisp={crisp}
         src={shown.src}
-        alt=""
         loading="lazy"
         referrerPolicy="no-referrer"
         onLoad={(e) => setCrisp(isEnlarged(e.currentTarget))}
@@ -34,17 +33,15 @@ export function IconView({ icon, bio, fallback }: { icon: IconChoice; bio: Biome
       />
     );
   return (
-    <span className="vx-icon" data-default="" style={cssVars({ "--tile": BIOMES[bio].bg, "--tile-hi": BIOMES[bio].acc })}>
+    <ArtGlyph tile={BIOMES[bio].bg} tileHi={BIOMES[bio].acc}>
       <GlyphSvg name={shown.glyph} pal={shown.palette} />
-    </span>
+    </ArtGlyph>
   );
 }
 
 /** Das Icon der Instanz: ihre Wahl, sonst das Icon des Modpacks, sonst ein Pixel-Icon, das fest aus der ID folgt. */
 export function InstanceIcon({ instance, bio }: { instance: Instance; bio: Biome }) {
   const packIconUrl = usePackIconUrl(instance);
-  const [glyph, palette] = glyphFor(instance.id);
-  const standard: IconChoice = { type: "glyph", glyph, palette };
-  const icon = instance.icon ?? (packIconUrl ? { type: "image" as const, src: packIconUrl } : standard);
+  const { icon, standard } = chooseIcon(instance, packIconUrl);
   return <IconView icon={icon} bio={bio} fallback={standard} />;
 }

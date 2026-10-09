@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n";
 import { Button, Chip, Hint, IconButton, JobProgress } from "@/ui";
@@ -7,7 +7,7 @@ import { projectKey, type CatalogType, type ProjectRef, type Source } from "@/li
 import { ownerKey } from "@/lib/mods";
 import type { Instance, World } from "@/lib/types";
 import { fitsLabel } from "./fit";
-import { HEAD_JOB_WIDTH, ROW_JOB_WIDTH, SIDE_JOB_WIDTH, useJobProgressFor } from "./jobProgress";
+import { JOB, useJobProgressFor, type JobSize } from "./jobProgress";
 import { useAddContent } from "./useAddContent";
 
 // Hinzufügen im Kontext einer Instanz (Datenpakete: einer Welt darin): Knopf, „Installiert“, Fortschritt oder „Keine Version“.
@@ -22,17 +22,17 @@ interface AddTarget {
 
 interface AddActionOptions extends AddTarget {
   versionId?: string;
-  jobWidth: ComponentProps<typeof JobProgress>["width"];
+  jobSize: JobSize;
   /** Meldet fehlende Versionen selbst; ohne steht „Keine Version“ an der Stelle des Knopfes. */
   onMissing?: () => void;
 }
 
 /** `instead` steht an der Stelle des Knopfes, solange es nicht `null` ist: installiert, prüft, läuft oder keine Version. */
-function useAddAction({ instance, world, project, type, source, versionId, jobWidth, onMissing }: AddActionOptions) {
+function useAddAction({ instance, world, project, type, source, versionId, jobSize, onMissing }: AddActionOptions) {
   const { t } = useI18n();
   const addContent = useAddContent();
   const disabled = useContentState((s) => !!s.active);
-  const job = useJobProgressFor(project.id, jobWidth);
+  const job = useJobProgressFor(project.id, jobSize);
   const [state, setState] = useState<"idle" | "checking" | "missing">("idle");
   const installed = instance.mods.some((m) => ownerKey(m) === projectKey(source, project.id));
 
@@ -47,7 +47,7 @@ function useAddAction({ instance, world, project, type, source, versionId, jobWi
   const instead = installed ? (
     <Chip icon="check">{t("components.content.installed")}</Chip>
   ) : state === "checking" ? (
-    <JobProgress label={t("components.common.checking")} p={null} width={jobWidth} />
+    <JobProgress label={t("components.common.checking")} p={null} {...JOB[jobSize]} />
   ) : (
     (job ?? (state === "missing" ? <Hint>{t("components.content.noVersionFor", { version: instance.minecraftVersion })}</Hint> : null))
   );
@@ -60,7 +60,7 @@ export function AddRowButton(target: AddTarget) {
   const { instance, project, type } = target;
   const { instead, disabled, add } = useAddAction({
     ...target,
-    jobWidth: SIDE_JOB_WIDTH,
+    jobSize: "side",
     onMissing: () => toast.error(t("components.content.notAvailableFor", { name: project.title, fits: fitsLabel(instance, type) })),
   });
   return (
@@ -71,15 +71,15 @@ export function AddRowButton(target: AddTarget) {
 /** Symbolknopf an einer Version in der Liste der Projektseite. */
 export function AddVersionButton({ versionId, ...target }: AddTarget & { versionId: string }) {
   const { t } = useI18n();
-  const { instead, disabled, add } = useAddAction({ ...target, versionId, jobWidth: ROW_JOB_WIDTH });
+  const { instead, disabled, add } = useAddAction({ ...target, versionId, jobSize: "row" });
   return (
-    instead ?? <IconButton size="s" icon="dl" label={t("components.content.addThisVersion", { name: target.project.title })} tip={t("components.content.addVersion")} disabled={disabled} onClick={add} />
+    instead ?? <IconButton size="s" icon="download" label={t("components.content.addThisVersion", { name: target.project.title })} tip={t("components.content.addVersion")} disabled={disabled} onClick={add} />
   );
 }
 
 /** Großer Knopf im Kopf der Projektseite. */
 export function AddProjectButton(target: AddTarget) {
   const { t } = useI18n();
-  const { instead, disabled, add } = useAddAction({ ...target, jobWidth: HEAD_JOB_WIDTH });
+  const { instead, disabled, add } = useAddAction({ ...target, jobSize: "head" });
   return instead ?? <Button variant="primary" size="l" icon="plus" disabled={disabled} onClick={add}>{t("common.add")}</Button>;
 }

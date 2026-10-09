@@ -1,0 +1,80 @@
+<section class="screen" data-screen="skins" hidden>
+<div class="page s-skins">
+  <header class="page-head">
+    <h1>Skins</h1>
+    <div class="page-actions">
+      <div class="row" style="gap:2px">
+        <button class="btn" data-v="primary" data-s="m" data-menu="m-add"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Skin hinzufügen</span></button>
+        <button class="btn ib" data-v="primary" data-s="m" data-menu="m-add" aria-label="Weitere Optionen"><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <div class="note" data-t="acc">
+    <svg class="ico" aria-hidden="true"><use href="#i-user"/></svg>
+    <div class="tx"><b>Skins brauchen ein Microsoft-Konto</b><small>Minecraft speichert Skin und Umhang in deinem Microsoft-Konto. Deine Bibliothek kannst du auch ohne Anmeldung pflegen.</small></div>
+    <button class="btn" data-v="secondary" data-s="m" data-open="ov-login"><svg class="ico" aria-hidden="true"><use href="#i-microsoft"/></svg><span class="bt">Mit Microsoft anmelden</span></button>
+  </div>
+
+  <section class="panel sk-panel">
+    <div class="panel-h"><h2 class="h2">Meine Skins<span class="count">5</span></h2><span class="faint sm">Aktiv: Kürbisbauer</span></div>
+    <div class="sk-grid">
+      <article class="sk-card" data-active>
+        <span class="chip sk-flag" data-t="acc"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg>Aktiv</span>
+        <div class="sk-stage"><canvas data-skin="#4B2A12|#D9A27A|#D2793C|#3B4D70" width="16" height="32"></canvas></div>
+        <div class="sk-name"><b class="trunc">Kürbisbauer</b><button class="btn ib" data-v="ghost" data-s="s" data-menu="m-skin" aria-label="Skin-Menü"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+        <div class="seg" role="group" aria-label="Modell"><button aria-pressed="true">Klassisch</button><button aria-pressed="false">Schlank</button></div>
+        <button class="btn" data-v="secondary" data-s="m" disabled><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span class="bt">Verwendet</span></button>
+      </article>
+      <article class="sk-card">
+        <div class="sk-stage"><canvas data-skin="#1A1410|#C99A74|#2B6F7A|#14161C" width="16" height="32"></canvas></div>
+        <div class="sk-name"><b class="trunc">Nachtwache</b><button class="btn ib" data-v="ghost" data-s="s" data-menu="m-skin" aria-label="Skin-Menü"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+        <div class="seg" role="group" aria-label="Modell"><button aria-pressed="false">Klassisch</button><button aria-pressed="true">Schlank</button></div>
+        <button class="btn" data-v="secondary" data-s="m"><span class="bt">Verwenden</span></button>
+      </article>
+      <article class="sk-card">
+        <div class="sk-stage"><canvas data-skin="#D9C27A|#E0B08A|#C9D4DE|#4B6A8A" width="16" height="32"></canvas></div>
+        <div class="sk-name"><b class="trunc">Schneeläufer</b><button class="btn ib" data-v="ghost" data-s="s" data-menu="m-skin" aria-label="Skin-Menü"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+        <div class="seg" role="group" aria-label="Modell"><button aria-pressed="true">Klassisch</button><button aria-pressed="false">Schlank</button></div>
+        <button class="btn" data-v="secondary" data-s="m"><span class="bt">Verwenden</span></button>
+      </article>
+      <article class="sk-card">
+        <div class="sk-stage"><canvas data-skin="#5A3A1C|#D2A07C|#4C8A3C|#5B4A2E" width="16" height="32"></canvas></div>
+        <div class="sk-name"><b class="trunc">Waldläufer</b><button class="btn ib" data-v="ghost" data-s="s" data-menu="m-skin" aria-label="Skin-Menü"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+        <div class="seg" role="group" aria-label="Modell"><button aria-pressed="true">Klassisch</button><button aria-pressed="false">Schlank</button></div>
+        <button class="btn" data-v="secondary" data-s="m"><span class="bt">Verwenden</span></button>
+      </article>
+      <article class="sk-card">
+        <div class="sk-stage"><canvas data-skin="#2A1A44|#B98E86|#7A4FC0|#2B2350" data-slim width="16" height="32"></canvas></div>
+        <div class="sk-name"><b class="trunc">Endwanderer</b><button class="btn ib" data-v="ghost" data-s="s" data-menu="m-skin" aria-label="Skin-Menü"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button></div>
+        <div class="seg" role="group" aria-label="Modell"><button aria-pressed="false">Klassisch</button><button aria-pressed="true">Schlank</button></div>
+        <button class="btn" data-v="secondary" data-s="m"><span class="bt">Verwenden</span></button>
+      </article>
+    </div>
+  </section>
+
+  <section class="panel sk-panel">
+    <div class="panel-h"><h2 class="h2">Umhänge<span class="count">3</span></h2><span class="faint sm">Wird mit deinem Konto synchronisiert</span></div>
+    <div class="cape-grid" role="radiogroup" aria-label="Umhang">
+      <button class="cape" role="radio" aria-checked="false">
+        <span class="cape-pic" data-c="none"><svg class="ico ico-l" aria-hidden="true"><use href="#i-close"/></svg></span>
+        <b>Keiner</b><small class="faint">Kein Umhang</small>
+      </button>
+      <button class="cape" role="radio" aria-checked="true">
+        <span class="cape-pic" data-c="pumpkin"></span>
+        <b>Pumpkin-Umhang</b><small class="faint">Aktiv</small>
+      </button>
+      <button class="cape" role="radio" aria-checked="false">
+        <span class="cape-pic" data-c="mojang"></span>
+        <b>Mojang</b><small class="faint">Klassischer Umhang</small>
+      </button>
+    </div>
+  </section>
+</div>
+</section>
+<script>
+/* Umhang-Auswahl (Radiogruppe) */
+document.querySelectorAll('.s-skins .cape').forEach(b => b.addEventListener('click', () => {
+  b.parentElement.querySelectorAll('.cape').forEach(o => o.setAttribute('aria-checked', String(o === b)));
+}));
+</script>

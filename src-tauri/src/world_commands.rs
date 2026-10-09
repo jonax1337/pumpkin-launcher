@@ -50,7 +50,7 @@ pub async fn world_restore(state: State<'_, AppState>, instance_id: String, back
 
 #[tauri::command]
 pub fn world_backup_delete(state: State<'_, AppState>, instance_id: String, backup_id: String) -> AppResult<()> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_instance_operation_even_if_running(&instance_id)?;
     state.require_instance(&instance_id)?;
     worlds::delete_backup(&state.dirs, &instance_id, &backup_id)
 }
@@ -74,7 +74,7 @@ pub async fn world_import(
 /// Die Sicherungen verschwinden mit der Instanz, so lassen sie sich vorher retten.
 #[tauri::command]
 pub async fn world_backups_export(state: State<'_, AppState>, instance_id: String, path: String) -> AppResult<String> {
-    let _operation = state.begin_operation()?;
+    let _operation = state.begin_instance_operation_even_if_running(&instance_id)?;
     let name = state.instances.get(&instance_id)?.name;
     let folder = state.blocking_with_dirs(move |dirs| worlds::export_backups(dirs, &instance_id, &name, Path::new(&path))).await?;
     Ok(folder.to_string_lossy().into_owned())

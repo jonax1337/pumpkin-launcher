@@ -16,20 +16,23 @@ import { catalogKeys, instanceKeys } from "./queryKeys";
 import { CATALOG_STALE_MS } from "./staleTimes";
 
 export type ContentRun<R = Instance> = ((operationId: string) => Promise<R>) & {
-  target?: string; label?: string; doneLabel?: string; cancellable?: boolean;
+  target?: string; label?: string; doneLabel?: string; cancellable?: boolean; instanceIds?: string[];
 };
 
 /**
  * Hängt an einen Lauf, was er betrifft (für den Fortschritt in der passenden Zeile)
  * und wie er im Aufgaben-Menü heißt („Sodium installieren“, danach „Sodium installiert“).
  * `cancellable`: Backend-Befehl `pack_install_cancel` bricht ihn ab, das Aufgaben-Menü zeigt dann „Abbrechen“.
+ * `instanceIds`: die Instanzen, an denen er arbeitet; nur sie sind währenddessen für Start und Änderungen gesperrt.
+ * Ohne Angabe legt der Lauf eine neue Instanz an.
  */
 export const withTarget = <R = Instance>(
   target: string,
   run: (operationId: string) => Promise<R>,
   label?: string,
-  options?: { cancellable?: boolean; doneLabel?: string },
-): ContentRun<R> => Object.assign(run, { target, label, doneLabel: options?.doneLabel, cancellable: options?.cancellable });
+  options?: { cancellable?: boolean; doneLabel?: string; instanceIds?: string[] },
+): ContentRun<R> =>
+  Object.assign(run, { target, label, doneLabel: options?.doneLabel, cancellable: options?.cancellable, instanceIds: options?.instanceIds });
 
 /** Bricht den laufenden Vorgang ab; das Ergebnis meldet der zentrale Fehler-Toast neutral. */
 export function cancelContent() {
@@ -50,7 +53,9 @@ export async function trackContent<R>(
   if (useContentState.getState().active) return null;
   const operationId = crypto.randomUUID();
   const label = run.label ?? t("ui.tasks.loadingContents");
-  useContentState.setState({ active: operationId, target: run.target ?? null, label, cancellable: !!run.cancellable, progress: null });
+  useContentState.setState({
+    active: operationId, target: run.target ?? null, label, cancellable: !!run.cancellable, progress: null, instanceIds: run.instanceIds ?? [],
+  });
   let unlisten: (() => void) | undefined;
   try {
     unlisten = await api.onContentProgress((progress) => {
@@ -64,7 +69,7 @@ export async function trackContent<R>(
     throw error;
   } finally {
     unlisten?.();
-    useContentState.setState({ active: null, target: null, label: null, cancellable: false });
+    useContentState.setState({ active: null, target: null, label: null, cancellable: false, instanceIds: [] });
     void qc.invalidateQueries({ queryKey: instanceKeys.all });
     void qc.invalidateQueries({ queryKey: instanceKeys.statuses });
     void qc.invalidateQueries({ queryKey: catalogKeys.allUpdates });

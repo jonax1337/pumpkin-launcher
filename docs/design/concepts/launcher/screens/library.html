@@ -1,0 +1,128 @@
+<!-- Bibliothek: Werkzeugleiste + gruppierte Tabelle -->
+<section class="screen" data-screen="library" hidden>
+<div class="page s-library">
+  <div class="page-head">
+    <h1>Bibliothek</h1>
+    <div class="page-actions"><button class="btn" data-v="primary" data-s="m" data-open="ov-new"><svg class="ico" aria-hidden="true"><use href="#i-plus"/></svg><span class="bt">Neue Instanz</span></button></div>
+  </div>
+
+  <div class="toolbar">
+    <label class="field-ico grow"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><input class="in" type="search" placeholder="Instanz suchen" aria-label="Instanz suchen"></label>
+    <button class="sel" aria-haspopup="listbox"><span><small class="pre">Loader</small><b>Alle</b></span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+    <button class="sel" aria-haspopup="listbox"><span><small class="pre">Version</small><b>Alle</b></span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+    <button class="sel" data-menu="m-sort" aria-haspopup="menu"><span><small class="pre">Sortieren</small><b>Zuletzt gespielt</b></span><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg></button>
+    <span class="sp"></span>
+    <button class="btn" data-v="secondary" data-s="m" data-toggle-aria="aria-pressed" aria-pressed="false"><svg class="ico" aria-hidden="true"><use href="#i-select"/></svg><span class="bt">Auswählen</span></button>
+  </div>
+
+  <div class="panel lib-panel" data-flush>
+    <div class="tbl" role="table" aria-label="Instanzen">
+      <div class="tr th" role="row">
+        <span class="cb"></span><span role="columnheader">Name</span>
+        <div class="meta"><span class="c-ver" role="columnheader">Version</span><span class="c-cnt" role="columnheader">Inhalte</span><span class="c-last" role="columnheader">Zuletzt gespielt</span><span class="c-time" role="columnheader">Spielzeit</span><span class="c-stat" role="columnheader">Status</span></div>
+        <span class="c-play"></span><span class="c-more"></span>
+      </div>
+    <details class="grp" open>
+      <summary><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg><span class="h3">Mit Freunden</span><span class="cnt">2</span></summary>
+      <div class="tr inst" style="--acc:#E78AC8" aria-selected="true">
+        <label class="chk cb"><input type="checkbox" aria-label="Survival 1.21 auswählen"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span></label>
+        <a class="nm-cell" data-go="instance" href="#instance"><span class="tile" style="--c:#E78AC8"><svg class="ico" aria-hidden="true"><use href="#i-pumpkin"/></svg></span><span class="nm"><b>Survival 1.21</b><small>erstellt 29. Aug. 2026</small></span></a>
+        <div class="meta">
+          <span class="c-ver trunc">Fabric 1.21.4</span>
+          <span class="c-cnt num">8</span>
+          <span class="c-last trunc">vor 2 Stunden</span>
+          <span class="c-time num">37 Std.</span>
+          <span class="c-stat"><button class="chip" data-t="warn" data-go="instance"><svg class="ico" aria-hidden="true"><use href="#i-arrow-up"/></svg>3 Updates</button></span>
+        </div>
+        <button class="btn ib c-play" data-v="primary" data-s="s" aria-label="Survival 1.21 spielen"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="btn ib c-more" data-v="ghost" data-s="s" data-menu="m-row" aria-haspopup="menu" aria-label="Weitere Aktionen für Survival 1.21"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button>
+      </div>
+      <div class="tr inst" style="--acc:#8FD06A" data-force="hover">
+        <label class="chk cb"><input type="checkbox" aria-label="PvP Training auswählen"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span></label>
+        <a class="nm-cell" data-go="instance" href="#instance"><span class="tile" style="--c:#8FD06A"><svg class="ico" aria-hidden="true"><use href="#i-sword"/></svg></span><span class="nm"><b>PvP Training</b><small>erstellt 29. Aug. 2026</small></span></a>
+        <div class="meta">
+          <span class="c-ver trunc">Fabric 1.21.4</span>
+          <span class="c-cnt num">4</span>
+          <span class="c-last trunc">08. Sept. 2026</span>
+          <span class="c-time num">15 Std.</span>
+          <span class="c-stat"><button class="chip" data-t="warn" data-go="instance"><svg class="ico" aria-hidden="true"><use href="#i-arrow-up"/></svg>1 Update</button></span>
+        </div>
+        <button class="btn ib c-play" data-v="primary" data-s="s" aria-label="PvP Training spielen"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="btn ib c-more" data-v="ghost" data-s="s" data-menu="m-row" aria-haspopup="menu" aria-label="Weitere Aktionen für PvP Training"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button>
+      </div>
+    </details>
+    <details class="grp" open>
+      <summary><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg><span class="h3">Modpacks</span><span class="cnt">2</span></summary>
+      <div class="tr inst" style="--acc:#E06C4F">
+        <label class="chk cb"><input type="checkbox" aria-label="Create-Fabrik auswählen"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span></label>
+        <a class="nm-cell" data-go="instance" href="#instance"><span class="tile" style="--c:#E06C4F"><canvas data-scene="nether" data-seed="23" data-w="48" data-h="9" aria-hidden="true"></canvas></span><span class="nm"><b>Create-Fabrik</b><small>erstellt 10. Juli 2026</small></span></a>
+        <div class="meta">
+          <span class="c-ver trunc">Forge 1.20.1</span>
+          <span class="c-cnt num">4</span>
+          <span class="c-last trunc">vor 3 Tagen</span>
+          <span class="c-time num">4,5 Std.</span>
+          <span class="c-stat"></span>
+        </div>
+        <button class="btn ib c-play" data-v="primary" data-s="s" aria-label="Create-Fabrik spielen"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="btn ib c-more" data-v="ghost" data-s="s" data-menu="m-row" aria-haspopup="menu" aria-label="Weitere Aktionen für Create-Fabrik"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button>
+      </div>
+      <div class="tr inst" style="--acc:#B58CF0">
+        <label class="chk cb"><input type="checkbox" aria-label="NeoForge Abenteuer mit sehr langem Namen für den Test auswählen"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span></label>
+        <a class="nm-cell" data-go="instance" href="#instance"><span class="tile" style="--c:#B58CF0"><svg class="ico" aria-hidden="true"><use href="#i-ender"/></svg></span><span class="nm"><b>NeoForge Abenteuer mit sehr langem Namen für den Test</b><small>erstellt 08. Sept. 2026</small></span></a>
+        <div class="meta">
+          <span class="c-ver trunc">NeoForge 1.21.1</span>
+          <span class="c-cnt num">3</span>
+          <span class="c-last trunc">vor 20 Tagen</span>
+          <span class="c-time num">10 Std.</span>
+          <span class="c-stat"></span>
+        </div>
+        <button class="btn ib c-play" data-v="primary" data-s="s" aria-label="NeoForge Abenteuer mit sehr langem Namen für den Test spielen"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="btn ib c-more" data-v="ghost" data-s="s" data-menu="m-row" aria-haspopup="menu" aria-label="Weitere Aktionen für NeoForge Abenteuer mit sehr langem Namen für den Test"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button>
+      </div>
+    </details>
+    <details class="grp" open>
+      <summary><svg class="ico" aria-hidden="true"><use href="#i-chev-down"/></svg><span class="h3">Ohne Gruppe</span><span class="cnt">3</span></summary>
+      <div class="tr inst" style="--acc:#4FB3A9">
+        <label class="chk cb"><input type="checkbox" aria-label="Quilt Kreativ auswählen"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span></label>
+        <a class="nm-cell" data-go="instance" href="#instance"><span class="tile" style="--c:#4FB3A9"><canvas data-scene="coast" data-seed="25" data-w="48" data-h="9" aria-hidden="true"></canvas></span><span class="nm"><b>Quilt Kreativ</b><small>erstellt 16. Sept. 2026</small></span></a>
+        <div class="meta">
+          <span class="c-ver trunc">Quilt 1.21.1</span>
+          <span class="c-cnt num">2</span>
+          <span class="c-last trunc">vor 12 Tagen</span>
+          <span class="c-time num">6 Std.</span>
+          <span class="c-stat"><button class="chip" data-t="warn" data-go="instance"><svg class="ico" aria-hidden="true"><use href="#i-arrow-up"/></svg>1 Update</button></span>
+        </div>
+        <button class="btn ib c-play" data-v="primary" data-s="s" aria-label="Quilt Kreativ spielen"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="btn ib c-more" data-v="ghost" data-s="s" data-menu="m-row" aria-haspopup="menu" aria-label="Weitere Aktionen für Quilt Kreativ"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button>
+      </div>
+      <div class="tr inst" style="--acc:#C9A05A">
+        <label class="chk cb"><input type="checkbox" aria-label="Retro 1.16 auswählen"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span></label>
+        <a class="nm-cell" data-go="instance" href="#instance"><span class="tile" style="--c:#C9A05A"><svg class="ico" aria-hidden="true"><use href="#i-pickaxe"/></svg></span><span class="nm"><b>Retro 1.16</b><small>erstellt 30. Juli 2026</small></span></a>
+        <div class="meta">
+          <span class="c-ver trunc">Vanilla 1.16.5</span>
+          <span class="c-cnt num">0</span>
+          <span class="c-last trunc">09. Aug. 2026</span>
+          <span class="c-time num">30 Std.</span>
+          <span class="c-stat"></span>
+        </div>
+        <button class="btn ib c-play" data-v="primary" data-s="s" aria-label="Retro 1.16 spielen"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="btn ib c-more" data-v="ghost" data-s="s" data-menu="m-row" aria-haspopup="menu" aria-label="Weitere Aktionen für Retro 1.16"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button>
+      </div>
+      <div class="tr inst" style="--acc:#8CC8F0">
+        <label class="chk cb"><input type="checkbox" aria-label="Vanilla Snapshot auswählen"><span class="box"><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg></span></label>
+        <a class="nm-cell" data-go="instance" href="#instance"><span class="tile" style="--c:#8CC8F0"><svg class="ico" aria-hidden="true"><use href="#i-snow"/></svg></span><span class="nm"><b>Vanilla Snapshot</b><small>erstellt 03. Okt. 2026</small></span></a>
+        <div class="meta">
+          <span class="c-ver trunc">Vanilla 1.21.5</span>
+          <span class="c-cnt num">0</span>
+          <span class="c-last trunc">Noch nie gespielt</span>
+          <span class="c-time num">–</span>
+          <span class="c-stat"></span>
+        </div>
+        <button class="btn ib c-play" data-v="primary" data-s="s" aria-label="Vanilla Snapshot spielen"><svg class="ico" aria-hidden="true"><use href="#i-play"/></svg></button>
+        <button class="btn ib c-more" data-v="ghost" data-s="s" data-menu="m-row" aria-haspopup="menu" aria-label="Weitere Aktionen für Vanilla Snapshot"><svg class="ico" aria-hidden="true"><use href="#i-more"/></svg></button>
+      </div>
+    </details>
+    </div>
+  </div>
+</div>
+</section>

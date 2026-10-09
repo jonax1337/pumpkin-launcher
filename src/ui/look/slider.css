@@ -1,0 +1,25 @@
+/* Regler (SegSlider). Nur Aussehen; Maße, Bahn und Griff-Lage setzt Slider.tsx per Tailwind.
+   16 Zellen im Slot (XP-Leiste), der Griff ist eine Steinplatte. Zustände über aria-disabled und :focus-visible am Regler. */
+.lk-slider { cursor: pointer; touch-action: none; }
+
+/* Zelle: leer = Raster-Strich, an = Akzent mit heller Kopfreihe, gesperrt (mehr hat der PC nicht) = dunkel */
+.lk-sl-trk i { background: linear-gradient(90deg, transparent calc(100% - var(--px)), rgba(255,255,255,.05) 0); transition: background-color var(--st); }
+.lk-sl-trk i[data-on] { background: linear-gradient(var(--acc-hi) 0 var(--px), transparent var(--px) calc(100% - var(--px)), var(--acc-lo) calc(100% - var(--px))), var(--acc); }
+.lk-sl-trk i[data-x] { background: var(--edge); }
+
+.lk-sl-th { --face: var(--line-2); --hi: var(--ctl-hi); --lo: var(--bg-2); background: var(--face); border: var(--px) solid var(--edge); clip-path: var(--n1);
+  box-shadow: inset var(--px) var(--px) 0 var(--hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--lo); }
+
+.lk-slider:not([aria-disabled="true"]):is(:hover, [data-force="hover"]) .lk-sl-trk { border-color: var(--fg-2); }
+.lk-slider:not([aria-disabled="true"]):is(:hover, [data-force="hover"]) .lk-sl-th { --face: var(--ctl); }
+.lk-slider:not([aria-disabled="true"]):active .lk-sl-th { --face: var(--line-2); box-shadow: inset var(--px) var(--px) 0 var(--lo), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--hi); }
+.lk-slider:focus-visible { outline: none; }
+.lk-slider:focus-visible .lk-sl-trk { border-color: var(--focus); box-shadow: var(--ring-i); }
+.lk-slider:focus-visible .lk-sl-th { --face: var(--fg-2); }
+
+/* Aus (Automatisch): entsättigt, flach */
+.lk-slider[aria-disabled="true"] { cursor: default; }
+.lk-slider[aria-disabled="true"] .lk-sl-trk { background: var(--panel); border-color: var(--line); box-shadow: none; }
+.lk-slider[aria-disabled="true"] .lk-sl-trk i[data-on] { background: var(--fg-3); }
+.lk-slider[aria-disabled="true"] .lk-sl-trk i[data-x] { background: transparent; }
+.lk-slider[aria-disabled="true"] .lk-sl-th { --face: var(--line); box-shadow: none; }

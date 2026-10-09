@@ -8,9 +8,6 @@ import { connectedGuestCount, type ActiveJoin } from "./sharingModel";
 import { StopSharingDialog } from "./StopSharingDialog";
 import type { SharingActivity } from "./useSharingActivity";
 
-const CHIP_WIDTH_PX = 248;
-const POPOVER_WIDTH_PX = 320;
-
 /**
  * Chip in der Fensterleiste, solange geteilt wird oder ein Beitritt läuft („Geteilt · 2 verbunden“, „Bei Alex · Direkt · 38 ms“).
  * Feste Breite, damit wechselnde Zahlen nichts verschieben. Ein Klick öffnet die Platte mit Verbindung und „Teilen beenden“ bzw. „Verlassen“.
@@ -30,15 +27,15 @@ export function SessionChip({ activity: { session, join } }: { activity: Sharing
         open={open}
         onOpenChange={setOpen}
         align="start"
-        width={POPOVER_WIDTH_PX}
+        size="m"
         label={t(session ? "friendsHost.pop.hostTitle" : "friendsHost.pop.joinTitle")}
         trigger={
-          <ChipButton icon={session ? "share" : "users"} data-tone="run" style={{ width: CHIP_WIDTH_PX }}>
+          <ChipButton className="w-[248px]" icon={session ? "share" : "friends"} tone="run">
             {session ? <HostingText session={session} /> : join && <JoiningText join={join} />}
           </ChipButton>
         }
       >
-        <div className="flex flex-col gap-4 p-1">
+        <div className="fr-session-pop">
           {session && <HostingPanel session={session} onStop={stop} />}
           {join && <JoiningPanel join={join} onLeft={() => setOpen(false)} />}
         </div>
@@ -61,7 +58,7 @@ function JoiningText({ join }: { join: ActiveJoin }) {
   return (
     <>
       <span className="ell">{t("friendsHost.chip.joinLead", { name: hostName(join, t("friendsHost.chip.unknownHost")) })}</span>
-      <span className="shrink-0">
+      <span className="fr-session-tail">
         {" · "}
         {state.type === "connected" ? <ConnectionText path={state.path} rttMs={state.rttMs} /> : <JoinProgressText type={state.type} />}
       </span>
@@ -77,7 +74,7 @@ function JoinProgressText({ type }: { type: JoinState["type"] }) {
 
 function Facts({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section className="fr-facts">
       <Heading level="card">{title}</Heading>
       {children}
     </section>
@@ -86,9 +83,9 @@ function Facts({ title, children }: { title: string; children: ReactNode }) {
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 text-[13px]">
-      <span className="text-fg-3">{label}</span>
-      <span className="min-w-0 text-right">{children}</span>
+    <div className="fr-fact">
+      <span>{label}</span>
+      <span>{children}</span>
     </div>
   );
 }

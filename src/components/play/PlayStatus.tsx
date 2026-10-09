@@ -12,11 +12,19 @@ import { useGame } from "@/store/game";
 import { CrashActions } from "./crash";
 import { usePhase, type Phase } from "./phase";
 
-/** Gemeinsame Optik der Statuszeilen: `lead` wird vorgelesen, `tail` (Zähler) und `acts` (Knöpfe) nicht. */
-function StatusLine({ lead, tail, acts }: { lead?: ReactNode; tail?: ReactNode; acts?: ReactNode }) {
+/** Zeile der Statuszeile: 32 px, feste Höhe, damit sich nichts verschiebt, wenn sich der Zustand ändert. Der Platzhalter (`PlayStatusSkel`) reserviert dieselbe Höhe. */
+const STATUS_ROW = "flex h-8 min-w-0 items-center gap-1.5 text-[length:calc(13px*var(--tz))] text-(color:--fg-2)";
+
+/** Leere Statuszeile: reserviert die Höhe von `PlayStatus`, solange noch keine Instanz da ist. */
+export function PlayStatusSkel({ className }: { className?: string }) {
+  return <div className={cn(STATUS_ROW, className)} />;
+}
+
+/** Gemeinsame Optik der Statuszeilen: `lead` wird vorgelesen, `tail` (Zähler) und `acts` (Knöpfe) nicht. `quiet`: die Meldung nimmt keinen Platz ein (nur für Screenreader). */
+function StatusLine({ lead, tail, acts, quiet }: { lead?: ReactNode; tail?: ReactNode; acts?: ReactNode; quiet?: boolean }) {
   return (
     <>
-      <span className="ptxt">
+      <span className={cn("min-w-0 overflow-hidden text-ellipsis whitespace-nowrap", quiet && "absolute")}>
         <span aria-live="polite">{lead}</span>
         {tail}
       </span>
@@ -30,7 +38,7 @@ function PreparingStatus({ instance, progress, onScene }: { instance: Instance; 
   const cancel = useCancelInstall();
   return (
     <StatusLine
-      lead={<b>{installStepLabel(progress.step, instance.loader)}</b>}
+      lead={<b className="font-semibold text-(color:--fg) [text-shadow:var(--tsh)]">{installStepLabel(progress.step, instance.loader)}</b>}
       tail={progress.total > 1 && (
         <> {t("components.game.countOf", { done: formatCount(progress.done), total: formatCount(progress.total) })}</>
       )}
@@ -38,9 +46,9 @@ function PreparingStatus({ instance, progress, onScene }: { instance: Instance; 
         <Button
           variant="ghost"
           size="s"
-          icon="x"
+          icon="close"
           onScene={onScene}
-          className="pcancel"
+          className="ml-2"
           disabled={cancel.isPending}
           onClick={() => cancel.mutate(instance.id)}
         >
@@ -55,10 +63,12 @@ function RunningStatus({ onScene, onViewLog }: { onScene?: boolean; onViewLog: (
   const { t } = useI18n();
   return (
     <StatusLine
+      quiet
       // Laufzeit steht im Knopf („Läuft seit …“); hier nur für Screenreader die Zustandsänderung.
       lead={<span className="sr">{t("components.game.mcRunningSr")}</span>}
       acts={
-        <Button variant="ghost" size="s" icon="term" onScene={onScene} className="plog" onClick={onViewLog}>
+        // Über der Szene steht der Knopf bündig mit dem Text darüber (Hero).
+        <Button variant="ghost" size="s" icon="terminal" onScene={onScene} bleed={onScene ? "start" : undefined} onClick={onViewLog}>
           {t("components.game.viewLog")}
         </Button>
       }
@@ -83,10 +93,10 @@ function CrashedStatus({ crash, instance, onScene, onViewLog }: {
  * `showLast={false}`: „Zuletzt gespielt“ steht schon woanders (Start: Metazeile im Hero).
  * `onScene`: Knöpfe über einer Szene (Grundplatte, harter Schatten).
  */
-export function PlayStatus({ instance, showLast = true, onScene }: { instance: Instance; showLast?: boolean; onScene?: boolean }) {
+export function PlayStatus({ instance, showLast = true, onScene, className }: { instance: Instance; showLast?: boolean; onScene?: boolean; className?: string }) {
   const phase = usePhase(instance.id);
   return (
-    <div className={cn("pstat", phase === "running" && "run")}>
+    <div className={cn(STATUS_ROW, className)}>
       <PhaseStatus instance={instance} phase={phase} showLast={showLast} onScene={onScene} />
     </div>
   );

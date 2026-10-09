@@ -17,6 +17,12 @@ export const errorsGame = {
   "errors.game.versionWithoutArguments": "Version {version} ohne Startargumente",
   "errors.game.quickPlayWorldUnsupported": "Minecraft {version} kann nicht direkt in eine Welt starten, das geht erst ab 1.20",
   "errors.game.rosettaRequired": "Dieses Java ist für Intel-Macs gebaut und braucht Rosetta 2. Installiere es im Terminal mit `softwareupdate --install-rosetta --agree-to-license` und starte erneut.",
+  "errors.game.launch.wrapperNotFound": "Der Wrapper „{program}“ wurde nicht gefunden. Gib den vollständigen Pfad an oder installiere das Programm.",
+  "errors.game.launch.hookNotFound": "Das Programm „{program}“ wurde nicht gefunden. Gib den vollständigen Pfad an oder installiere es.",
+  "errors.game.launch.preLaunchNotStarted": "Der Befehl vor dem Start „{program}“ ließ sich nicht starten. Das Spiel wurde nicht gestartet.",
+  "errors.game.launch.preLaunchFailed": "Der Befehl vor dem Start „{program}“ endete mit dem Code {code}. Das Spiel wurde nicht gestartet.",
+  "errors.game.launch.preLaunchEnded": "Der Befehl vor dem Start „{program}“ wurde von außen beendet. Das Spiel wurde nicht gestartet.",
+  "errors.game.launch.preLaunchTimeout": "Der Befehl vor dem Start „{program}“ brauchte länger als {seconds} Sekunden und wurde beendet. Das Spiel wurde nicht gestartet.",
 
   "errors.game.loaderLibraryWithoutSha1": "Loader-Library {name} ohne SHA-1",
   "errors.game.loaderProfileInherits": "{loader}-Profil erbt von {inherits} statt {mc}",

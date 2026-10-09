@@ -258,6 +258,128 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Signieren ist optional: Ohne die Secrets bleibt der Build wie bisher (Windows unsigniert, macOS ad-hoc signiert,
+      # siehe CONTRIBUTING.md#signing). Die Schritte unten setzen ihre Variablen deshalb nur, wenn alles da ist: Ein leeres
+      # APPLE_SIGNING_IDENTITY würde die Ad-hoc-Identität "-" aus tauri.conf.json überschreiben.
+      - name: Detect configured code signing
+        id: signing
+        shell: bash
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_CERTIFICATE_PROFILE: ${{ vars.AZURE_SIGNING_CERTIFICATE_PROFILE }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          all_set() {
+            local name
+            for name in "$@"; do
+              [ -n "${!name}" ] || return 1
+            done
+          }
+          windows=false
+          macos=false
+          notarize=false
+          if [ "$RUNNER_OS" = Windows ] && all_set AZURE_TENANT_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET \
+            AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_SIGNING_CERTIFICATE_PROFILE; then
+            windows=true
+          fi
+          if [ "$RUNNER_OS" = macOS ] && all_set APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY; then
+            macos=true
+            all_set APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID && notarize=true
+          fi
+          echo "Code signing: windows=$windows macos=$macos notarization=$notarize"
+          {
+            echo "windows=$windows"
+            echo "macos=$macos"
+            echo "notarize=$notarize"
+          } >> "$GITHUB_OUTPUT"
+
+      # Tauri importiert das Zertifikat selbst (APPLE_CERTIFICATE), signiert die Universal-App mit der Identität und
+      # notarisiert sie, sobald APPLE_ID, APPLE_PASSWORD und APPLE_TEAM_ID gesetzt sind.
+      - name: Enable macOS signing and notarization
+        if: steps.signing.outputs.macos == 'true'
+        shell: bash
+        env:
+          NOTARIZE: ${{ steps.signing.outputs.notarize }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          export_env() {
+            local delimiter="env_$(uuidgen)"
+            printf '%s<<%s\n%s\n%s\n' "$1" "$delimiter" "${!1}" "$delimiter" >> "$GITHUB_ENV"
+          }
+          export_env APPLE_CERTIFICATE
+          export_env APPLE_CERTIFICATE_PASSWORD
+          export_env APPLE_SIGNING_IDENTITY
+          if [ "$NOTARIZE" = true ]; then
+            export_env APPLE_ID
+            export_env APPLE_PASSWORD
+            export_env APPLE_TEAM_ID
+          fi
+
+      - name: Install the Azure Artifact Signing CLI
+        if: steps.signing.outputs.windows == 'true'
+        shell: bash
+        run: cargo install artifact-signing-cli --version 0.11.0 --locked
+
+      # Windows: Tauri ruft den Signaturbefehl für jede Datei auf, die es selbst erzeugt (Haupt-App, eigene NSIS-Plugins,
+      # Deinstaller, Installer). Die Updater-Signatur (.sig) entsteht danach und deckt so die signierte Datei ab.
+      - name: Configure Windows signing
+        id: windows-signing
+        if: steps.signing.outputs.windows == 'true'
+        shell: bash
+        env:
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_SIGNING_CERTIFICATE_PROFILE: ${{ vars.AZURE_SIGNING_CERTIFICATE_PROFILE }}
+        run: |
+          signtool=$(ls "/c/Program Files (x86)/Windows Kits/10/bin/"*/x64/signtool.exe | sort -V | tail -n 1)
+          {
+            echo "SIGNTOOL_PATH=$(cygpath -w "$signtool")"
+            echo "AZURE_TENANT_ID=$AZURE_TENANT_ID"
+            echo "AZURE_CLIENT_ID=$AZURE_CLIENT_ID"
+            echo "AZURE_CLIENT_SECRET=$AZURE_CLIENT_SECRET"
+          } >> "$GITHUB_ENV"
+          # Nur für diesen Build per --config zugeschaltet: Ein fester signCommand in tauri.conf.json bräche jeden Build ohne die CLI.
+          config="$RUNNER_TEMP/tauri-windows-signing.json"
+          jq -n \
+            --arg endpoint "$AZURE_SIGNING_ENDPOINT" \
+            --arg account "$AZURE_SIGNING_ACCOUNT" \
+            --arg profile "$AZURE_SIGNING_CERTIFICATE_PROFILE" \
+            '{bundle: {windows: {signCommand: {cmd: "artifact-signing-cli", args: [
+              "-e", $endpoint, "-a", $account, "-c", $profile, "-d", "Pumpkin Launcher",
+              "--fd", "SHA256", "--tr", "http://timestamp.acs.microsoft.com", "--td", "SHA256", "%1"
+            ]}}}}' > "$config"
+          echo "config=$(cygpath -m "$config")" >> "$GITHUB_OUTPUT"
+
+      # Das Theme-Plugin liegt als fertige DLL im Repo (installer/theme/); Tauri signiert nur die NSIS-Plugins, die es selbst kopiert.
+      - name: Sign the installer theme plugin
+        if: steps.signing.outputs.windows == 'true'
+        shell: bash
+        env:
+          SIGNING_CONFIG: ${{ steps.windows-signing.outputs.config }}
+        run: |
+          plugin=$(cygpath -w "$PWD/src-tauri/installer/theme/PumpkinTheme.dll")
+          command_lines=$(jq -r --arg file "$plugin" \
+            '.bundle.windows.signCommand | [.cmd] + [.args[] | if . == "%1" then $file else . end] | .[]' "$SIGNING_CONFIG" | tr -d '\r')
+          mapfile -t command <<< "$command_lines"
+          "${command[@]}"
+
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -272,7 +394,7 @@ jobs:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           # Der Entwurf hat den Text schon; tauri-action schreibt ihn als `notes` in latest.json, das der Updater anzeigt.
           releaseBody: ${{ needs.prepare.outputs.notes }}
-          args: ${{ matrix.args }}
+          args: ${{ steps.windows-signing.outputs.config && format('{0} --config {1}', matrix.args, steps.windows-signing.outputs.config) || matrix.args }}
 
   # Die Builds ergänzen latest.json nacheinander; enden zwei gleichzeitig, kann eine Plattform fehlen.
   updater-json:

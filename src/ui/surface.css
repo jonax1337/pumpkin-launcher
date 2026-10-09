@@ -1,0 +1,44 @@
+/* Gemeinsame Flächen des Inventar-Stils. Komponenten setzen diese Klassen (statt die Rezepte zu wiederholen)
+   und stellen nur Maße und Zustände ein. Werte: tokens.css (--slot-bd, --slot-sh, --tsh, --ring-i, --nt …).
+
+   .lk-slot   eingelassen: Felder, Auswahl, Kästchen, Regler-/Fortschrittsbahnen, Icon-Kacheln, Chips, Bildrahmen
+   .lk-stone  erhaben (Steinplatte): Knöpfe, Reiter, Griffe, Toasts, Zeilen. Variablen: --face --hi --lo --bv (Fasenbreite)
+   .lk-text   Beschriftung mit hartem Schatten (auf Stein und Slots)
+   .lk-deep   tieferer Grund für .lk-slot/.lk-pit (Protokollkonsole)
+   Für Elemente einer Seite gibt es die Komponente `Surface` (Surface.tsx); die Klassen setzen nur Kit-Komponenten.                      */
+
+.lk-slot {
+  background: var(--sunk);
+  border: var(--px) solid;
+  border-color: var(--slot-bd);
+  box-shadow: var(--slot-sh);
+  clip-path: var(--n1);
+}
+/* Hover/Fokus: helle Kante auf allen Seiten, Fokus zusätzlich der doppelte Ring */
+.lk-slot:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { border-color: var(--fg-2); }
+.lk-slot:is(:focus-visible, :focus-within, [data-force="focus"]) { border-color: var(--focus); box-shadow: var(--ring-i); }
+
+.lk-stone {
+  --face: var(--panel-3); --hi: var(--line-hi); --lo: var(--bg-2); --bv: var(--bvw);
+  background: var(--face);
+  border: var(--px) solid var(--edge);
+  box-shadow: inset var(--bv) var(--bv) 0 var(--hi), inset calc(var(--bv) * -1) calc(var(--bv) * -1) 0 var(--lo);
+  clip-path: var(--n1);
+}
+/* Gedrückt: Fase umgekehrt */
+.lk-stone:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) {
+  box-shadow: inset var(--bv) var(--bv) 0 var(--lo), inset calc(var(--bv) * -1) calc(var(--bv) * -1) 0 var(--hi);
+}
+/* Eingelassen ohne Bedienung: Körperflächen, Hinweisplatten, Fortschrittsbahnen. Wie .lk-slot, aber keine Hover-/Fokus-Kante
+   (sonst färbte sich ein Rahmen um bedienbaren Inhalt beim Fokussieren eines Kindes). */
+.lk-pit {
+  background: var(--sunk);
+  border: var(--px) solid;
+  border-color: var(--slot-bd);
+  box-shadow: var(--slot-sh);
+  clip-path: var(--n1);
+}
+/* Tiefer als der übliche Slot (Protokollkonsole): nur der Grund, Rahmen und Schatten bleiben; steht hinter .lk-slot/.lk-pit. */
+.lk-deep { background: var(--sunk-deep); }
+
+.lk-text { text-shadow: var(--tsh); }

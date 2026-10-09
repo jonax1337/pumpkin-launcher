@@ -1,0 +1,13 @@
+/* Linkzeilen (LinkList/LinkRow) und Sprunglink (SkipLink). Nur Aussehen; Maße und Anordnung setzen die Komponenten per Tailwind. */
+
+/* Zeile: Haarlinie darunter (nicht unter der letzten), Hover und Tastaturfokus heben die Fläche; der Pfeil rechts ist gedämpft */
+.lk-linkrow { color: var(--fg); cursor: pointer; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.lk-linkrow:last-child { box-shadow: none; }
+.lk-linkrow:is(:hover, :focus-visible) { background: var(--hv-row, var(--panel-2)); }
+.lk-linkrow-out { color: var(--fg-3); }
+.lk-linkrow-hint { color: var(--fg-3); }
+
+/* Sprunglink: Steinplatte (.lk-stone), erst bei Tastaturfokus im Bild; der Fokus zeigt Rand und Ring der Platte selbst */
+.lk-skip { color: var(--fg); font-weight: 600; }
+.lk-skip:focus-visible { border-color: var(--focus); box-shadow: var(--ring-i); }
+@media (forced-colors: none) { .lk-skip:focus-visible { outline: none; } }

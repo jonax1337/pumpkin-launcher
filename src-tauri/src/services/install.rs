@@ -116,7 +116,7 @@ pub fn log_config_path(dirs: &Dirs, log: &LoggingClient) -> PathBuf {
 
 /// Installiert `version` für eine Instanz und liefert den Pfad der Java-Programmdatei.
 ///
-/// Der geteilte Cache hat keine Dateisperren: Installationen laufen nacheinander (globale Sperre in `AppState`),
+/// Der geteilte Cache hat keine Dateisperren: Installationen laufen nacheinander (`AppState::lock_game_files`),
 /// zwei gleichzeitige schrieben sonst dieselben `.part`-Dateien.
 pub async fn install(
     client: &reqwest::Client,

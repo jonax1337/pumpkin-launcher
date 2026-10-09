@@ -1,6 +1,6 @@
 /**
  * Auslöser des zuletzt geöffneten Menüs. Öffnet ein Eintrag einen Dialog, ist der Eintrag beim Öffnen schon
- * aus dem DOM; der Dialog gibt den Fokus dann hierhin zurück (siehe useReturnFocus in Dialog.tsx).
+ * aus dem DOM; der Dialog gibt den Fokus dann hierhin zurück (siehe useReturnFocus in dialogBehavior.ts).
  */
 
 /** So lange nach dem Schließen des Menüs (durch die Auswahl) zählt sein Auslöser noch als Herkunft eines Dialogs. */

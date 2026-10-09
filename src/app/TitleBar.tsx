@@ -8,7 +8,7 @@ import { SessionChip } from "@/components/friends/SessionChip";
 import { closeWarning, type CloseWarning } from "@/components/friends/sharingModel";
 import { useSharingActivity, type SharingActivity } from "@/components/friends/useSharingActivity";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
-import { ButtonLink, Chip, ConfirmDialog, Icon } from "@/ui";
+import { ButtonLink, Chip, ConfirmDialog, IconButton } from "@/ui";
 
 const CLOSE_TEXT: Record<CloseWarning, TKey> = {
   hosting: "friendsHost.close.hosting",
@@ -35,7 +35,7 @@ function CloseConfirm({ activity: { session, join }, open, onOpenChange, onConfi
   );
 }
 
-/** Fensterknöpfe des rahmenlosen Fensters (nur in der App, im Browser nicht nötig). Sonderform: volle Leistenhöhe, bündig am Rand. */
+/** Fensterknöpfe des rahmenlosen Fensters (nur in der App, im Browser nicht nötig). */
 function WindowButtons({ activity }: { activity: SharingActivity }) {
   const { t } = useI18n();
   const [confirmingClose, setConfirmingClose] = useState(false);
@@ -44,30 +44,9 @@ function WindowButtons({ activity }: { activity: SharingActivity }) {
   const askClose = () => (closeWarning(activity.session !== undefined, activity.join !== null) ? setConfirmingClose(true) : void win.close());
   return (
     <div className="win">
-      <button
-        type="button"
-        className="winbtn"
-        aria-label={t("ui.window.minimize")}
-        onClick={() => void win.minimize()}
-      >
-        <Icon name="wmin" size="s" />
-      </button>
-      <button
-        type="button"
-        className="winbtn"
-        aria-label={t("ui.window.maximize")}
-        onClick={() => void win.toggleMaximize()}
-      >
-        <Icon name="wmax" size="s" />
-      </button>
-      <button
-        type="button"
-        className="winbtn close"
-        aria-label={t("common.close")}
-        onClick={askClose}
-      >
-        <Icon name="x" size="s" />
-      </button>
+      <IconButton size="s" icon="win-min" label={t("ui.window.minimize")} tip={false} onClick={() => void win.minimize()} />
+      <IconButton size="s" icon="win-max" label={t("ui.window.maximize")} tip={false} onClick={() => void win.toggleMaximize()} />
+      <IconButton size="s" solid="bad" icon="win-close" label={t("common.close")} tip={false} onClick={askClose} />
       <CloseConfirm activity={activity} open={confirmingClose} onOpenChange={setConfirmingClose} onConfirm={() => void win.close()} />
     </div>
   );
@@ -81,20 +60,20 @@ export function TitleBar({ online }: { online: boolean }) {
   return (
     <header className="bar" data-tauri-drag-region>
       <div className="wm" data-tauri-drag-region>
-        <BrandMark />
-        <BrandWordmark />
+        <BrandMark bar />
+        <BrandWordmark bar />
       </div>
-      <div className="bar-mid items-center gap-2" data-tauri-drag-region>
+      <div className="bar-mid" data-tauri-drag-region>
         <SessionChip activity={activity} />
         {update && (
-          <ButtonLink to="/settings?tab=ueber" size="s" icon="up" tone="acc" className="shrink-0">
+          <ButtonLink to="/settings?tab=ueber" size="s" icon="update" tone="acc">
             {t("ui.titlebar.updateAvailable")}
           </ButtonLink>
         )}
       </div>
       <div className="bar-right">
         {/* Live-Region bleibt stehen (links neben der Gruppe, schiebt nichts); online leer, damit nichts vorgelesen wird */}
-        <span className="pointer-events-none absolute top-1/2 right-[calc(100%+8px)] flex -translate-y-1/2" role="status">
+        <span className="bar-live" role="status">
           {!online && (
             <Chip tone="warn" icon="plug">
               {t("ui.offline.label")}<span className="sr">{t("ui.offline.detail")}</span>

@@ -2,7 +2,7 @@
 //! Reihenfolge: der Abschnitt „Suspected Mods“ (Forge, NeoForge) und die Pakete im Stacktrace der Ausnahme, die auf die
 //! installierten Mods abgebildet werden. Das ist ein Hinweis, kein Urteil.
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
 use crate::models::{Mod, ModKind};
@@ -36,9 +36,22 @@ pub fn suspects_in_file(path: &Path, mods: &[Mod]) -> Vec<String> {
     }
 }
 
-fn read_capped(path: &Path) -> std::io::Result<String> {
+/// Anfang der Datei, höchstens `MAX_REPORT_BYTES`: bei einem Absturzbericht steht dort die Ausnahme.
+pub(crate) fn read_capped(path: &Path) -> std::io::Result<String> {
+    read_lossy(fs::File::open(path)?)
+}
+
+/// Ende der Datei, höchstens `MAX_REPORT_BYTES`: in einem Protokoll steht der Fehler zuletzt.
+pub(crate) fn read_tail_capped(path: &Path) -> std::io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let len = file.metadata()?.len();
+    file.seek(SeekFrom::Start(len.saturating_sub(MAX_REPORT_BYTES)))?;
+    read_lossy(file)
+}
+
+fn read_lossy(file: fs::File) -> std::io::Result<String> {
     let mut bytes = Vec::new();
-    fs::File::open(path)?.take(MAX_REPORT_BYTES).read_to_end(&mut bytes)?;
+    file.take(MAX_REPORT_BYTES).read_to_end(&mut bytes)?;
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
@@ -113,7 +126,7 @@ fn frame_keys(frame: &str, class: &str) -> Vec<String> {
 }
 
 /// Kleinbuchstaben und Ziffern: „Fabric API“, „fabric-api“ und „fabric_api“ sind dieselbe Kennung.
-fn normalized(text: &str) -> String {
+pub(crate) fn normalized(text: &str) -> String {
     text.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect()
 }
 

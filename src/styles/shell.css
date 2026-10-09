@@ -1,0 +1,35 @@
+/* PIXELKINO, Gerüst: App-Raster, Fensterleiste, Seitenleiste, Platte, Szenen und gemeinsamer Seitenrahmen. Tokens und Reset in base.css. */
+/* ---------- App-Gerüst ---------- */
+.app { position: fixed; inset: 0; display: grid; grid-template-columns: var(--side) minmax(0, 1fr); grid-template-rows: var(--bar) 1fr; background: var(--bg); opacity: 0; visibility: hidden; transition: opacity .4s var(--ease); }
+.app.ready { opacity: 1; visibility: visible; }
+/* Keine native Spur: die Scrollbar des Kits (app/ViewScrollbar.tsx) liegt darüber, Szenen reichen bis an den Rand, nichts springt */
+.view { grid-column: 2; grid-row: 2; position: relative; overflow-y: auto; overflow-x: hidden; scrollbar-width: none; scrollbar-gutter: auto; overscroll-behavior: contain; min-height: 0; }
+/* Start scrollt nicht, solange er passt (app/useFits.ts); bei Zoom/kleinem Fenster normal scrollbar statt abgeschnitten */
+.view.noscroll { overflow-y: hidden; }
+
+/* ---------- Fensterleiste: Steinleiste mit Rille unten (dunkle Kante, darüber eine helle Linie) ---------- */
+/* Links: Marke mittig über der Seitenleiste (Spalte --side; 32 px Marke + 6 px Innenabstand von .wm), Leiste über beide Spalten */
+.bar { grid-column: 1 / -1; grid-row: 1; position: relative; z-index: 40; display: flex; align-items: center; gap: 4px; height: var(--bar); padding-left: calc((var(--side) - 32px) / 2 - 6px); background: var(--bg-2); box-shadow: inset 0 calc(var(--px) * -1) 0 var(--edge), inset 0 calc(var(--px) * -2) 0 var(--line); -webkit-app-region: drag; user-select: none; }
+.wm { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px 0 6px; text-decoration: none; color: var(--fg); flex: none; }
+.bar-mid { flex: 1; min-width: 12px; display: flex; align-items: center; gap: 8px; justify-content: flex-start; padding-left: 20px; }
+.bar-right { position: relative; display: flex; align-items: center; gap: 4px; flex: none; padding-right: 8px; }
+/* Live-Region der Offline-Anzeige: links neben der Gruppe, schiebt nichts */
+.bar-live { position: absolute; top: 50%; right: calc(100% + 8px); display: flex; translate: 0 -50%; pointer-events: none; }
+.win { display: flex; align-items: center; gap: 2px; height: var(--bar); margin-left: 4px; }
+
+/* ---------- Seitenleiste: nur Symbole (BarButton side), oben Bereiche, unten Aufgaben und Einstellungen; Rille an der rechten Kante ---------- */
+.side { grid-column: 1; grid-row: 2; position: relative; z-index: 35; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 12px 0; background: var(--bg-2); box-shadow: inset calc(var(--px) * -1) 0 0 var(--edge), inset calc(var(--px) * -2) 0 0 var(--line); user-select: none; }
+.side-grp { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+
+/* ---------- Szenen (Canvas, ganzzahlig skaliert) ---------- */
+.scene { position: absolute; inset: 0; overflow: hidden; background: var(--scene-bg, var(--bg)); contain: strict; }
+.scene canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
+/* `art` ist der Klassen-Default von PixelScene, wenn Aufrufer keine eigene Klasse mitgeben */
+.art { position: relative; overflow: hidden; background: var(--scene-bg, #111827); }
+
+
+/* ---------- Windows-Kontrastmodus: Rahmen statt Flächen, Thumb in Systemfarbe ---------- */
+@media (forced-colors: active) {
+  .side { border-right: 1px solid CanvasText; }
+  .bar { border-bottom: 1px solid CanvasText; }
+}

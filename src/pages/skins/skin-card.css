@@ -1,0 +1,9 @@
+/* ---------- Skins ---------- */
+/* 3D-Figur: Canvas, per CSS um ganze Icon-Einheiten je Texturpixel vergrößert und fein genug aufgelöst (SkinFigure) */
+.skin-fig { flex: none; }
+/* Umhang-Vorschau (CapePreview): Außenseite 10×16 Texturpixel, je 6 CSS-Pixel groß, pixelscharf; ohne Textur das Stufenmuster */
+.cape-preview { display: block; height: 96px; aspect-ratio: 10 / 16; image-rendering: pixelated; }
+.cape-preview[data-fallback] { background:
+  linear-gradient(90deg, transparent 0 40%, #1C1208 40% 46%, transparent 46% 54%, #1C1208 54% 60%, transparent 60%) 0 30px / 100% 8px no-repeat,
+  linear-gradient(90deg, transparent 0 36%, #F2B34A 36% 64%, transparent 64%) 0 52px / 100% 16px no-repeat,
+  repeating-linear-gradient(90deg, #E5702A 0 8px, #CF5E20 8px 16px); }

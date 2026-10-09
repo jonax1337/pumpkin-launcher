@@ -3,7 +3,7 @@ import { SkinViewer } from "@/components/SkinViewer";
 import { NameDialog } from "@/components/NameDialog";
 import { useAddPlayerSkin, useSkinSignature, useSkinTexture, useUpdateSkin, useUploadSkin } from "@/hooks/useSkins";
 import type { LibrarySkin, SkinVariant } from "@/lib/types";
-import { Button, Chip, IconButton, Menu, Panel, Segmented, Tip, Trunc, type MenuEntry } from "@/ui";
+import { Button, Chip, Heading, IconButton, Menu, Panel, Segmented, Tip, type MenuEntry } from "@/ui";
 
 const SKIN_VARIANTS: SkinVariant[] = ["classic", "slim"];
 
@@ -27,15 +27,15 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
   const upload = useUploadSkin();
   const isWorn = signature != null && signature === worn?.signature && skin.variant === worn.variant;
   const menu: MenuEntry[] = [
-    { id: "rename", text: t("common.rename"), icon: "file", onSelect: onRename },
+    { id: "rename", text: t("common.rename"), icon: "tag", onSelect: onRename },
     { id: "delete", text: t("common.delete"), icon: "trash", bad: true, onSelect: onDelete },
   ];
   return (
-    <Panel as="article" pad="m" className="skin-card" aria-label={skin.name}>
-      {isWorn && <Chip className="absolute -top-[11px] left-3 z-[1]" tone="acc" icon="check" size="s">{t("pages.skins.inUseBadge")}</Chip>}
+    <Panel as="article" level="raised" className="flex flex-col items-center gap-2.5 p-3" active={isWorn} aria-label={skin.name}>
+      {isWorn && <Chip className="absolute top-[calc(12px+var(--u4))] left-[calc(12px+var(--u4))] z-2" tone="acc" icon="check" size="s">{t("pages.skins.inUseBadge")}</Chip>}
       <SkinViewer src={texture} variant={skin.variant} capeSrc={capeUrl} label={t("pages.skins.previewLabel", { name: skin.name })} />
-      <div className="skin-card-h">
-        <Trunc as="b" text={skin.name} className="min-w-0 flex-1" />
+      <div className="flex w-full items-center gap-2">
+        <Heading level="card" zoom trunc className="flex-1 leading-[1.3] tracking-[.02em]">{skin.name}</Heading>
         <Menu
           items={menu}
           trigger={
@@ -58,14 +58,13 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
       {/* Ohne Konto bleibt der Knopf erreichbar und nennt den Grund, statt wortlos grau zu sein. */}
       <Tip label={accountId ? null : t("pages.skins.useNeedsAccount")} describe>
         <Button
-          variant="primary"
-          size="s"
-          width="full"
-          disabled={upload.isPending}
+          icon={isWorn ? "check" : undefined}
+          className="w-full"
+          disabled={upload.isPending || isWorn}
           aria-disabled={accountId ? undefined : true}
           onClick={() => accountId && upload.mutate({ accountId, skin })}
         >
-          {upload.isPending ? t("pages.skins.using") : t("pages.skins.use")}
+          {upload.isPending ? t("pages.skins.using") : t(isWorn ? "pages.skins.used" : "pages.skins.use")}
         </Button>
       </Tip>
     </Panel>

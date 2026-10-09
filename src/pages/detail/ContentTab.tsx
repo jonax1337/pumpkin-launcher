@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Button, Empty, Glyph, Hint, SearchField, Segmented, Select, Spacer, Toolbar } from "@/ui";
+import { Actions, Button, Glyph, Hint, SearchField, SectionHeader, Segmented, Select, Spacer, Toolbar } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { useProjects } from "@/hooks/useContent";
 import { useStableFn } from "@/hooks/useStableFn";
@@ -23,6 +24,7 @@ import { RP_HINT_KEY } from "./content/constants";
 import { focusSoon, retryPerFrame, revealAndFocus, UPDATE_FOCUS_RETRY_FRAMES } from "./content/focus";
 import { countByKind, KindFilter } from "./content/KindFilter";
 import { ResourcePackPanel, ShaderPanel } from "./content/PackPanel";
+import { ProfileBar } from "./content/ProfileBar";
 import { showRemovedToast } from "./content/removedToast";
 import { UndoBar } from "./content/UndoBar";
 import { UpdateAllButton } from "./content/UpdateAllButton";
@@ -37,7 +39,7 @@ import { VersionDialog } from "./content/VersionDialog";
 import type { Finding } from "./content/useWarnings";
 import { warnAction } from "./content/warnAction";
 import type { KindFilter as KindFilterValue, Row, Warn } from "./content/types";
-import { useBusyReason } from "./guards";
+import { useInstanceBusyReason } from "./guards";
 import { LocalFilesDropzone } from "./LocalFilesDropzone";
 import { useLocalFiles } from "./LocalFiles";
 
@@ -68,7 +70,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
   const { t } = useI18n();
   const local = useLocalFiles(instance, shown);
   const { active, target, progress } = useContentState();
-  const busy = useBusyReason(instance.id);
+  const busy = useInstanceBusyReason(instance.id);
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<KindFilterValue>("all");
   const [mode, setMode] = useState<ViewMode>("list");
@@ -140,8 +142,8 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
   const focusHead = () =>
     focusSoon(
       () =>
-        rootRef.current?.querySelector<HTMLElement>(".vx-lhead input[type=checkbox]") ??
-        rootRef.current?.querySelector<HTMLElement>(".vx-tb-main input[type=search]"),
+        rootRef.current?.querySelector<HTMLElement>("[data-kit-item=head] input[type=checkbox]") ??
+        rootRef.current?.querySelector<HTMLElement>("input[type=search]"),
     );
 
   const remove = useStableFn((ids: string[]) => {
@@ -233,20 +235,36 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
 
   return (
     <ContentModelProvider value={model}>
-      <div className="relative min-w-0" ref={rootRef}>
+      <div className="dc-root" ref={rootRef}>
         <LocalFilesDropzone {...local.dropzone} />
         <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
-        <Toolbar height={56} search="s" alt={<BulkBar />} altActive={selection.pickedLive.length > 0}>
+        <SectionHeader
+          title={t("pages.detail.tabContent")}
+          actions={
+            <Actions>
+              <UpdateAllButton buttonRef={updateAllRef} />
+              {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
+              <Button size="s" icon="plus" onClick={onAdd}>{t("common.add")}</Button>
+              {local.pick && (
+                <Button size="s" icon="upload" disabled={!!active} onClick={local.pick}>
+                  {t("detail.content.addFile")}
+                </Button>
+              )}
+            </Actions>
+          }
+        />
+        <Toolbar height={32} search="m" alt={<BulkBar />} altActive={selection.pickedLive.length > 0}>
           <SearchField size="s" value={search} onChange={setSearch} placeholder={t("detail.content.searchPlaceholder")} label={t("detail.content.searchLabel")} />
           <KindFilter value={kind} onChange={setKind} counts={counts} />
           <Select
             size="s"
-            className="max-[1280px]:[&_.vx-sel-lab]:hidden"
+            labelClassName="le-1280:hidden"
             label={t("detail.content.sortLabel")}
             value={sort}
             onChange={(next) => setSort(next as ContentSort)}
             options={sortOptions}
           />
+          <ProfileBar instance={instance} busy={busy} />
           <Spacer />
           <Segmented
             size="s"
@@ -259,14 +277,6 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
               { value: "grid", label: t("detail.content.viewGrid"), icon: "grid" },
             ]}
           />
-          <UpdateAllButton buttonRef={updateAllRef} />
-          {/* Sekundär: auf dieser Seite ist nur Spielen Akzent-Primär. */}
-          <Button size="s" icon="plus" onClick={onAdd}>{t("common.add")}</Button>
-          {local.pick && (
-            <Button size="s" icon="ul" disabled={!!active} onClick={local.pick}>
-              {t("detail.content.addFile")}
-            </Button>
-          )}
         </Toolbar>
 
         {rollback.applied && <UndoBar change={rollback.applied} locked={!!active} onUndo={rollback.undo} onDismiss={rollback.dismiss} />}
@@ -274,7 +284,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
         {kind === "shader" && <ShaderPanel packs={packs} shaders={instance.mods.filter((m) => m.kind === "shader")} hasIris={!!iris?.enabled} loader={instance.loader} />}
 
         {visible.length === 0 ? (
-          <Empty
+          <EmptyState
             title={t("components.search.nothingFound")}
             actions={
               <>
@@ -284,12 +294,12 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
             }
           >
             {t("detail.content.noMatch", { filter: search.trim() || (kind !== "all" ? t(KIND_LABEL_KEYS[kind]) : "") })}
-          </Empty>
+          </EmptyState>
         ) : (
           <ContentList entries={visible} />
         )}
 
-        {packs.failed && instance.mods.some((m) => m.kind === "resourcepack") && <Hint icon="info" className="mt-2">{t(RP_HINT_KEY)}</Hint>}
+        {packs.failed && instance.mods.some((m) => m.kind === "resourcepack") && <Hint icon="info">{t(RP_HINT_KEY)}</Hint>}
       </div>
 
       {confirming && (
@@ -327,20 +337,20 @@ function EmptyContent({ instance, local, onAdd }: { instance: Instance; local: R
   const { t } = useI18n();
   const busy = useContentState((s) => !!s.active);
   return (
-    <div className="relative">
+    <div className="dc-root">
       <LocalFilesDropzone {...local.dropzone} />
-      <Empty
+      <EmptyState
         ill={<Glyph name="cube" pal="steel" box={64} />}
         title={t("detail.content.emptyTitle")}
         actions={
           <>
             <Button icon="plus" onClick={onAdd}>{t("common.add")}</Button>
-            {local.pick && <Button icon="ul" disabled={busy} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
+            {local.pick && <Button icon="upload" disabled={busy} onClick={local.pick}>{t("detail.content.addFile")}</Button>}
           </>
         }
       >
         {instance.loader === "vanilla" ? t("detail.content.emptyVanilla") : t("detail.content.emptyHint")}
-      </Empty>
+      </EmptyState>
     </div>
   );
 }

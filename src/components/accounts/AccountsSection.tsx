@@ -1,10 +1,24 @@
 import { useI18n } from "@/i18n";
-import { Actions, Button, Empty, ErrorBox, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { Button, Chip, Hint, Icon, IconButton, List, ListRow, RowTitle, Skel } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBox } from "@/components/ErrorBox";
 import { openAddOffline, startMsLogin } from "@/store/accountUi";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, useSettings, type ActiveAccount } from "@/store/settings";
 import { AccountAvatar } from "./AccountAvatar";
 import { isActiveAccount, keyOf, kindLabel, useAllAccounts, useRemoveAccount } from "./useAccounts";
+
+/** „Microsoft-Konto hinzufügen“ und (wo erlaubt) „Spielername hinzufügen“; stehen im Kopf der Einstellungen › Konten. */
+export function AccountAddButtons() {
+  const { t } = useI18n();
+  const offlineAllowed = useOfflineAllowed((s) => s.allowed);
+  return (
+    <>
+      <Button variant="primary" size="s" icon="microsoft" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
+      {offlineAllowed && <Button size="s" icon="user" onClick={openAddOffline}>{t("components.account.addPlayerName")}</Button>}
+    </>
+  );
+}
 
 /** Konten verwalten (Einstellungen). */
 export function AccountsSection() {
@@ -17,29 +31,25 @@ export function AccountsSection() {
   return (
     <>
       {query.isPending && accounts.length === 0 ? (
-        <Skel h={60} />
+        <Skel className="h-[60px]" />
       ) : accounts.length ? (
-        <List variant="accounts" aria-label={t("components.account.accounts")}>
+        <List spaced aria-label={t("components.account.accounts")}>
           {accounts.map((account) => (
             <AccountRow key={keyOf(account)} account={account} active={active} onRemove={remove} removing={pending} />
           ))}
         </List>
       ) : (
-        <Empty
+        <EmptyState
           size="pane"
           title={t("components.account.noneYet")}
         >
           {offlineAllowed ? t("components.account.noneOfflineAllowed") : t("components.account.msLoginPrompt")}
-        </Empty>
+        </EmptyState>
       )}
       {query.error && (
-        <ErrorBox className="mt-3" title={t("components.account.msLoadFailed")} error={query.error} onRetry={() => void query.refetch()} />
+        <ErrorBox className="accounts-note" title={t("components.account.msLoadFailed")} error={query.error} onRetry={() => void query.refetch()} />
       )}
-      <Actions wrap className="mt-3">
-        <Button icon="user" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
-        {offlineAllowed && <Button icon="plus" onClick={openAddOffline}>{t("components.account.addPlayerName")}</Button>}
-      </Actions>
-      <Hint className="mt-2.5 max-w-[70ch]">
+      <Hint className="accounts-note">
         {offlineAllowed ? t("components.account.offlineHint") : t("components.onboarding.msHintRequired")}
       </Hint>
     </>
@@ -54,14 +64,26 @@ function AccountRow({ account, active, onRemove, removing }: {
   const select = useSettings((s) => s.selectAccount);
   const name = accountName(account);
   const isActive = isActiveAccount(active, account);
+  const microsoft = account.kind === "microsoft";
   return (
-    <ListRow selected={isActive}>
-      <AccountAvatar account={account} />
-      <RowTitle title={name} sub={`${kindLabel(account)}${isActive ? ` · ${t("components.account.active")}` : ""}`} />
+    <ListRow plate="row" selected={isActive}>
+      <AccountAvatar account={account} box={48} />
+      <RowTitle
+        title={name}
+        sub={
+          <span className="inline-flex items-center gap-1.5">
+            <Icon name={microsoft ? "microsoft" : "user"} size="s" />
+            {kindLabel(account)}
+          </span>
+        }
+      />
+      {isActive && <Chip tone="acc" size="s" icon="check">{t("components.account.active")}</Chip>}
       {!isActive && <Button size="s" onClick={() => select(account)}>{t("components.account.switch")}</Button>}
-      <Button variant="ghost" size="s" disabled={account.kind === "microsoft" && removing} onClick={() => onRemove(account)}>
-        {account.kind === "microsoft" ? t("components.account.signOutPlain") : t("common.remove")}
-      </Button>
+      {microsoft ? (
+        <Button variant="ghost" size="s" icon="logout" disabled={removing} onClick={() => onRemove(account)}>{t("components.account.signOutPlain")}</Button>
+      ) : (
+        <IconButton icon="trash" size="s" label={t("common.remove")} onClick={() => onRemove(account)} />
+      )}
     </ListRow>
   );
 }

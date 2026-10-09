@@ -2,8 +2,9 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PumpkinChoice } from "@/branding/calendar";
 import type { LanguageChoice } from "@/i18n/types";
+import { EMPTY_LAUNCH } from "@/lib/launchSettings";
 import type { JvmPreset } from "@/lib/jvm";
-import type { GameWindow } from "@/lib/types";
+import type { GameWindow, LaunchSettings } from "@/lib/types";
 
 export type PxSize = "s" | "m" | "l";
 export type TextSize = "m" | "l" | "xl";
@@ -28,6 +29,8 @@ interface SettingsState {
   jvmArgs: string;
   /** Fenster für Instanzen, die keines festlegen. */
   window: GameWindow;
+  /** Umgebungsvariablen, Wrapper und Hooks für Instanzen, die zu einem Feld nichts eingestellt haben. */
+  launch: LaunchSettings;
   launcherOnPlay: LauncherOnPlay;
   active: ActiveAccount | null;
   offlineAccounts: string[];
@@ -61,7 +64,7 @@ interface SettingsState {
 type SettingsPatch = Partial<
   Pick<
     SettingsState,
-    "javaPath" | "memoryMb" | "minMemoryMb" | "jvmPreset" | "jvmArgs" | "window" | "launcherOnPlay" | "pxSize" | "textSize" | "motion" | "pumpkin" | "discordPresence" | "language"
+    "javaPath" | "memoryMb" | "minMemoryMb" | "jvmPreset" | "jvmArgs" | "launch" | "window" | "launcherOnPlay" | "pxSize" | "textSize" | "motion" | "pumpkin" | "discordPresence" | "language"
   >
 >;
 
@@ -72,6 +75,7 @@ const RESETTABLE_DEFAULTS = {
   minMemoryMb: null,
   jvmPreset: "balanced",
   jvmArgs: "",
+  launch: EMPTY_LAUNCH,
   window: { type: "default" },
   launcherOnPlay: "keep",
 } satisfies Partial<SettingsState>;

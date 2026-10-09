@@ -11,9 +11,6 @@ export const flag = (on: unknown) => (on ? "" : undefined);
 /** Eigene CSS-Variablen als style; React kennt `--x`-Schlüssel nicht im Typ. */
 export const cssVars = (vars: Record<`--${string}`, string | number | undefined>) => vars as CSSProperties;
 
-/** Breite als Zahl = px am Element; Tokens (`s`, `full` …) stehen als data-w und regelt das CSS. */
-export const widthStyle = (width: number | string | undefined, style?: CSSProperties) => (typeof width === "number" ? { ...style, width } : style);
-
 /** Läuft der Inhalt über (Auslassung, Zeilenklammer)? 1 px Toleranz gegen Rundung. */
 export const isOverflowing = (el: HTMLElement | null) => !!el && (el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 1);
 

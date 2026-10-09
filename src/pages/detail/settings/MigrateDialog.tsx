@@ -6,11 +6,8 @@ import { useMigration, useMigrationCheck } from "@/hooks/useMigration";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type MigrationCheck, type MigrationTarget, type ModChange, type ModLoader } from "@/lib/types";
 import { useBusyReason } from "../guards";
 
-/** Feste Höhe: die Prüfung darunter wächst und schrumpft, der Dialog nicht. */
-const DIALOG_WIDTH = 620;
-const DIALOG_HEIGHT = 680;
-const CONFIRM_WIDTH = 130;
-const CHECK_SKELETON_HEIGHT = 96;
+const CONFIRM_BUTTON = "w-[130px]";
+const CHECK_SKELETON = "h-24";
 
 /** Gewählte Loader-Version „neueste stabile“: das Ziel trägt dann keine, die nächste Installation nimmt die neueste. */
 const LATEST = "latest";
@@ -68,8 +65,7 @@ export function MigrateDialog({ instance, onClose }: { instance: Instance; onClo
       onOpenChange={(open) => !open && onClose()}
       title={t("detail.migrate.title")}
       sub={instance.name}
-      width={DIALOG_WIDTH}
-      height={DIALOG_HEIGHT}
+      height="l"
       footLeft={busy ?? undefined}
       footer={
         <>
@@ -80,7 +76,7 @@ export function MigrateDialog({ instance, onClose }: { instance: Instance; onClo
             cancel={t("common.cancel")}
             confirm={{
               label: t("detail.migrate.apply"),
-              width: CONFIRM_WIDTH,
+              className: CONFIRM_BUTTON,
               disabled: cannotStart || !!check.data?.blocked,
               onClick: () => run(migration.inPlace),
             }}
@@ -106,7 +102,7 @@ function TargetFields({ form }: { form: MigrationForm }) {
       <Field label={t("components.newInstance.mcVersion")}>
         <Actions gap={12} wrap>
           {versions.isPending ? (
-            <Skel w={220} h={40} />
+            <Skel className="h-10 w-55" />
           ) : (
             <Select
               value={form.version}
@@ -160,9 +156,9 @@ function CheckResult({ instance, target, check }: {
   const { t } = useI18n();
   if (check.isPending) {
     return (
-      <div className="flex flex-col gap-2" aria-busy>
+      <div className="mg-check" aria-busy>
         <Hint>{t("detail.migrate.checking")}</Hint>
-        <Skel h={CHECK_SKELETON_HEIGHT} />
+        <Skel className={CHECK_SKELETON} />
       </div>
     );
   }
@@ -177,7 +173,7 @@ function GameSwitch({ check }: { check: MigrationCheck }) {
   const of = (outcome: ModChange["outcome"]) => check.changes.filter((c) => c.outcome === outcome);
   const [updates, adds, disables] = [of("update"), of("add"), of("disable")];
   return (
-    <div className="flex flex-col gap-3">
+    <div className="mg-changes">
       {check.blocked && (
         <StatusPanel tone="warn" title={t("detail.migrate.blockedTitle")}>
           {t(`errors.game.migrate.${check.blocked}`)} {t("detail.migrate.copyHint")}
@@ -197,7 +193,7 @@ function ChangeList({ title, changes, hint }: { title: string; changes: ModChang
   if (!changes.length) return null;
   return (
     <Field label={title} group help={hint}>
-      <ul className="text-fg-2">
+      <ul className="mg-list">
         {changes.map((c) => (
           <li key={c.modId}>{c.version ? `${c.name} → ${c.version}` : c.name}</li>
         ))}

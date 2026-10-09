@@ -7,29 +7,35 @@ import { startMsLogin } from "@/store/accountUi";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import {
-  useAddSkin, useDeleteSkin, useResetSkin, useSaveActiveSkin, useSetCape, useSkinLibrary, useSkinProfile, useSkinSignature,
+  useAddSkin, useDeleteSkin, useResetSkin, useSaveActiveSkin, useSkinLibrary, useSkinProfile, useSkinSignature,
 } from "@/hooks/useSkins";
 import { api } from "@/lib/api";
 import { toastError } from "@/lib/toast";
-import { type Cape, type LibrarySkin } from "@/lib/types";
+import { type LibrarySkin } from "@/lib/types";
 import { useUsableAccount } from "@/store/offline";
 import type { ActiveAccount } from "@/store/settings";
 import {
-  Actions, Button, CardGrid, ConfirmDialog, ContextMenu, Empty, ErrorBox, Field, Hint, IconButton, Menu, PageHeader, SectionHeader, Select, Skel, StatusPanel, Tip, Workspace, WorkspaceContent, WorkspaceRail,
+  Actions, Button, CardGrid, ConfirmDialog, ContextMenu, Count, DropZone, Hint, IconButton, Menu, Page, PageHeader, SectionHeader, Skel, StatusPanel, Tip, Workspace, WorkspaceContent, WorkspaceRail,
   type MenuEntry,
 } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBox } from "@/components/ErrorBox";
 import { DropHint, rejectedFileToast } from "./detail/dropFiles";
+import { CapesPanel } from "./skins/CapesPanel";
 import { PlayerSkinDialog, RenameDialog, SkinCard, type WornLook } from "./skins/SkinCard";
-import "./skins/skins.css";
-
-// Radix-Auswahlen kennen keinen leeren Wert.
-const NO_CAPE = "none";
 
 const newestFirst = (a: LibrarySkin, b: LibrarySkin) => b.addedAt - a.addedAt;
 
 type MicrosoftAccount = Extract<ActiveAccount, { kind: "microsoft" }>;
 
 const isPng = (path: string) => path.toLowerCase().endsWith(".png");
+
+/** Gemessene Höhen der geladenen Inhalte: so springt die Seite beim Laden nicht. */
+const LOOK_SKELETON_HEIGHT_PX = 433;
+const SKIN_CARD_SKELETON_HEIGHT_PX = 407;
+
+/** Karten füllen die Breite: so viele Spalten, wie mit mindestens 188 px passen (bei 1100 px drei Skins in einer Reihe statt einer einzelnen in der zweiten). */
+const GRID_FILL = "[--card-min:min(188px,100%)] gap-4";
 
 export function SkinsPage() {
   const { t } = useI18n();
@@ -70,30 +76,29 @@ export function SkinsPage() {
   });
   return (
     <ContextMenu items={menu}>
-    <section className="page skins relative">
+    <Page className="relative">
       <PageHeader title={t("ui.nav.skins")}>
         <Menu
           items={addMenu}
-          trigger={<Button icon="plus" iconEnd="chevd" disabled={adding}>{t("pages.skins.addSkin")}</Button>}
+          trigger={<Button variant="primary" icon="plus" iconEnd="chev-down" disabled={adding}>{t("pages.skins.addSkin")}</Button>}
         />
       </PageHeader>
       {!account && <NeedsMicrosoft />}
       <Workspace rail={account ? (
-          <WorkspaceRail className="skins-rail" aria-label={t("pages.skins.currentSkinLabel", { name: account.username })}>
+          <WorkspaceRail aria-label={t("pages.skins.currentSkinLabel", { name: account.username })}>
             <CurrentLook account={account} />
           </WorkspaceRail>
         ) : undefined}>
         <Library account={account} />
       </Workspace>
+      {account && <CapesPanel accountId={account.id} />}
       {dragging && (
-        <div className="drop over absolute inset-0 z-10 h-auto justify-start" aria-hidden>
-          <div className="sticky top-[30vh] flex flex-col items-center gap-2 py-10">
-            <DropHint>{t("pages.skins.dropAllowed")}</DropHint>
-          </div>
-        </div>
+        <DropZone over overlay aria-hidden>
+          <DropHint>{t("pages.skins.dropAllowed")}</DropHint>
+        </DropZone>
       )}
       {loadingPlayer && <PlayerSkinDialog onClose={() => setLoadingPlayer(false)} />}
-    </section>
+    </Page>
     </ContextMenu>
   );
 }
@@ -102,10 +107,10 @@ function NeedsMicrosoft() {
   const { t } = useI18n();
   return (
     <StatusPanel
-      className="mt-4"
       icon="user"
+      className="flex-wrap"
       title={t("pages.skins.needsMsTitle")}
-      actions={<Button icon="user" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>}
+      actions={<Button size="s" icon="microsoft" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>}
     >
       {t("pages.skins.needsMsBody")}
     </StatusPanel>
@@ -124,63 +129,46 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
     const retry = () => void profile.refetch();
     return <ErrorBox title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={retry} />;
   }
-  if (!profile.data) return <Skel h={336} />;
+  if (!profile.data) return <Skel style={{ height: LOOK_SKELETON_HEIGHT_PX }} />;
   const { skin, capes } = profile.data;
   const cape = capes.find((c) => c.active);
 
   return (
-    <div className="skins-current">
+    <div className="flex flex-col items-stretch gap-4 le-960:flex-row le-960:items-center">
       <SkinViewer
         src={skin?.url}
         variant={skin?.variant ?? "classic"}
         capeSrc={cape?.url}
         zoom={2}
         label={t("pages.skins.currentSkinLabel", { name: account.username })}
+        className="le-960:flex-[0_0_240px]"
       />
-      <div className="skins-current-details">
-        <SectionHeader title={account.username} size="sub" as="h2" />
+      <div className="flex min-w-0 flex-col gap-3 le-960:flex-1">
+        <SectionHeader title={account.username} level="sub" as="h2" />
         <Hint>{skin ? t("pages.skins.modelLine", { model: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
-        <CapeChoice accountId={account.id} capes={capes} />
-        <Actions wrap>
+        <Actions wrap className="flex-col items-stretch">
           <Button
+            size="s"
             icon="save"
+            className="h-auto min-h-ctl-s whitespace-normal"
             disabled={!skin || save.isPending}
             onClick={() => save.mutate({ accountId: account.id, name: account.username })}
           >
             {t("pages.skins.saveToLibrary")}
           </Button>
-          <Button variant="ghost" icon="redo" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.useDefault")}</Button>
+          <Button size="s" variant="ghost" icon="undo" className="h-auto min-h-ctl-s whitespace-normal" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.useDefault")}</Button>
         </Actions>
       </div>
       <ConfirmDialog
         {...resetConfirm.dialogProps({
           title: () => t("pages.skins.useDefaultTitle"),
           text: () => t("pages.skins.useDefaultText"),
-          confirmLabel: t("pages.settings.resetLabel"),
+          confirmLabel: t("pages.skins.useDefaultConfirm"),
           pending: reset.isPending,
           onConfirm: ({ id }, close) => reset.mutate({ accountId: id }, { onSuccess: close }),
         })}
       />
     </div>
-  );
-}
-
-const capeOptions = (capes: Cape[], noneLabel: string) => [{ value: NO_CAPE, label: noneLabel }, ...capes.map((c) => ({ value: c.id, label: c.alias }))];
-
-function CapeChoice({ accountId, capes }: { accountId: string; capes: Cape[] }) {
-  const { t } = useI18n();
-  const setCape = useSetCape();
-  if (!capes.length) return <Hint>{t("pages.skins.noCapesHint")}</Hint>;
-  return (
-    <Field label={t("pages.skins.capeField")} htmlFor="skin-cape">
-      <Select
-        id="skin-cape"
-        value={capes.find((c) => c.active)?.id ?? NO_CAPE}
-        options={capeOptions(capes, t("pages.skins.noCapeOption"))}
-        disabled={setCape.isPending}
-        onChange={(id) => setCape.mutate({ accountId, cape: capes.find((c) => c.id === id) ?? null })}
-      />
-    </Field>
   );
 }
 
@@ -199,45 +187,37 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
   const remove = useDeleteSkin();
   const [renaming, setRenaming] = useState<LibrarySkin | null>(null);
   const removal = useConfirmTarget<LibrarySkin>();
-  // Umhang der Vorschau: ohne Wahl der, den das Konto trägt.
-  const [chosenCape, setChosenCape] = useState<string>();
-  const capes = profile.data?.capes ?? [];
-  const previewCapeId = chosenCape ?? capes.find((c) => c.active)?.id ?? NO_CAPE;
-  const previewCape = capes.find((c) => c.id === previewCapeId);
+  // Umhang der Vorschau: der, den das Konto trägt.
+  const previewCape = profile.data?.capes.find((c) => c.active);
 
   return (
-    <WorkspaceContent role="region" className="skins-library" aria-labelledby="skin-lib">
+    <WorkspaceContent role="region" aria-labelledby="skin-lib">
       <SectionHeader
         id="skin-lib"
-        title={t("pages.skins.libraryTitle")}
+        title={<>{t("pages.skins.libraryTitle")}{library.data && <Count value={library.data.length} muted />}</>}
         info={
           <Tip label={t("pages.skins.libraryHelp")} describe>
             <IconButton icon="info" size="s" label={t("pages.skins.libraryTitle")} />
           </Tip>
         }
       />
-      {capes.length > 0 && (
-        <Field label={t("pages.skins.capePreviewField")} htmlFor="skin-cape-preview" className="mt-3 max-w-[360px]">
-          <Select id="skin-cape-preview" value={previewCapeId} options={capeOptions(capes, t("pages.skins.noCapeOption"))} onChange={setChosenCape} />
-        </Field>
-      )}
       <div className="mt-3">
         <QueryList
           query={library}
           error={t("pages.instances.loadErrorTitle")}
           loading={
-            <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
-              <SkelList n={3} h={308} />
+            <CardGrid className={GRID_FILL} aria-busy aria-label={t("components.common.loadingAria")}>
+              <SkelList n={3} style={{ height: SKIN_CARD_SKELETON_HEIGHT_PX }} />
             </CardGrid>
           }
           empty={
-            <Empty title={t("pages.skins.emptyTitle")}>
+            <EmptyState title={t("pages.skins.emptyTitle")}>
               {t("pages.skins.emptyBody")}
-            </Empty>
+            </EmptyState>
           }
         >
           {(list) => (
-            <CardGrid>
+            <CardGrid className={GRID_FILL}>
               {[...list].sort(newestFirst).map((skin) => (
                 <SkinCard
                   key={skin.id}

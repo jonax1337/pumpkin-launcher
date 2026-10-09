@@ -14,13 +14,13 @@ export function UpdateAllButton({ buttonRef }: { buttonRef: Ref<HTMLButtonElemen
   const count = model.updateFor.size;
   const shown = count > 0 || model.updatingAll;
   return (
-    <span className="grid items-center justify-items-end *:col-start-1 *:row-start-1">
+    <span className="dc-upall">
       <Button
         ref={buttonRef}
         size="s"
-        icon="up"
+        icon="update"
         count={count}
-        className={cn(!shown && "invisible")}
+        className={cn(!shown && "dc-ghosted")}
         aria-label={model.updatingAll ? t("detail.content.updating") : undefined}
         disabled={model.locked || !shown}
         onClick={() => model.askUpdates([...model.updateFor.keys()])}

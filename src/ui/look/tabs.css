@@ -1,0 +1,56 @@
+/* Reiter, Senkrecht-Navigation und Segment. Nur Aussehen; Höhen, Abstände und Anordnung setzt Tabs.tsx per Tailwind.
+   Gewählt = aria-selected / aria-checked / aria-current. Der Schatten steht in --t-sh (Zustand), damit der Fokusring ihn nicht überdeckt. */
+.lk-tab {
+  --t-nudge: 0px;
+  --t-sh: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) 0 0 var(--edge);
+  color: var(--fg-2); font-weight: 700; user-select: none; cursor: pointer; text-decoration: none; text-shadow: var(--tsh);
+  background: var(--sunk); border: var(--px) solid var(--edge); border-bottom-width: 0; clip-path: var(--nt); box-shadow: var(--t-sh);
+  transition: background-color var(--st);
+}
+.lk-tabs[data-size="s"] .lk-tab { --t-nudge: 1px; }
+.lk-tab-l { translate: 0 var(--t-nudge); }
+.lk-tab .lk-count { color: var(--fg-3); }
+
+.lk-tab:is(:hover, [data-force="hover"]):not(:disabled, [aria-selected="true"], [aria-checked="true"], [aria-current="page"]) { color: var(--fg); background: var(--panel-2); border-color: var(--fg-2); }
+.lk-tab:is(:active, [data-force="press"]):not(:disabled, [aria-selected="true"], [aria-checked="true"], [aria-current="page"]) > .lk-tc { translate: 0 var(--px); }
+/* Auf --panel-3 erreicht --fg-3 nur 4,4:1 (Zähler): im gewählten Reiter eine Stufe heller */
+.lk-tab:is([aria-selected="true"], [aria-checked="true"], [aria-current="page"]) { --fg-3: var(--fg-2); color: var(--fg); background: var(--panel-3); border-color: var(--edge); }
+/* Aus: gestrichelter Strich unter der Schrift, flache Fuge statt Licht */
+.lk-tab:disabled { color: var(--fg-3); cursor: default; text-shadow: none; text-decoration: underline dashed; text-decoration-thickness: var(--px); text-underline-offset: 5px; --t-sh: inset var(--u2) var(--u2) 0 var(--panel), inset calc(var(--u2) * -1) 0 0 var(--edge); }
+.lk-tab:disabled .lk-ico { opacity: .6; }
+
+/* Leiste: Grundlinie unten; der gewählte Reiter ist höher, hat oben die Akzentkante und unten keinen Rand */
+.lk-tabs[data-variant="underline"] { background: linear-gradient(var(--ctl), var(--ctl)) 0 100% / 100% var(--px) no-repeat; }
+.lk-tabs[data-variant="underline"] .lk-tab:is([aria-selected="true"], [aria-current="page"]) {
+  --t-sh: inset 0 var(--u2) 0 var(--acc-bar, var(--acc)), inset var(--u2) 0 0 var(--line-hi), inset calc(var(--u2) * -1) 0 0 var(--bg-2);
+}
+.lk-tabs[data-sticky] { background-color: var(--bg); }
+
+/* Senkrecht: gestapelte Platten, die gewählte reicht an die rechte Kante (Akzentkante links) */
+.lk-tabs[data-variant="vertical"] { background: linear-gradient(var(--ctl), var(--ctl)) 100% 0 / var(--px) 100% no-repeat; }
+.lk-tabs[data-variant="vertical"] .lk-tab { border-bottom-width: var(--px); clip-path: none; --t-sh: inset var(--u2) var(--u2) 0 var(--line), inset 0 calc(var(--u2) * -1) 0 var(--edge); }
+.lk-tabs[data-variant="vertical"] .lk-tab:is([aria-selected="true"], [aria-current="page"]) {
+  border-right-width: 0; clip-path: var(--nl);
+  --t-sh: inset var(--u2) 0 0 var(--acc-bar, var(--acc)), inset 0 var(--u2) 0 var(--line-hi), inset 0 calc(var(--u2) * -1) 0 var(--bg-2);
+}
+.lk-tabs[data-variant="vertical"] .lk-tab:is([aria-selected="true"], [aria-current="page"]) .lk-ico { color: var(--acc); }
+
+/* Segment: Slot-Gruppe (.lk-pit), gewählt = erhabener Stein mit Akzentkante unten */
+.lk-tabs[data-variant="segment"] .lk-tab { --t-sh: 0 0 0 0 transparent; background: transparent; border: 0; clip-path: none; text-shadow: none; }
+.lk-tabs[data-variant="segment"] .lk-tab:is(:hover, [data-force="hover"]):not(:disabled, [aria-selected="true"], [aria-checked="true"]) { background: var(--panel); }
+.lk-tabs[data-variant="segment"] .lk-tab:is([aria-selected="true"], [aria-checked="true"]) {
+  background: var(--panel-3);
+  --t-sh: inset var(--px) var(--px) 0 var(--line-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--bg-2), inset 0 calc(var(--u2) * -1) 0 var(--acc-bar, var(--acc));
+  animation: lk-seg-in .12s steps(2, end);
+}
+@keyframes lk-seg-in { from { background: var(--panel-2); } }
+
+/* Fokus: Rand in Fokusfarbe + doppelter Ring, der Zustandsschatten bleibt darunter */
+.lk-tabs .lk-tab:is(:focus-visible, [data-force="focus"]) { border-color: var(--focus); box-shadow: var(--ring-i), var(--t-sh); color: var(--fg); }
+
+.lk-tabpanel:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 6px; }
+
+@media (forced-colors: active) {
+  .lk-tab:is([aria-selected="true"], [aria-checked="true"], [aria-current="page"]) { outline: 2px solid Highlight; outline-offset: -2px; }
+  .lk-tabs .lk-tab:is(:focus-visible, [data-force="focus"]) { outline: 2px solid Highlight; outline-offset: 2px; }
+}

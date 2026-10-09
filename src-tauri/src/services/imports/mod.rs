@@ -17,7 +17,7 @@ use super::java::{self, JavaSetting};
 use super::launch_args::{self, MAX_ARGS};
 use super::limits::ICON_LIMIT;
 use super::progress::{Phase, SharedProgress};
-use super::{blocking, check_cancelled, content, copy_files, data_url, forge, modrinth, none_if_missing, walk, REGENERATED};
+use super::{blocking, check_cancelled, content, copy_files, data_url, forge, image_mime, modrinth, none_if_missing, remote_icon, walk, Dirs, REGENERATED};
 use crate::{
     coded,
     error::{AppError, AppResult},
@@ -103,7 +103,7 @@ impl Setup {
         }
         self.memory_mb = self.memory_mb.filter(|mb| *mb > 0);
         self.min_memory_mb = self.min_memory_mb.filter(|mb| *mb > 0);
-        self.icon = self.icon.filter(|src| InstanceIcon::Image { src: src.clone() }.validated().is_ok());
+        self.icon = self.icon.and_then(icon_if_valid);
         self.notes = self.notes.trim().chars().take(MAX_NOTES_LEN).collect();
         self.group = self.group.map(|group| group.trim().chars().take(MAX_NAME_LEN).collect::<String>()).filter(|group| !group.is_empty());
         self
@@ -322,13 +322,21 @@ fn read_icon(path: &Path) -> Option<String> {
     Some(data_url(image_mime(&bytes)?, &bytes))
 }
 
-fn image_mime(bytes: &[u8]) -> Option<&'static str> {
-    match bytes {
-        [0x89, b'P', b'N', b'G', ..] => Some("image/png"),
-        [0xFF, 0xD8, 0xFF, ..] => Some("image/jpeg"),
-        [b'G', b'I', b'F', b'8', ..] => Some("image/gif"),
-        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some("image/webp"),
-        _ => None,
+/// Das Bild, wenn es als Icon einer Instanz taugt (Format und Größe, siehe `InstanceIcon::validated`).
+fn icon_if_valid(src: String) -> Option<String> {
+    InstanceIcon::Image { src: src.clone() }.validated().is_ok().then_some(src)
+}
+
+/// Das Modpack-Icon, das die CurseForge App für die Instanz kennt. Sie speichert nur die Adresse; das Bild wird einmal
+/// geladen und das Icon der Instanz. Scheitert das Laden, bleibt es beim Pixel-Icon.
+async fn curseforge_modpack_icon(dirs: &Dirs, game_dir: &Path) -> Option<String> {
+    let url = curseforge::thumbnail_url(game_dir)?;
+    match remote_icon::fetch(dirs, &url).await {
+        Ok(icon) => icon.and_then(icon_if_valid),
+        Err(err) => {
+            tracing::warn!(%err, "Modpack-Icon der CurseForge App nicht geladen");
+            None
+        }
     }
 }
 
@@ -377,6 +385,10 @@ pub async fn import(state: &AppState, source: ForeignInstance, progress: SharedP
     let game_dir = PathBuf::from(source.game_dir);
     let origins = curseforge::origins(&game_dir);
     let setup = source.setup;
+    let icon = match setup.icon {
+        Some(icon) => Some(icon),
+        None => curseforge_modpack_icon(&state.dirs, &game_dir).await,
+    };
     let mut instance = Instance {
         memory_mb: setup.memory_mb,
         min_memory_mb: setup.min_memory_mb,
@@ -385,7 +397,7 @@ pub async fn import(state: &AppState, source: ForeignInstance, progress: SharedP
         window: setup.window,
         group: setup.group,
         notes: setup.notes,
-        icon: setup.icon.map(|src| InstanceIcon::Image { src }),
+        icon: icon.map(|src| InstanceIcon::Image { src }),
         imported_from: Some(source.path),
         ..Instance::from_new(NewInstance {
             name: setup.name,

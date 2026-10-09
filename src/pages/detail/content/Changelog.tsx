@@ -19,13 +19,13 @@ export function Changelog({ instance, mod, versionId }: { instance: Instance; mo
   const versions = useQuery({ ...catalogApi("modrinth").versionsQuery(projectId ?? "", fitFilter(instance, mod.kind)), enabled: !!projectId });
   const changelog = versions.data?.find((v) => v.id === versionId)?.changelog?.trim();
 
-  if (versions.isPending) return <Skel h={48} />;
-  if (changelog) return <Description body={changelog} className="max-h-60 overflow-y-auto" />;
+  if (versions.isPending) return <Skel className="h-12" />;
+  if (changelog) return <Description body={changelog} className="dc-changelog" />;
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="dc-changelog-miss">
       <Hint icon="info">{versions.isError ? t("detail.content.changesLoadError") : t("detail.content.changesNone")}</Hint>
       {projectId && (
-        <Button variant="ghost" size="s" icon="ext" onClick={() => openPage(versionPage(projectId, versionId))}>
+        <Button variant="ghost" size="s" icon="external" onClick={() => openPage(versionPage(projectId, versionId))}>
           {t("detail.content.viewVersionOnModrinth")}
         </Button>
       )}

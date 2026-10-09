@@ -1,49 +1,38 @@
 import { memo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ICON_DATA, rowsPath } from "@/pixel/icon-data";
+import { ICON_CELLS, iconShape } from "@/pixel/icon-data";
 import { Face, glyphFor, GlyphSvg, type GlyphName, type GlyphPalette } from "@/pixel/icons";
 import { SkinHead } from "@/pixel/SkinHead";
 import type { IconName, IconSize, Tone } from "./types";
 import { cssVars } from "./util";
 
-/** Leere Spalten rechts von den sichtbaren Pixeln, in Icon-Einheiten. */
-const blankColumnsAtEnd = (rows: readonly string[]) => rows[0].length - 1 - Math.max(...rows.map((row) => row.lastIndexOf("#")));
-
-function Raster({ name, g }: { name: IconName; g: 7 | 5 }) {
-  const rows = g === 7 ? ICON_DATA[name].g7 : ICON_DATA[name].g5;
-  return (
-    <svg viewBox={`0 0 ${g} ${g}`} data-g={g} aria-hidden>
-      <path d={rowsPath(`${name}:${g}`, rows)} />
-    </svg>
-  );
-}
-
 /**
- * Pixel-Icon in fester Box. Regel: 1 Icon-Pixel = 1 Icon-Einheit (--iu, unabhängig von der Pixelstufe --px), nie gebrochen skaliert (xl: fest 2 Einheiten).
- * s: Box 20, 5×5 · m: Box 24, 7×7 (5×5 nur, wenn 7 Einheiten nicht passen; unit.ts setzt data-ico-m) · l: Box 28, 7×7 · xl: Box 56, 7×7 × 2.
- * Farbe: currentColor, außer `tone`.
+ * Pixel-Icon in fester Box: ein 8×8-Raster, 1 Icon-Pixel = 1 ganze Zelle (nie gebrochen skaliert, unabhängig von der Pixelstufe --px).
+ * Zelle je Slot (Gerätepixel-genau, unit.ts): s Box 16 (2 px) · m Box 24 (3 px) · l Box 32 (4 px) · xl Box 48 (6 px).
+ * Farbe: currentColor (zweiter Ton 50 %), außer `tone`.
  */
-export const Icon = memo(function Icon({ name, size = "m", tone, flip, edge, className }: {
+export const Icon = memo(function Icon({ name, size = "m", tone, edge, className }: {
   name: IconName;
   size?: IconSize;
   tone?: Tone | "muted";
-  flip?: "x" | "y";
   /** Steht das Icon am Ende eines Knopfes, schneidet es die Luft der Box und die leeren Rasterspalten rechts ab: der sichtbare Rand liegt dann am Innenabstand. */
   edge?: "end";
   className?: string;
 }) {
+  const { solid, dim, blankEnd } = iconShape(name);
   return (
     <span
-      className={cn("vx-ico", className)}
+      className={cn("lk-ico", className)}
       data-size={size}
       data-tone={tone}
-      data-flip={flip}
       data-edge={edge}
-      style={edge && cssVars({ "--e5": blankColumnsAtEnd(ICON_DATA[name].g5), "--e7": blankColumnsAtEnd(ICON_DATA[name].g7) })}
+      style={edge && cssVars({ "--e": blankEnd })}
       aria-hidden
     >
-      {size !== "s" && <Raster name={name} g={7} />}
-      {(size === "s" || size === "m") && <Raster name={name} g={5} />}
+      <svg viewBox={`0 0 ${ICON_CELLS} ${ICON_CELLS}`}>
+        <path d={solid} />
+        {dim && <path d={dim} data-dim="" />}
+      </svg>
     </span>
   );
 });
@@ -57,7 +46,7 @@ export type GlyphBox = 40 | 52 | 64 | 72 | 104;
  */
 export const Glyph = memo(function Glyph({ name, pal, box = 40, className }: { name: GlyphName; pal: GlyphPalette; box?: GlyphBox; className?: string }) {
   return (
-    <span className={cn("vx-gl", className)} data-box={box} aria-hidden>
+    <span className={cn("lk-gl", className)} data-box={box} aria-hidden>
       <GlyphSvg name={name} pal={pal} />
     </span>
   );
@@ -71,22 +60,39 @@ export function ProjectIcon({ url, seed, box = 40, className }: { url?: string |
     return <Glyph name={g} pal={p} box={box} className={className} />;
   }
   return (
-    <span className={cn("vx-gl", className)} data-box={box} data-img="" aria-hidden>
+    <span className={cn("lk-gl", className)} data-box={box} data-img="" aria-hidden>
       <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(url)} />
     </span>
   );
 }
 
+const AVATAR_SIZE = {
+  28: "var(--avs, calc(var(--iu, 3px) * 8))",
+  32: "var(--av-32, calc(var(--iu, 3px) * 8))",
+  48: "48px",
+} as const;
+export type AvatarBox = keyof typeof AVATAR_SIZE;
+
 /**
- * Spielerkopf (8×8) in fester Box 28 oder 32; Kantenlänge ganzzahlige Zellen (--avs bzw. --av-32). Mit `skin` (Adresse der
- * Skin-Textur) der echte Kopf, solange sie lädt oder wenn sie fehlt ein Pixelgesicht, fest aus dem Namen abgeleitet.
+ * Spielerkopf (8×8) in fester Box 28, 32 oder 48; Kantenlänge ganzzahlige Zellen (--avs bzw. --av-32; 48 = 6 px je Zelle). Mit `skin`
+ * (Adresse der Skin-Textur) der echte Kopf, solange sie lädt oder wenn sie fehlt ein Pixelgesicht, fest aus dem Namen abgeleitet.
+ * `className` platziert den Kopf in der Umgebung (z. B. `justify-self-center` in einer breiteren Rasterspalte).
  */
-export function Avatar({ name, skin, box = 32, className }: { name: string; skin?: string | null; box?: 28 | 32; className?: string }) {
-  const size = box === 32 ? "var(--av-32, calc(var(--iu, 3px) * 8))" : "var(--avs, calc(var(--iu, 3px) * 8))";
+export function Avatar({ name, skin, box = 32, className }: { name: string; skin?: string | null; box?: AvatarBox; className?: string }) {
+  const size = AVATAR_SIZE[box];
   const face = <Face name={name} size={size} />;
   return (
-    <span className={cn("vx-av", className)} data-box={box} aria-hidden>
+    <span className={cn("lk-av", className)} data-box={box} aria-hidden>
       {skin ? <SkinHead src={skin} size={size} fallback={face} /> : face}
     </span>
   );
+}
+
+/**
+ * Statusquadrat (6 Einheiten, Rand in Plattenfarbe) an der unteren rechten Ecke des nächsten positionierten Elternelements,
+ * z. B. eines `relative`-Wrappers um einen `Avatar`. `tone="run"`: online/aktiv (grün), sonst gedämpft. Nur Zierde: die Zeile nennt den
+ * Zustand zusätzlich im Text (nie nur Farbe).
+ */
+export function StatusDot({ tone, className }: { tone?: "run"; className?: string }) {
+  return <span className={cn("lk-dot absolute right-[calc(var(--px)*-2)] bottom-[calc(var(--px)*-2)] size-[calc(var(--px)*6)]", className)} data-tone={tone} aria-hidden />;
 }

@@ -7,9 +7,7 @@ import { useI18n } from "@/i18n";
 import { type FriendsState, type RelayInfo } from "@/lib/types";
 import { Checkbox, Dialog, DialogActions, Field, Hint } from "@/ui";
 
-const DIALOG_WIDTH_PX = 600;
-const DIALOG_HEIGHT_PX = 780;
-const CONFIRM_WIDTH_PX = 180;
+const CONFIRM_WIDTH = "w-[180px]";
 
 /** Alle Relay-Server als „Host (Betreiber)“, wie der Dialog sie aufzählt. */
 function RelaysText({ relays }: { relays: RelayInfo[] }) {
@@ -23,7 +21,7 @@ function RelaysText({ relays }: { relays: RelayInfo[] }) {
 function PrivacyPoints({ relays }: { relays: RelayInfo[] }) {
   const { t } = useI18n();
   return (
-    <ul className="mb-4 flex list-disc flex-col gap-2 pl-5">
+    <ul className="fr-points">
       <li>{t("friendsSettings.optIn.codes")}</li>
       <li>{t("friendsSettings.optIn.addresses")}</li>
       <li><RelaysText relays={relays} /></li>
@@ -67,15 +65,14 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friendsSettings.optIn.title")}
-      width={DIALOG_WIDTH_PX}
-      height={DIALOG_HEIGHT_PX}
+      height="l"
       busy={enable.isPending}
       footer={
         <DialogActions
           cancel={t("common.cancel")}
           confirm={{
             label: enable.isPending ? t("friendsSettings.optIn.pending") : t("friendsSettings.optIn.confirm"),
-            width: CONFIRM_WIDTH_PX,
+            className: CONFIRM_WIDTH,
             form: formId,
             disabled: !ready,
           }}
@@ -83,7 +80,7 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
       }
     >
       <PrivacyPoints relays={state.relays} />
-      <form id={formId} onSubmit={submit} className="flex flex-col gap-3">
+      <form id={formId} onSubmit={submit} className="fr-form">
         <Field label={t("friendsSettings.nameLabel")} help={t("friendsSettings.nameHint")}>
           <QueryList query={query} error={t("components.account.msLoadFailed")} empty={<p>{t("friendsSettings.nameUnavailable")}</p>}>
             {(accounts) => <p aria-live="polite">{accounts[0].username}</p>}

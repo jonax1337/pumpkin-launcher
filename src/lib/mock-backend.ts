@@ -5,6 +5,7 @@ import { allCapabilities, eventSubscriptions, type Backend, type BackendEvents, 
 import { createAccountMock } from "./mock-accounts";
 import { createContentMock } from "./mock-content";
 import { createContentFilesMock } from "./mock-content-files";
+import { createCrashMock } from "./mock-crash";
 import { crowdedInstance, initialInstances } from "./mock-data";
 import { pickPaths, pickSavePath } from "./mock-files";
 import { createFriendsMock } from "./mock-friends";
@@ -12,6 +13,7 @@ import { createGameMock } from "./mock-game";
 import { createInstanceMock } from "./mock-instances";
 import { createLifecycleMock } from "./mock-lifecycle";
 import { createPackMock } from "./mock-pack";
+import { createProfileMock } from "./mock-profiles";
 import { createScreenshotMock } from "./mock-screenshots";
 import { createSettingsMock } from "./mock-settings";
 import { createSkinMock } from "./mock-skins";
@@ -73,7 +75,9 @@ export function createMockBackend(): Backend {
     ...createAccountMock(context, friends.accountChanged),
     ...createContentMock(context),
     ...createContentFilesMock(context),
+    ...createCrashMock(context),
     ...createPackMock(context),
+    ...createProfileMock(context),
     ...createLifecycleMock(context, worlds),
     ...skins,
     ...worlds,
@@ -112,6 +116,11 @@ export function createMockBackend(): Backend {
     templateExport: onlyInApp("hooks.api.export"),
     templateImport: onlyInApp("hooks.api.pickFiles"),
     takeOpenedPack: () => Promise.resolve(null),
+    takeDeepLinks: () => Promise.resolve([]),
+    foreignLinksEnabled: () => Promise.resolve(false),
+    setForeignLinks: onlyInApp("hooks.api.foreignLinks"),
+    createShortcut: onlyInApp("hooks.api.createShortcut"),
+    packIcon: () => Promise.resolve(null),
     pickPaths,
     pickSavePath,
     revealPath: onlyInApp("hooks.api.openFolder"),

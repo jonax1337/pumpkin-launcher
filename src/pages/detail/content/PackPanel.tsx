@@ -37,31 +37,31 @@ export function ResourcePackPanel({ packs, say }: { packs: PackPanelState; say: 
   }
 
   return (
-    <Panel pad="m" className="mb-3">
-      <SectionHeader as="h3" size="card" title={t("detail.packs.title")} />
-      <p className="text-fg-3 m-0 text-[13px]">{t("detail.packs.sub")} {t("detail.packs.moveHint")}</p>
-      {controls.blocked && <Hint tone="warn" className="mt-2">{controls.blocked}</Hint>}
+    <Panel className="dc-panel p-4">
+      <SectionHeader level="card" title={t("detail.packs.title")} />
+      <p className="dc-panel-sub">{t("detail.packs.sub")} {t("detail.packs.moveHint")}</p>
+      {controls.blocked && <Hint tone="warn" className="dc-panel-hint">{controls.blocked}</Hint>}
       {activeOrder.length === 0 ? (
-        <p className="text-fg-2 mt-2 mb-0 text-[13px]">{t("detail.packs.empty")}</p>
+        <p className="dc-panel-empty">{t("detail.packs.empty")}</p>
       ) : (
-        <ol className="m-0 mt-2 list-none p-0" aria-label={t("detail.packs.title")}>
+        <ol className="dc-order" aria-label={t("detail.packs.title")}>
           {activeOrder.map((mod, index) => (
             <li
               key={mod.id}
-              className="flex items-center gap-3 py-1"
+              className="dc-order-item"
               onKeyDown={(e) => {
                 if (!e.altKey || blocked || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
                 e.preventDefault();
                 moveTo(mod, e.key === "ArrowUp" ? "up" : "down", e.currentTarget.parentElement);
               }}
             >
-              <span className="text-fg-3 w-5 text-right text-[13px]" aria-hidden>{index + 1}</span>
+              <span className="dc-order-n" aria-hidden>{index + 1}</span>
               <ProjectIcon url={iconOf(mod)} seed={mod.id} />
-              <b className="min-w-0 flex-1 truncate">{titleOf(mod)}</b>
-              {controls.isIncompatible(mod) && <Chip size="s" tone="warn" dot>{t("detail.packs.incompatible")}</Chip>}
+              <b className="dc-order-name">{titleOf(mod)}</b>
+              {controls.isIncompatible(mod) && <Chip size="s" tone="warn">{t("detail.packs.incompatible")}</Chip>}
               <IconButton
                 size="s"
-                icon="up"
+                icon="chev-up"
                 data-pack-move={`${mod.id}:up`}
                 label={t("detail.packs.up", { name: titleOf(mod) })}
                 disabled={blocked || index === 0}
@@ -69,7 +69,7 @@ export function ResourcePackPanel({ packs, say }: { packs: PackPanelState; say: 
               />
               <IconButton
                 size="s"
-                icon="down"
+                icon="chev-down"
                 data-pack-move={`${mod.id}:down`}
                 label={t("detail.packs.down", { name: titleOf(mod) })}
                 disabled={blocked || index === activeOrder.length - 1}
@@ -77,7 +77,7 @@ export function ResourcePackPanel({ packs, say }: { packs: PackPanelState; say: 
               />
               <IconButton
                 size="s"
-                icon="x"
+                icon="close"
                 label={t("detail.packs.deactivate", { name: titleOf(mod) })}
                 disabled={blocked}
                 onClick={() => controls.setActive(mod, false)}
@@ -98,15 +98,15 @@ export function ShaderPanel({ packs, shaders, hasIris, loader }: { packs: PackPa
   const known = shaders.filter((m) => m.enabled).map((m) => ({ value: m.fileName, label: titleOf(m) }));
   const unknown = shaderFile && !known.some((o) => o.value === shaderFile) ? [{ value: shaderFile, label: t("detail.packs.unknownShader", { name: shaderFile }) }] : [];
   return (
-    <Panel pad="m" className="mb-3">
-      <SectionHeader as="h3" size="card" title={t("detail.packs.shaderTitle")} />
-      <p className="text-fg-3 m-0 mb-2 text-[13px]">{t("detail.packs.shaderSub")}</p>
+    <Panel className="dc-panel p-4">
+      <SectionHeader level="card" title={t("detail.packs.shaderTitle")} />
+      <p className="dc-panel-sub">{t("detail.packs.shaderSub")}</p>
       {!hasIris && (
-        <Hint tone="warn" className="mb-2">
+        <Hint tone="warn" className="dc-panel-hint">
           {irisSupported({ loader }) ? t("detail.content.shaderNeedsIris") : t("detail.content.shadersUnsupportedDetail", { loader: LOADER_LABELS[loader] })}
         </Hint>
       )}
-      {controls.blocked && <Hint tone="warn" className="mb-2">{controls.blocked}</Hint>}
+      {controls.blocked && <Hint tone="warn" className="dc-panel-hint">{controls.blocked}</Hint>}
       <Select
         size="s"
         label={t("detail.packs.shaderLabel")}

@@ -1,0 +1,92 @@
+/* Instanz-Detail (Survival 1.21). Nur Tokens, keine stilspezifischen Regeln. */
+
+.s-instance { padding: 0 0 56px; }
+
+/* ---------- Kopf: Szene als Hintergrund, Boden läuft in --bg aus (harte Stufen) ---------- */
+.s-instance .ih { position: relative; height: 224px; overflow: hidden; background: var(--bg-2); border-bottom: var(--px) solid var(--edge); }
+.s-instance .ih-bg { position: absolute; inset: 0; }
+.s-instance .ih::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(var(--bg), var(--bg)) 0 100% / 100% 8px no-repeat,
+    linear-gradient(rgb(0 0 0 / .3), rgb(0 0 0 / .3)) 0 100% / 100% 40px no-repeat,
+    linear-gradient(rgb(0 0 0 / .3), rgb(0 0 0 / .3)) 0 100% / 100% 80px no-repeat,
+    linear-gradient(rgb(0 0 0 / .3), rgb(0 0 0 / .3)) 0 100% / 100% 120px no-repeat,
+    linear-gradient(rgb(0 0 0 / .3), rgb(0 0 0 / .3)) 0 100% / 100% 160px no-repeat; }
+.s-instance .ih-in { position: relative; z-index: 1; height: 100%; padding: 14px var(--gut) 18px; display: flex; flex-direction: column; justify-content: space-between; }
+.s-instance .ih-top { display: flex; }
+.s-instance .ih-top .btn { background: rgb(0 0 0 / .45); }
+.s-instance .ih-bot { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px 24px; }
+.s-instance .ih-id { flex: 1 1 360px; min-width: 0; display: grid; gap: 12px; }
+.s-instance .title { flex: none; font-size: clamp(30px, 4.4vw, 56px); overflow-wrap: anywhere; text-shadow: 0 var(--u2) 0 #000; }
+.s-instance .ih-meta { gap: 10px; }
+.s-instance .ih-meta .sm { color: var(--fg); text-shadow: 0 var(--px) 0 #000; }
+.s-instance .ih-meta .dotsep { margin: 0; }
+.s-instance button.chip { cursor: pointer; background: var(--sunk); }
+.s-instance button.chip:hover { color: var(--fg); border-color: var(--fg-2); }
+.s-instance .ih-act { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Tabs und Flächen ---------- */
+.s-instance .ib { padding: 14px var(--gut) 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+.s-instance .ih-bg > canvas { object-position: 50% 58%; }
+.s-instance .tabs .badge { margin-left: 2px; }
+.s-instance .pnl { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; }
+.s-instance .pnl section.stack-m { grid-template-columns: minmax(0, 1fr); }
+.s-instance .tb-content .grow { max-width: 300px; }
+.s-instance .tb-act { margin-left: auto; }
+.s-instance .pnl.stack-l { gap: 28px; }
+.s-instance .pnl.stack-m { gap: 14px; }
+.s-instance .pnl .stack-m { gap: 12px; }
+
+/* ---------- Inhalt ---------- */
+.s-instance .tb-content { row-gap: 10px; }
+.s-instance .tb-sel { width: auto; min-width: 150px; }
+.s-instance .tbl .tr { grid-template-columns: var(--cols); }
+.s-instance .tbl .tr.is-child { padding-left: 48px; background: var(--bg-2); }
+.s-instance .tbl .tr.is-child .nm-cell::before { content: ""; width: 12px; height: 12px; flex: none; margin-right: -4px; border-left: var(--u2) solid var(--line-hi); border-bottom: var(--u2) solid var(--line-hi); }
+.s-instance .nm-cell small { display: flex; align-items: center; gap: 8px; }
+.s-instance .nm-cell small .chip { height: 20px; padding: 0 6px; font-size: 13px; flex: none; }
+.s-instance .c-up { min-width: 0; }
+.s-instance .sw { min-height: 0; }
+.s-instance .tbl .btn.ib { width: 32px; justify-self: end; }
+.s-instance .tbl .tr > .sw { justify-self: start; }
+@media (max-width: 960px) { .s-instance .tbl[style] { --cols: 24px minmax(0,1fr) 120px 64px 32px !important; } }
+
+/* Fliesstext-Spalten der Welten/Server-Tabellen */
+.s-instance .panel[data-flush] { clip-path: var(--n1); }
+
+/* ---------- Screenshots ---------- */
+.s-instance .card canvas, .s-instance .scn canvas { width: 100%; height: 100%; image-rendering: pixelated; }
+.s-instance .shot .cap2 { padding: 4px 9px; }
+.s-instance .shot .cap2 b { font-size: 14px; }
+
+/* ---------- Protokoll: Konsole ---------- */
+.s-instance .console { max-height: 420px; overflow: auto; padding: 10px 14px; font: 400 13px/1.6 ui-monospace, Consolas, "Courier New", monospace; color: var(--fg-2); scrollbar-width: thin; scrollbar-color: var(--ctl) var(--sunk); }
+.s-instance .ln { display: grid; grid-template-columns: 8ch minmax(0, 24ch) minmax(0, 1fr); gap: 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.s-instance .ln .ts { color: var(--fg-3); }
+.s-instance .ln .lv { color: var(--fg-3); }
+.s-instance .ln .tx { color: var(--fg); }
+.s-instance .ln .tx .ico { display: inline-block; vertical-align: -3px; margin-right: 6px; }
+.s-instance .ln[data-l=warn] { background: color-mix(in srgb, var(--warn) 10%, transparent); }
+.s-instance .ln[data-l=warn] .lv, .s-instance .ln[data-l=warn] .tx { color: var(--warn); }
+.s-instance .ln[data-l=bad] { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.s-instance .ln[data-l=bad] .lv, .s-instance .ln[data-l=bad] .tx { color: var(--bad); }
+@media (max-width: 960px) { .s-instance .ln { grid-template-columns: 8ch minmax(0, 1fr); } .s-instance .ln .lv { display: none; } }
+
+/* ---------- Einstellungen ---------- */
+.s-instance .frow { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 12px 28px; align-items: start; padding: 14px 0; border-top: var(--px) solid var(--line); }
+.s-instance .panel-h + .frow { border-top: 0; padding-top: 0; }
+.s-instance .fl { display: grid; gap: 4px; padding-top: 8px; }
+.s-instance .fl b { font: 700 15px/1.2 var(--f-body); }
+.s-instance .fl small { font-size: 13px; line-height: 1.35; color: var(--fg-3); }
+.s-instance .fc { min-width: 0; }
+.s-instance .fc .fld { max-width: 420px; }
+.s-instance .fc .rad .lb small { margin-left: 4px; }
+.s-instance .res .in { width: 120px; }
+.s-instance .scn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; max-width: 920px; }
+.s-instance .scn { text-align: left; font: inherit; color: inherit; }
+.s-instance .scn .cap2 { padding: 4px 9px; }
+.s-instance .scn .cap2 b { font-size: 13px; white-space: normal; }
+.s-instance .scn { align-content: start; }
+.s-instance .scn[aria-selected=true] .cap2::after { margin-right: 0; }
+.s-instance .panel.danger { border-color: var(--bad); }
+@media (max-width: 800px) { .s-instance .frow { grid-template-columns: minmax(0, 1fr); } .s-instance .fl { padding-top: 0; } }

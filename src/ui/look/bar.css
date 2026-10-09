@@ -1,0 +1,28 @@
+/* Leistenknopf (Bar.tsx). Nur Aussehen: Hover-Platte, aktueller Bereich = Slot + Kupfersymbol, Zähler-Plakette, Beschriftung.
+   Die Fläche liegt auf ::before (der Knopf selbst bleibt ungeclippt, damit Plakette und Balken an der Ecke sichtbar sind).
+   Maße, Abstände und Sichtbarkeit von Plakette/Balken stehen als Tailwind-Klassen in Bar.tsx. */
+.lk-bar { color: var(--fg-2); text-decoration: none; cursor: pointer; }
+.lk-bar::before { content: ""; position: absolute; inset: 0; z-index: -1; border: var(--px) solid transparent; clip-path: var(--n1); transition: background-color var(--st); }
+.lk-bar:is(:hover, [data-force="hover"], [aria-expanded="true"]) { color: var(--fg); }
+.lk-bar:is(:hover, [data-force="hover"], [aria-expanded="true"])::before { background: var(--panel); }
+.lk-bar[aria-current="page"] { color: var(--copper); }
+.lk-bar[aria-current="page"]::before { background: var(--sunk); border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
+.lk-bar:is(:active, [data-force="press"])::before { background: var(--edge); }
+.lk-bar:is(:active, [data-force="press"]) > .lk-bc { translate: 0 var(--px); }
+.lk-bar:is(:focus-visible, [data-force="focus"])::before { border-color: var(--focus); box-shadow: var(--ring-i); }
+/* Seitenleiste: der dritte Ring des Standards läge über dem 32-px-Symbol (6 px Luft): Rand + dunkle Fuge (2 Einheiten) */
+.lk-bar[data-side]:is(:focus-visible, [data-force="focus"])::before { box-shadow: inset 0 0 0 var(--px) var(--edge); }
+
+/* Beschriftung (Konto) */
+.lk-bar-lab { font-weight: 600; color: var(--fg); }
+.lk-bar[data-tone="warn"] .lk-bar-lab { color: var(--warn); }
+
+/* Zähler-Plakette */
+.lk-bar-badge { background: var(--copper); color: var(--ink); border: var(--px) solid var(--edge); font-family: var(--f-px); font-weight: 400; }
+
+/* Windows-Kontrastmodus: aktueller Bereich und Fokus als Umriss in Systemfarbe */
+@media (forced-colors: active) {
+  .lk-bar[aria-current="page"]::before { border-color: Highlight; }
+  .lk-bar:is(:focus-visible, [data-force="focus"])::before { border-color: Highlight; }
+  .lk-bar-badge { border-color: ButtonText; }
+}

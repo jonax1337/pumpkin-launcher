@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, Chip, Dialog, ErrorBox, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { Button, Chip, Dialog, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { fitFilter, fitsLabel } from "@/components/catalog/fit";
 import { versionLoaders, versionTypeSuffix } from "@/components/catalog/labels";
 import { catalogApi } from "@/lib/catalogApi";
@@ -35,7 +36,7 @@ function VersionItem({ instance, mod, version, current, locked, onPick }: {
           {t("detail.content.versionSwitch")}
         </Button>
       )}
-      <div className="col-span-full">
+      <div className="ver-changelog">
         <ChangelogDisclosure instance={instance} mod={mod} versionId={version.id} />
       </div>
     </ListRow>
@@ -54,16 +55,15 @@ export function VersionDialog({ instance, mod, title, locked, onPick, onClose }:
     <Dialog
       open
       onOpenChange={(open) => !open && onClose()}
-      width={620}
-      height={560}
+      height="m"
       title={t("detail.content.versionTitle", { name: title })}
       sub={t("detail.content.versionSub", { fits: fitsLabel(instance, mod.kind) })}
     >
-      {versions.isPending && <Skel h={120} />}
+      {versions.isPending && <Skel className="h-30" />}
       {versions.isError && <ErrorBox title={t("detail.content.versionLoadError")} error={versions.error} onRetry={() => void versions.refetch()} />}
       {versions.data && !versions.data.length && <p>{t("detail.content.versionNone")}</p>}
       {versions.data && versions.data.length > 0 && (
-        <List variant="versions" aria-label={t("detail.content.versionTitle", { name: title })}>
+        <List flat aria-label={t("detail.content.versionTitle", { name: title })}>
           {versions.data.slice(0, SHOWN_VERSIONS).map((version) => (
             <VersionItem
               key={version.id}
@@ -78,7 +78,7 @@ export function VersionDialog({ instance, mod, title, locked, onPick, onClose }:
         </List>
       )}
       {versions.data && versions.data.length > SHOWN_VERSIONS && (
-        <Hint icon="info" className="mt-2">{t("detail.content.versionsCapped", { n: SHOWN_VERSIONS })}</Hint>
+        <Hint icon="info" className="dc-panel-hint">{t("detail.content.versionsCapped", { n: SHOWN_VERSIONS })}</Hint>
       )}
     </Dialog>
   );

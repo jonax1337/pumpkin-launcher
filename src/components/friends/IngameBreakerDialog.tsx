@@ -6,7 +6,6 @@ import type { IngameFailureKind, Instance } from "@/lib/types";
 import { Button, Dialog } from "@/ui";
 import { runBreakerChoice, type BreakerChoice } from "./breakerModel";
 
-const DIALOG_WIDTH_PX = 480;
 
 /**
  * Das Spiel ist beim Start gescheitert und der Launcher hat das Freunde-Menü der Instanz ausgeschaltet (docs/bridge/README.md, "Startup recovery"): hier wählt der
@@ -49,7 +48,7 @@ function BreakerChoices({ instance, reason, onStart, onClose }: {
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friendsHost.breaker.title")}
-      width={DIALOG_WIDTH_PX}
+      size="s"
       role="alertdialog"
       describedBy={textId}
       busy={pending}
@@ -61,7 +60,7 @@ function BreakerChoices({ instance, reason, onStart, onClose }: {
       }
     >
       <p id={textId}>{t("friendsHost.breaker.text")}</p>
-      <p className="mt-2 text-fg-3">
+      <p className="fr-detail">
         {t("friendsHost.breaker.detail", { instance: instance.name, failure: t(`friendsHost.ingame.failure.${reason}`) })}
       </p>
     </Dialog>

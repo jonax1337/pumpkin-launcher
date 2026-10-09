@@ -13,13 +13,13 @@ import { LONG_TOAST_MS } from "@/lib/toast";
 import type { ExitPayload, Instance, InstanceStatus } from "@/lib/types";
 import { useGame } from "@/store/game";
 import { consumeStoppedByUser } from "@/store/stopAsk";
-import { instanceKeys, instanceRelatedKeys, logKeys, screenshotKeys, worldKeys } from "./queryKeys";
+import { crashKeys, instanceKeys, instanceRelatedKeys, logKeys, screenshotKeys, worldKeys } from "./queryKeys";
 
 type ToastAction = { label: string; onClick: () => void };
 
 /**
  * Nach dem Ende des Spiels: Das Backend hat die Spielzeit der Sitzung angerechnet und ihr Protokoll gesichert,
- * das Spiel Welten, Serverliste und Screenshots geändert.
+ * das Spiel Welten, Serverliste und Screenshots geändert; der Absturzassistent diagnostiziert den neuen Stand.
  */
 function refreshAfterExit(qc: QueryClient, instanceId: string) {
   qc.setQueryData<InstanceStatus>(instanceKeys.status(instanceId), (s) => s && { ...s, running: false });
@@ -27,6 +27,7 @@ function refreshAfterExit(qc: QueryClient, instanceId: string) {
   void qc.invalidateQueries({ queryKey: worldKeys.all(instanceId) });
   void qc.invalidateQueries({ queryKey: screenshotKeys.list(instanceId) });
   void qc.invalidateQueries({ queryKey: logKeys.sessions(instanceId) });
+  void qc.invalidateQueries({ queryKey: crashKeys.diagnosis(instanceId) });
 }
 
 /** Bleibt stehen, bis der Nutzer reagiert: ein Absturz ist keine vorübergehende Meldung. */

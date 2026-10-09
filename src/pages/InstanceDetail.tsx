@@ -1,7 +1,8 @@
 import { useState, type RefObject } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useI18n } from "@/i18n";
-import { BackLink, ContextMenu, ErrorBox, Icon, Skel, TabPanel, Tabs, type MenuEntry, type TabItem } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { BackLink, ContextMenu, HeroShade, Icon, Page, Skel, TabPanel, Tabs, TabsSkel, type MenuEntry, type TabItem } from "@/ui";
 import { LogConsole } from "@/components/log/LogConsole";
 import { AddContentSheet } from "@/components/catalog/AddContentSheet";
 import { useInstanceMenu } from "@/components/instance";
@@ -37,10 +38,10 @@ function InstanceDetail({ id }: { id: string }) {
 
   if (error)
     return (
-      <section className="page">
+      <Page>
         <BackLink to="/instances">{t("ui.nav.library")}</BackLink>
-        <ErrorBox className="mt-4" title={t("pages.detail.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
-      </section>
+        <ErrorBox title={t("pages.detail.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
+      </Page>
     );
   if (!instance) return <DetailSkeleton id={id} />;
   return <Loaded instance={instance} tab={tab} setTab={setTab} head={head} compact={compact} />;
@@ -53,16 +54,17 @@ function DetailSkeleton({ id }: { id: string }) {
     <section className="detail" aria-busy aria-label={t("components.common.loadingAria")}>
       <header className="dhead">
         <PixelScene bio={look.bio} seed={look.seed} mode="live" className="scene" />
-        <div className="shade-head" />
+        <HeroShade />
         <div className="dh-full">
           <div className="dh-info">
-            <div className="flex"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
-            <Skel h={48} w="min(460px, 60%)" />
-            <Skel h={28} w={280} />
+            <div className="dh-back"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
+            <Skel className="h-[52px] w-[min(460px,60%)]" />
+            <Skel className="h-7 w-[280px]" />
           </div>
         </div>
       </header>
-      <div className="dtabs" />
+      <TabsSkel />
+      <div className="dbody"><Skel className="h-8 w-full" /></div>
     </section>
   );
 }
@@ -100,6 +102,12 @@ function Loaded({ instance, tab, setTab, head, compact }: {
 }) {
   const { t } = useI18n();
   const [adding, setAdding] = useState(false);
+  // Absturzassistent: „Mod suchen“ öffnet das Hinzufügen mit vorbelegter Suche; `seed` baut den Dialog dafür neu auf.
+  const [search, setSearch] = useState({ query: "", seed: 0 });
+  const addContentFor = (query: string) => {
+    setSearch(({ seed }) => ({ query, seed: seed + 1 }));
+    setAdding(true);
+  };
   const updateFor = useCurrentUpdates(instance, instance.mods.length > 0);
   const analysis = useContentAnalysis(instance).data;
   const { findingsOf, total: warnTotal } = useWarnings(instance, analysis?.issues ?? []);
@@ -124,13 +132,13 @@ function Loaded({ instance, tab, setTab, head, compact }: {
     { label: instance.name },
     ...instanceItems.filter((item) => item === "-" || !("id" in item) || (item.id !== "settings" && item.id !== "log")),
     "-",
-    { id: "content", text: t("pages.detail.tabContent"), icon: "list", checked: tab === "content", onSelect: () => setTab("content") },
+    { id: "content", text: t("pages.detail.tabContent"), icon: "mod", checked: tab === "content", onSelect: () => setTab("content") },
     { id: "add-content", text: t("common.add"), icon: "plus", onSelect: () => setAdding(true) },
-    { id: "updates", text: updatesLabel(updateFor.size), icon: "up", disabled: !updateFor.size, onSelect: showUpdates },
-    { id: "worlds", text: t("common.worlds"), checked: tab === "worlds", onSelect: () => setTab("worlds") },
-    { id: "screenshots", text: t("components.export.entry.screenshots"), checked: tab === "screenshots", onSelect: () => setTab("screenshots") },
-    { id: "console", text: t("components.log.ariaLabel"), icon: "term", checked: tab === "console", onSelect: toLog },
-    { id: "settings", text: t("common.settings"), icon: "gear", checked: tab === "settings", onSelect: () => setTab("settings") },
+    { id: "updates", text: updatesLabel(updateFor.size), icon: "update", disabled: !updateFor.size, onSelect: showUpdates },
+    { id: "worlds", text: t("common.worlds"), icon: "world", checked: tab === "worlds", onSelect: () => setTab("worlds") },
+    { id: "screenshots", text: t("components.export.entry.screenshots"), icon: "screenshot", checked: tab === "screenshots", onSelect: () => setTab("screenshots") },
+    { id: "console", text: t("components.log.ariaLabel"), icon: "terminal", checked: tab === "console", onSelect: toLog },
+    { id: "settings", text: t("common.settings"), icon: "settings", checked: tab === "settings", onSelect: () => setTab("settings") },
   ];
 
   return (
@@ -146,11 +154,11 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         onLaunched={toLog}
       />
 
-      {/* Leiste klebt unter dem kompakten Kopf; .dtabs gibt nur den Seitenrand (Seitengerüst). */}
+      {/* Leiste klebt unter dem kompakten Kopf; Seitenrand wie der Seitenkopf (Seitengerüst). */}
       <Tabs
         idBase="dt"
         sticky="var(--dc)"
-        className="dtabs"
+        gutter
         label={t("pages.detail.tabsLabel")}
         items={tabs}
         value={tab}
@@ -172,11 +180,11 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         </div>
         {tab === "worlds" && <WorldsTab instance={instance} onLaunched={toLog} />}
         {tab === "screenshots" && <ScreenshotsTab instance={instance} />}
-        {tab === "console" && <LogConsole instance={instance} />}
+        {tab === "console" && <LogConsole instance={instance} onAddContent={addContentFor} />}
         {tab === "settings" && <SettingsTab instance={instance} packRequested={packRequested} onPackShown={() => setPackRequested(false)} />}
       </TabPanel>
 
-      <AddContentSheet instance={instance} open={adding} onOpenChange={setAdding} />
+      <AddContentSheet key={search.seed} instance={instance} open={adding} onOpenChange={setAdding} initialQuery={search.query} />
     </section>
     </ContextMenu>
   );

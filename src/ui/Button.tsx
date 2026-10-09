@@ -1,213 +1,155 @@
 import type { ComponentProps, ReactNode, Ref } from "react";
 import { Link, type LinkProps } from "react-router";
 import { cn } from "@/lib/utils";
-import { Tip } from "./Tip";
 import { Icon } from "./Icon";
-import { Count } from "./Chip";
-import { Progress } from "./Feedback";
-import { flag, hasContent, widthStyle } from "./util";
+import { Tip } from "./Tooltip";
 import type { Compact, IconName, Size, Tone } from "./types";
+import { flag, hasContent } from "./util";
+import { Count } from "./Chip";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 
 export type ButtonLook = {
-  /** primary = Akzentblock, secondary = Platte (Standard), ghost = nur Text (Hover-Platte), danger = roter Block */
+  /** primary = Steinplatte in der Akzentfarbe, secondary = Steinplatte (Standard), ghost = flach (beim Überfahren ein Slot), danger = rote Steinplatte */
   variant?: ButtonVariant;
-  /** Höhe 32 / 40 / 56 px; bestimmt Icon-Slot (s/m/l), Schrift und Innenabstand. */
+  /** Höhe 32 / 40 / 56 px; bestimmt Icon-Slot, Schrift, Innenabstand und Abstand im Knopf. */
   size?: Size;
   icon?: IconName;
   iconEnd?: IconName;
   /** Textfarbe für Geist/Sekundär; Geist-Hover wird leicht getönt. */
   tone?: Extract<Tone, "acc" | "warn" | "bad">;
-  /** Feste Breite in px (Inhalt zentriert) oder volle Breite. */
-  width?: number | "full";
   /** Zahl nach der Beschriftung (Pixelschrift). */
   count?: number;
   /** Unter dieser Fensterbreite nur Symbol + Zahl; die Beschriftung bleibt für Vorleser. */
   compactBelow?: Compact;
-  /** Über einer Szene: Grundplatte dauerhaft, harter Schatten. */
-  onScene?: boolean;
+  /** Über einer Szene: Grundplatte dauerhaft, harter Schatten. `"strong"`: Sekundär mit deutlichen Zuständen (Hover heller Rand und Fläche, Druck eingedrückt), wo sich die Szenenfläche sonst kaum ändert. */
+  onScene?: boolean | "strong";
   /** Innenabstand nach außen ziehen, damit Text/Symbol bündig mit der Kante darüber/darunter steht. */
   bleed?: "start" | "end";
+  /** Die Beschriftung darf umbrechen: die Höhe wächst über das Maß der Größe hinaus, die Breite bleibt höchstens 100 % (lange Beschriftungen in schmalen Containern). */
+  wrap?: boolean;
+  /** Der Aufrufer legt den Inhalt selbst aus (Zeilen, Balken, Überlagerungen per Tailwind): `children` stehen roh in einer Hülle, die die Platte füllt; `icon`, `iconEnd`, `count` entfallen. Der Innenabstand kommt per `className`; ein gesperrter Knopf dämpft den Inhalt nicht. */
+  fill?: boolean;
+  /** Laufender Vorgang statt Bedienung (für einen Knopf, der nicht `disabled` ist): Fase dauerhaft umgekehrt wie gedrückt, kein Hover und Druck, Zeiger „Fortschritt“, `aria-busy`. Die Farben der Variante bleiben. */
+  busy?: boolean;
+  /** Sekundär mit `tone`: auch die helle Fase trägt zu 40 % die Tonfarbe (Statusknopf wie „Beenden“ oder „Erneut starten“). */
+  tinted?: boolean;
 };
 
-const isBlock = (v: ButtonVariant) => v === "primary" || v === "danger";
+/*
+ * Layout (Tailwind). Alle Maße laufen über drei Variablen, die die Größe setzt: --b-h (Höhe), --b-ico (Symbolbox), --b-pad (Innenabstand).
+ * Vollständige Klassennamen, damit Tailwind sie findet; ein `className` des Aufrufers (z. B. `w-48`, `px-8`) überstimmt sie.
+ */
+const BOX: Record<Size, string> = {
+  s: "[--b-h:var(--lk-h-s)] [--b-ico:var(--lk-ico-s)] [--b-pad:12px] data-[variant=ghost]:[--b-pad:8px] text-ctl-s",
+  m: "[--b-h:var(--lk-h-m)] [--b-ico:var(--lk-ico-m)] [--b-pad:16px] data-[variant=ghost]:[--b-pad:10px] text-ctl-m",
+  l: "[--b-h:var(--lk-h-l)] [--b-ico:var(--lk-ico-l)] [--b-pad:24px] data-[variant=ghost]:[--b-pad:16px] text-ctl-l",
+};
+const GAP: Record<Size, string> = { s: "gap-1.5", m: "gap-2", l: "gap-3" };
 
-/** Trennt die Look-Props von den übrigen Props des Elements. */
-function splitLook<P extends ButtonLook>({ variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed, ...rest }: P): [ButtonLook, Omit<P, keyof ButtonLook>] {
-  return [{ variant, size, icon, iconEnd, tone, width, count, compactBelow, onScene, bleed }, rest];
-}
+/** Kompakt: der Innenabstand schrumpft auf (Höhe − Symbol) / 2 − 1 Einheit, die Beschriftung wird nur noch vorgelesen. */
+const COMPACT_PAD = "[--b-pad:calc((var(--b-h)_-_var(--b-ico))_/_2_-_var(--px))]";
+const COMPACT: Record<Compact, { box: string; label: string }> = {
+  1180: { box: `le-1180:${COMPACT_PAD}`, label: "le-1180:sr-only" },
+  1096: { box: `le-1096:${COMPACT_PAD}`, label: "le-1096:sr-only" },
+  900: { box: `le-900:${COMPACT_PAD}`, label: "le-900:sr-only" },
+};
 
-/** data-* des Aussehens; Größe/Variante stehen immer da (CSS rechnet nicht mit Vorgaben). */
-function lookData({ variant = "secondary", size = "m", icon, tone, width, compactBelow, onScene, bleed }: ButtonLook) {
+const BASE = "lk-btn relative inline-flex shrink-0 items-center justify-center whitespace-nowrap h-(--b-h)";
+const BLEED = "data-[bleed=start]:-ms-(--b-pad) data-[bleed=end]:-me-(--b-pad)";
+
+/** Steinplatte (surface.css) für alles außer Geist; Geist ist flach und wird erst beim Überfahren zum Slot. */
+const STONE = "lk-stone lk-text";
+
+function data({ variant = "secondary", size = "m", icon, tone, onScene, bleed, fill, busy, tinted }: ButtonLook) {
   return {
     "data-variant": variant,
     "data-size": size,
     "data-tone": tone,
     "data-lead": flag(icon),
-    "data-w": width === "full" ? "full" : undefined,
-    "data-compact": compactBelow,
-    "data-scene": flag(onScene),
+    "data-scene": onScene === "strong" ? "strong" : flag(onScene),
     "data-bleed": bleed,
+    "data-fill": flag(fill),
+    "data-busy": flag(busy),
+    "data-tint": flag(tinted),
+    "aria-busy": busy || undefined,
   };
 }
 
-function Inner({ variant = "secondary", size = "m", icon, iconEnd, count, compactBelow, children }: ButtonLook & { children?: ReactNode }) {
+function Inner({ size = "m", icon, iconEnd, count, compactBelow, wrap, fill, children }: ButtonLook & { children?: ReactNode }) {
+  // `fill`: der Aufrufer gestaltet den Inhalt selbst; die Hülle füllt die Platte (und trägt den Versatz beim Drücken).
+  if (fill) return <span className="lk-bc flex size-full min-w-0 items-center">{children}</span>;
   return (
-    <>
-      {isBlock(variant) && <span className="vx-bf" aria-hidden />}
-      <span className="vx-bc">
-        {icon && <Icon name={icon} size={size} />}
-        {hasContent(children) && (compactBelow ? <span className="vx-lab">{children}</span> : children)}
-        {count != null && <Count value={count} />}
-        {iconEnd && <Icon name={iconEnd} size={size} edge="end" />}
-      </span>
-    </>
+    <span className={cn("lk-bc inline-flex min-w-0 items-center", GAP[size], wrap && "whitespace-normal [overflow-wrap:anywhere]")}>
+      {icon && <Icon name={icon} size={size} />}
+      {hasContent(children) && <span className={cn("lk-lab", compactBelow && COMPACT[compactBelow].label)}>{children}</span>}
+      {count != null && <Count value={count} />}
+      {iconEnd && <Icon name={iconEnd} size={size} edge="end" />}
+    </span>
   );
 }
 
+/** Klassen der Knopf-Fläche (Maße aus der Größe, Steinplatte außer bei Geist); gemeinsam für `Button` und `ButtonLink`. */
+function buttonBox({ variant = "secondary", size = "m", compactBelow, wrap }: ButtonLook) {
+  return cn(BASE, BOX[size], BLEED, "px-(--b-pad) data-[lead]:pl-[calc(var(--b-pad)_-_2px)]", compactBelow && COMPACT[compactBelow].box, variant !== "ghost" && STONE, wrap && "h-auto min-h-(--b-h) max-w-full whitespace-normal");
+}
+
 /**
- * Knopf des Kits. Sockel + Fläche mit Bevel (primär/Gefahr), Platte (sekundär) oder Hover-Platte (Geist).
- * Props und ref gehen an das <button> (Radix asChild).
+ * Knopf: Aussehen aus look.css (`lk-btn`), Layout aus Tailwind. Props und ref gehen an das <button>.
+ * Die Breite regelt der Aufrufer per Klasse (`w-full`, `w-40`).
  */
-export function Button({ className, style, type = "button", children, ...props }: ButtonLook & ComponentProps<"button">) {
-  const [look, rest] = splitLook(props);
+export function Button({ variant = "secondary", size = "m", icon, iconEnd, tone, count, compactBelow, onScene, bleed, wrap, fill, busy, tinted, className, type = "button", children, ...props }: ButtonLook & ComponentProps<"button">) {
+  const look = { variant, size, icon, iconEnd, tone, count, compactBelow, onScene, bleed, wrap, fill, busy, tinted };
   return (
-    <button type={type} className={cn("vx-btn fx", className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
+    <button type={type} className={cn(buttonBox(look), className)} {...data(look)} {...props}>
       <Inner {...look}>{children}</Inner>
     </button>
   );
 }
 
-/** Knopf-Optik als Link (react-router). */
-export function ButtonLink({ className, style, children, ...props }: ButtonLook & LinkProps & { ref?: Ref<HTMLAnchorElement> }) {
-  const [look, rest] = splitLook(props);
+/** Knopf-Optik als Link (react-router): dieselben Props wie `Button`, dazu die von `Link`. */
+export function ButtonLink({ variant = "secondary", size = "m", icon, iconEnd, tone, count, compactBelow, onScene, bleed, wrap, fill, busy, tinted, className, children, ...props }: ButtonLook & LinkProps & { ref?: Ref<HTMLAnchorElement> }) {
+  const look = { variant, size, icon, iconEnd, tone, count, compactBelow, onScene, bleed, wrap, fill, busy, tinted };
   return (
-    <Link className={cn("vx-btn fx", className)} {...lookData(look)} style={widthStyle(look.width, style)} {...rest}>
+    <Link className={cn(buttonBox(look), className)} {...data(look)} {...props}>
       <Inner {...look}>{children as ReactNode}</Inner>
     </Link>
   );
 }
 
-type IconButtonLook = Omit<ButtonLook, "icon" | "iconEnd" | "width" | "count" | "compactBelow" | "bleed">;
+/**
+ * Zurück-Link über einer Überschrift („‹ Bibliothek“): Geist s mit führendem Pfeil. Auf Seiten bündig mit der Überschrift (`bleed`),
+ * über Szenen (`onScene`) steht die Platte selbst. Mit `to` ein Link, mit `onClick` ein Knopf.
+ */
+export function BackLink({ children, onScene, to, onClick, className }: { children: ReactNode; onScene?: boolean; className?: string } & ({ to: string; onClick?: never } | { to?: never; onClick: () => void })) {
+  const look: ButtonLook = { variant: "ghost", size: "s", icon: "chev-left", onScene, bleed: onScene ? undefined : "start" };
+  const props = { className: cn(buttonBox(look), className), ...data(look) };
+  const inner = <Inner {...look}>{children}</Inner>;
+  return to != null ? <Link to={to} {...props}>{inner}</Link> : <button type="button" onClick={onClick} {...props}>{inner}</button>;
+}
 
 /**
  * Quadratischer Symbolknopf (32/40/56), Standard Geist. `label` ist der zugängliche Name;
  * der Tooltip zeigt `tip` (Standard: label), `tip={false}` schaltet ihn ab.
+ * `solid="bad"`: Geist, dessen Hover und Druck die volle rote Fläche sind (Fenster schließen); in Ruhe bleibt er neutral.
  */
-export function IconButton({ icon, label, tip, variant = "ghost", size, tone, onScene, className, type = "button", ...props }: IconButtonLook & {
+export function IconButton({ icon, label, tip, variant = "ghost", size = "m", tone, onScene, solid, className, type = "button", ...props }: Pick<ButtonLook, "variant" | "size" | "tone" | "onScene"> & {
   icon: IconName;
   label: string;
   tip?: string | false;
+  solid?: "bad";
 } & Omit<ComponentProps<"button">, "aria-label" | "children">) {
-  const look = { variant, size, icon, tone, onScene };
-  // Der Symbolknopf ist quadratisch: ohne die Einrückung für ein führendes Icon (data-lead)
   const btn = (
-    <button type={type} className={cn("vx-btn vx-ib fx", className)} {...lookData(look)} data-lead={undefined} aria-label={label} {...props}>
-      <Inner {...look} />
+    <button
+      type={type}
+      className={cn(BASE, BOX[size], "w-(--b-h) p-0", variant !== "ghost" && STONE, className)}
+      {...data({ variant, size, tone, onScene })}
+      data-solid={solid}
+      aria-label={label}
+      {...props}
+    >
+      <Inner size={size} icon={icon} />
     </button>
   );
   return tip === false ? btn : <Tip label={tip ?? label}>{btn}</Tip>;
-}
-
-/** Zurück-Link über einer Überschrift („‹ Bibliothek“): Geist s, bündig mit der Überschrift. */
-export function BackLink({ children, onScene, to, onClick }: { children: ReactNode; onScene?: boolean } & ({ to: string; onClick?: never } | { to?: never; onClick: () => void })) {
-  const data = lookData({ variant: "ghost", size: "s", icon: "chev", onScene, bleed: "start" });
-  const inner = (
-    <span className="vx-bc">
-      <Icon name="chev" size="s" flip="x" />
-      {children}
-    </span>
-  );
-  return to != null ? (
-    <Link to={to} className="vx-btn fx" {...data}>{inner}</Link>
-  ) : (
-    <button type="button" onClick={onClick} className="vx-btn fx" {...data}>{inner}</button>
-  );
-}
-
-type BarLook = {
-  current?: boolean;
-  expanded?: boolean;
-  children: ReactNode;
-  className?: string;
-  /** Sichtbare Beschriftung nach dem Inhalt (höchstens 124 px, Auslassung); der Name gehört ins aria-label. */
-  label?: ReactNode;
-  /** Beschriftung in Warnfarbe (z. B. „Spielername fehlt“). */
-  tone?: Extract<Tone, "warn">;
-  /** Symbol nach der Beschriftung (Icon s, z. B. Menüpfeil). */
-  iconEnd?: IconName;
-  /**
-   * Laufende Arbeit (Aufgaben): feste Breite 56, Symbol links. Bei `count` > 0 Zähler-Plakette rechts und Mini-Balken
-   * unter dem Symbol (`p` 0–1, null = unbestimmt); der Platz bleibt immer, nichts verschiebt sich.
-   */
-  activity?: { count: number; p: number | null };
-  /** Für die Seitenleiste: 44 px quadratisch, nur Symbol; aktiv durch Fläche und Iconfarbe. */
-  side?: boolean;
-  /** Zähler-Plakette an der Ecke, nur bei mehr als 0. Sie ist stumm: die Zahl gehört in den zugänglichen Namen (aria-label). */
-  badge?: number;
-};
-
-function barData({ label, tone, activity, side }: Pick<BarLook, "label" | "tone" | "activity" | "side">) {
-  return {
-    "data-side": flag(side),
-    "data-tone": label != null ? tone : undefined,
-    "data-activity": activity ? (activity.count > 0 ? "busy" : "") : undefined,
-  };
-}
-
-/** Größte Zahl in der Zähler-Plakette; darüber steht „9+“. */
-const MAX_BADGE_COUNT = 9;
-
-const badgeText = (count: number) => (count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : count);
-
-function BarInner({ children, label, iconEnd, activity, badge, side }: Pick<BarLook, "children" | "label" | "iconEnd" | "activity" | "badge" | "side">) {
-  return (
-    <>
-      <span className="vx-bc">
-        {children}
-        {label != null && <span className="vx-bar-lab">{label}</span>}
-        {iconEnd && <Icon name={iconEnd} size="s" />}
-      </span>
-      {!side && <span className="vx-tick" aria-hidden />}
-      {activity && (
-        <>
-          <span className="vx-bar-badge" aria-hidden>{badgeText(activity.count)}</span>
-          <Progress thin p={activity.p} decorative className="vx-bar-meter" />
-        </>
-      )}
-      {badge != null && badge > 0 && <span className="vx-bar-badge" data-always aria-hidden>{badgeText(badge)}</span>}
-    </>
-  );
-}
-
-type BarLinkProps = { to: string } & Omit<LinkProps, "to" | "children" | "className"> & { ref?: Ref<HTMLAnchorElement> };
-type BarPlainProps = { to?: undefined } & Omit<ComponentProps<"button">, "children" | "className">;
-
-/**
- * Knopf in der Fensterleiste (36 px): Hover-Platte, `current` = Platte + Kupferstrich (aktueller Bereich),
- * `expanded` = offen (Menü). Mit `to` ein Link. `label`/`tone`/`iconEnd`: Konto-Knopf; `activity`: Aufgaben.
- */
-export function BarButton(props: BarLook & (BarLinkProps | BarPlainProps)) {
-  const { current, expanded, className, children, label, tone, iconEnd, activity, side, badge, ...target } = props;
-  const common = {
-    className: cn("vx-bar fx", className),
-    ...barData({ label, tone, activity, side }),
-    "aria-current": current ? ("page" as const) : undefined,
-    "aria-expanded": expanded,
-  };
-  const inner = <BarInner label={label} iconEnd={iconEnd} activity={activity} badge={badge} side={side}>{children}</BarInner>;
-  return target.to != null ? (
-    <Link {...common} {...target}>{inner}</Link>
-  ) : (
-    <button type="button" {...common} {...target}>{inner}</button>
-  );
-}
-
-/**
- * Nur die Klassen (für Fremdbausteine, die keine Props durchreichen, z. B. Sonner-Aktionsknöpfe).
- * Nur Geist/Sekundär: primär braucht die Fläche als eigenes Element (Button).
- */
-export function buttonClass({ variant = "secondary", size = "m", tone, onScene }: Pick<ButtonLook, "size" | "tone" | "onScene"> & { variant?: "secondary" | "ghost" } = {}) {
-  return cn("vx-btn fx", `vx-btn--${variant}`, size !== "m" && `vx-btn--${size}`, tone && `vx-btn--${tone}`, onScene && "vx-btn--scene");
 }

@@ -1,6 +1,6 @@
 /* Bewegung des Kits und des App-Gerüsts: Ein- und Ausblenden von Overlays (Radix wartet auf die Ausblend-Animation),
    Fortschritt-Suchen (ind), Platzhalter-Puls (skp), Einblenden-Staffel (rise) und Seitenwechsel.
-   Übergänge in ganzen Stufen (steps), nie über halbe Pixel; `prefers-reduced-motion` steht in pixelkino.css. */
+   Übergänge in ganzen Stufen (steps), nie über halbe Pixel; `prefers-reduced-motion` steht in styles/base.css. */
 
 @keyframes fade { from { opacity: 0; } }
 @keyframes fadeout { to { opacity: 0; } }
@@ -14,11 +14,11 @@
 @keyframes sheetin { from { transform: translateX(calc(100% + 16px)); } }
 @keyframes sheetout { from { transform: none; } to { transform: translateX(calc(100% + 16px)); } }
 
-/* Unbestimmter Fortschritt: Suchfenster wandert (vx-prog und .prog im Spielen-Knopf) */
+/* Unbestimmter Fortschritt: Suchfenster wandert (lk-prog und .prog im Spielen-Knopf) */
 @keyframes ind { from { -webkit-mask-position: -120px 0; mask-position: -120px 0; } to { -webkit-mask-position: 240px 0; mask-position: 240px 0; } }
 
-/* Platzhalter beim Laden (vx-skel) pulsiert in Stufen */
-@keyframes skp { to { background: #172131; } }
+/* Platzhalter beim Laden (lk-skel) pulsiert in Stufen */
+@keyframes skp { to { background: var(--line); } }
 
 /* Einblenden-Staffel: Zeilen und Karten (40 ms je Position, --i) */
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }

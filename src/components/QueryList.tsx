@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
-import { ErrorBox, Skel } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Skel } from "@/ui";
 
 /** Fehler, Laden und leere Liste einer Abfrage; sonst `children` mit den Einträgen. `loading` ersetzt den Standard-Platzhalter. */
-export function QueryList<T>({ query, error, empty, loading = <Skel h={56} />, children }: {
+export function QueryList<T>({ query, error, empty, loading = <Skel className="h-14" />, children }: {
   query: UseQueryResult<T[]>;
   error: string;
   empty: ReactNode;

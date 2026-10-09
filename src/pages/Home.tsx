@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { PlayStatus } from "@/components/play/PlayStatus";
+import { PlayStatus, PlayStatusSkel } from "@/components/play/PlayStatus";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
-import { SkelList } from "@/components/SkelList";
 import { Onboarding } from "@/components/Onboarding";
 import { useInstanceMenu } from "@/components/instance";
 import { byRecent, pickRecentInstance, useInstances } from "@/hooks/useInstances";
@@ -12,10 +11,11 @@ import { PixelScene } from "@/pixel/PixelScene";
 import { newInstanceUrl } from "@/lib/routes";
 import type { Instance } from "@/lib/types";
 import { useLook } from "@/store/look";
-import { Actions, Button, ButtonLink, ContextMenu, ErrorBox, SectionHeader, Skel, type MenuEntry } from "@/ui";
+import { Actions, Button, ButtonLink, ContextMenu, HeroMeta, HeroShade, HeroTitleSkel, Page, SectionHeader, Skel, type MenuEntry } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { HeroActions } from "./home/HeroActions";
 import { HeroInfo } from "./home/HeroInfo";
-import { Rail, TILE_H, TILE_W } from "./home/Rail";
+import { Rail, RailSkeleton } from "./home/Rail";
 
 function HomeInstancesHeader() {
   const { t } = useI18n();
@@ -23,13 +23,14 @@ function HomeInstancesHeader() {
     <SectionHeader
       title={t("components.detail.yourInstances")}
       id="cont-h"
-      className="library-heading"
+      wrap
+      className="mb-pg-s"
       actions={
         <Actions wrap>
           <NewInstanceDialog>
-            <Button icon="plus">{t("components.newInstance.title")}</Button>
+            <Button size="s" icon="plus">{t("components.newInstance.title")}</Button>
           </NewInstanceDialog>
-          <ButtonLink to="/instances" variant="ghost" iconEnd="chev">{t("ui.nav.library")}</ButtonLink>
+          <ButtonLink size="s" to="/instances" iconEnd="chev-right">{t("ui.nav.library")}</ButtonLink>
         </Actions>
       }
     />
@@ -43,15 +44,16 @@ function HomeSkeleton() {
       <h1 className="sr">{t("ui.nav.home")}</h1>
       <div className="hero">
         <div className="hero-k">
-          <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
-          <div className="hmeta"><Skel h={16} w={320} /></div>
+          <HeroTitleSkel />
+          <HeroMeta><Skel className="h-4 w-[320px]" /></HeroMeta>
         </div>
-        <div className="acts"><Skel h={56} w={272} /><Skel h={40} w={40} /></div>
-        <div className="pstat" />
+        <Actions gap={12}><Skel className="h-ctl-l w-[272px]" /><Skel className="size-ctl-l" /></Actions>
+        {/* Statuszeile unter den Knöpfen: auch im echten Hero reserviert (PlayStatus), damit sich die Höhe nicht ändert */}
+        <PlayStatusSkel />
       </div>
       <div className="cont">
         <HomeInstancesHeader />
-        <div className="railwrap"><div className="rail"><SkelList n={4} w={TILE_W} h={TILE_H} className="flex-none" /></div></div>
+        <RailSkeleton n={4} />
       </div>
     </section>
   );
@@ -67,10 +69,10 @@ export function HomePage() {
   if (isLoading) return <HomeSkeleton />;
   if (error)
     return (
-      <section className="page">
+      <Page>
         <h1 className="sr">{t("ui.nav.home")}</h1>
         <ErrorBox title={t("pages.home.loadErrorTitle")} error={error} onRetry={() => void refetch()} />
-      </section>
+      </Page>
     );
   if (!instances?.length || !current) return <Onboarding />;
 
@@ -95,8 +97,8 @@ function HomeContent({ instances, current, onPick }: {
   return (
     <ContextMenu items={items}>
     <section className="home">
-      <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene" />
-      <div className="shade-home" />
+      <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene z-0" />
+      <HeroShade side />
       <h1 className="sr">{t("ui.nav.home")}</h1>
       <div className="hero">
         <HeroInfo key={`info-${current.id}`} instance={current} />

@@ -116,11 +116,10 @@ fn form_decode(s: &str) -> String {
     percent_encoding::percent_decode_str(&s.replace('+', " ")).decode_utf8_lossy().into_owned()
 }
 
-// Seite im Browser nach der Anmeldung: Vorlage und Schriften liegen in `assets/login/`; Stylesheets, Buddy, Wortzeichen
+// Seite im Browser nach der Anmeldung: Vorlage und Schriften liegen in `assets/login/`; Tokens (base.css, ui/tokens.css), Buddy, Wortzeichen
 // und Favicon sind die Dateien der App selbst (`src/`, `branding/`). Alles wird eingebunden, die Seite lädt nichts nach.
 const PAGE: &str = include_str!("../../../assets/login/page.html");
-const APP_CSS: &str = concat!(include_str!("../../../../src/styles/pixelkino.css"), "
-", include_str!("../../../../src/branding/branding.css"));
+const APP_CSS: &str = concat!(include_str!("../../../../src/styles/base.css"), "\n", include_str!("../../../../src/ui/tokens.css"));
 const FONT_BIG: &[u8] = include_bytes!("../../../assets/login/big-shoulders-800.woff2");
 const FONT_HANKEN: &[u8] = include_bytes!("../../../assets/login/hanken-grotesk.woff2");
 const WORDMARK: &[u8] = include_bytes!("../../../../branding/pumpkin-launcher/wordmark/light.svg");
@@ -177,8 +176,8 @@ mod tests {
         let ok = SIGNED_IN.render();
         assert!(ok.contains("<h1>Angemeldet</h1>") && ok.contains("Pumpkin Launcher") && ok.contains("data:image/svg+xml;base64,"));
         let bad = FAILED.render();
-        assert!(bad.contains("Das hat nicht geklappt") && bad.contains("onb-card plate bad"));
-        assert!(ok.contains(".onb-card") && ok.contains(".plate::before"), "Stylesheets der App sind eingebunden");
+        assert!(bad.contains("Das hat nicht geklappt") && bad.contains("login-card bad"));
+        assert!(ok.contains(".login-card") && ok.contains("--panel-2:"), "Karte und Tokens der App sind eingebunden");
         assert!(ok.contains("font-family:\"Big Shoulders Display\"") && !ok.contains("url(http"), "Schriften eingebettet, keine externen Adressen");
         for page in [&ok, &bad] {
             for placeholder in ["@FAVICON@", "@F_BIG@", "@F_HANKEN@", "@BUDDY@", "@WORDMARK@", "@CLASS@", "@TITLE@", "@TEXT@", "@CSS_APP@"] {

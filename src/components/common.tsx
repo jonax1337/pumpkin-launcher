@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useI18n, t } from "@/i18n";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { useJavaInstalls } from "@/hooks/useJavaInstalls";
@@ -9,7 +9,7 @@ import { formatMemory, formatPlaytime, MB_PER_GB, memoryAdvice, memoryTooHigh, r
 import { platform } from "@/lib/platform";
 import { toastError } from "@/lib/toast";
 import { LOADER_LABELS, type Instance, type JavaInstall } from "@/lib/types";
-import { Actions, Button, Hint, Radio, SegSlider, Select, TextField } from "@/ui";
+import { Actions, Button, Count, Hint, Radio, SegSlider, Select, Input, cssVars } from "@/ui";
 
 /** „Fabric 1.21.4“ bzw. „Vanilla 1.21.4“. */
 export const loaderLine = (i: Pick<Instance, "loader" | "minecraftVersion">) => `${LOADER_LABELS[i.loader]} ${i.minecraftVersion}`;
@@ -97,8 +97,8 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true, di
       <Radio name={name} checked={!isAuto} disabled={disabled} onChange={() => onChange(gb * MB_PER_GB)}>
         {t("components.memory.ownValue")}
       </Radio>
-      <div className="memrow">
-        <div className="memsl" style={{ "--free": `${((MEMORY_SEGMENTS - top) / MEMORY_SEGMENTS) * 100}%` } as CSSProperties}>
+      <div className="flex items-start gap-3.5">
+        <div className="flex min-w-0 flex-col gap-0.5" style={cssVars({ "--free": `${((MEMORY_SEGMENTS - top) / MEMORY_SEGMENTS) * 100}%` })}>
           <SegSlider
             value={gb}
             max={top}
@@ -108,9 +108,11 @@ export function MemoryChooser({ name, value, onChange, autoText, help = true, di
             onChange={(v) => onChange(v * MB_PER_GB)}
           />
           {/* Grenze unter dem letzten freien Segment; bei 16 unter dem Ende */}
-          <span className="cap" aria-hidden>{t("components.memory.maxGb", { n: top })}</span>
+          <span className="pr-(--free) text-right text-ctl-s leading-[calc(16px*var(--tz))] whitespace-nowrap text-(--fg-3)" aria-hidden>{t("components.memory.maxGb", { n: top })}</span>
         </div>
-        <span className="num" style={{ color: disabled || isAuto ? "var(--fg-3)" : undefined }}>{gb} GB</span>
+        <output className="flex-none">
+          <Count value={`${gb} GB`} size={24} muted={disabled || isAuto} strong={!(disabled || isAuto)} className="block h-8 min-w-[4.5ch] leading-8" />
+        </output>
       </div>
       {help && <MemoryHelp value={value} />}
     </>
@@ -174,8 +176,8 @@ export function JavaChooser({ name, value, onChange, fallback, disabled }: {
         />
       )}
       <Actions>
-        <TextField
-          width="full"
+        <Input
+          className="w-full"
           disabled={disabled || !own}
           aria-label={t("components.java.pathTo", { file: JAVA_PROGRAM.file })}
           value={draft}

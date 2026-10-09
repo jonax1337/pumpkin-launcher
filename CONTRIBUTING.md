@@ -79,7 +79,7 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 
 ## Code conventions
 
-- Frontend: TypeScript and React; use the existing components and the pixel design system in `src/ui/` and `src/pixel/`. Tailwind is used for layout helpers.
+- Frontend: TypeScript and React. Build UI from the components in `@/ui` (`src/ui/`; component table, rules and pitfalls in [`src/ui/README.md`](src/ui/README.md)) and the pixel scenes and icons in `src/pixel/`. Layout (display, gap, padding, sizes, breakpoints) is Tailwind in your own markup, overridden per call with `className`. The look (colours, borders, states) belongs to the kit: page CSS does not select `.lk-*` classes or restyle kit internals and does not use `!important`. Page-owned styling goes into a stylesheet next to the page, imported by `src/index.css` or by the page. A missing component or variant is added to the kit (look in `src/ui/look/*.css`, export in `src/ui/index.ts`, example on the `/_kit` preview that `pnpm dev` serves; see "Adding or changing a component" in the kit README).
 - Backend: keep Tauri commands thin and put logic in services and state. Use the existing `thiserror` and `tracing` patterns.
 - Backend commands: register them in `src-tauri/src/lib.rs`, the `Backend` type in `src/lib/backend.ts`, the Tauri adapter in `src/lib/backend-tauri.ts` and the browser mock in `src/lib/mock-*.ts`.
 - User-facing text: keep German and English dictionaries in sync under `src/i18n/`. Backend errors use `coded!` keys from the error dictionaries. Use everyday language.
@@ -88,7 +88,7 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 - GitHub Actions are pinned to commit SHAs with version comments. Commit subjects should be short and imperative.
 
 For module boundaries and data flow, see [Architecture](docs/ARCHITECTURE.md).
-UI tokens and text-size behavior are described in [Pixelkino](docs/design/PIXELKINO.md).
+The design language (palette, pixel grid, Inventar surfaces, icons, motion, accessibility) is described in [Pixelkino](docs/design/PIXELKINO.md); `docs/design/concepts/` holds the static design mockups.
 The [Pumpkin Bridge reference](docs/bridge/README.md) describes the launcher–game channel; [mod/README.md](mod/README.md) describes its build.
 
 ## Microsoft sign-in for forks
@@ -150,6 +150,85 @@ The trusted public updater key is `plugins.updater.pubkey` in `src-tauri/tauri.c
 Keep a separate secure backup: losing the private key prevents updates to existing installations
 unless their trusted key is deliberately migrated or users reinstall.
 
+#### OS code signing (optional)
+
+The workflow signs the Windows installer and the macOS app only when the entries below exist.
+Each platform needs all of its **required** entries; with any missing, that platform builds exactly
+as before (unsigned Windows installer, ad hoc signed macOS app), so forks need no setup.
+The step **Detect configured code signing** in each installer job logs what it found.
+Create secrets under **Settings > Secrets and variables > Actions** (repository or the `release`
+environment) and variables on the same page's **Variables** tab.
+
+| Name | Kind | Platform | Value |
+| --- | --- | --- | --- |
+| `AZURE_TENANT_ID` | secret | Windows, required | Directory (tenant) ID of the Entra app registration |
+| `AZURE_CLIENT_ID` | secret | Windows, required | Application (client) ID of that registration |
+| `AZURE_CLIENT_SECRET` | secret | Windows, required | Client secret **value** of that registration |
+| `AZURE_SIGNING_ENDPOINT` | variable | Windows, required | Regional endpoint of the signing account, e.g. `https://weu.codesigning.azure.net` |
+| `AZURE_SIGNING_ACCOUNT` | variable | Windows, required | Artifact Signing account name |
+| `AZURE_SIGNING_CERTIFICATE_PROFILE` | variable | Windows, required | Certificate profile name |
+| `APPLE_CERTIFICATE` | secret | macOS, required | Base64 of the exported Developer ID Application `.p12` |
+| `APPLE_CERTIFICATE_PASSWORD` | secret | macOS, required | Password chosen when exporting the `.p12` |
+| `APPLE_SIGNING_IDENTITY` | secret | macOS, required | Certificate name, e.g. `Developer ID Application: Your Name (TEAMID)` |
+| `APPLE_ID` | secret | macOS, for notarization | Apple ID email |
+| `APPLE_PASSWORD` | secret | macOS, for notarization | [App-specific password](https://support.apple.com/en-us/102654) of that Apple ID, not the account password |
+| `APPLE_TEAM_ID` | secret | macOS, for notarization | Apple Developer Team ID |
+
+Without all three notarization secrets the macOS app is Developer-ID signed but not notarized
+(Tauri skips notarization with a warning). The notarization variant with an App Store Connect
+API key is not wired.
+
+**Windows (Azure Artifact Signing).** Follow Microsoft's [quickstart](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart):
+register the `Microsoft.CodeSigning` resource provider, create an Artifact Signing account, complete
+identity validation and create a **Public Trust** certificate profile. Note the account's regional
+endpoint; a region/endpoint mismatch causes `403 Forbidden`. Then create a Microsoft Entra app
+registration with a client secret and assign it the **Artifact Signing Certificate Profile Signer**
+role on the certificate profile ([role assignment](https://learn.microsoft.com/en-us/azure/artifact-signing/tutorial-assign-roles)).
+Its tenant ID, client ID and secret are the three `AZURE_*` secrets; account, profile and endpoint are the variables.
+The job installs the pinned `artifact-signing-cli` (a third-party wrapper around Microsoft's signing client
+and `signtool`, recommended by [Tauri's Windows signing guide](https://v2.tauri.app/distribute/sign/windows/#azure-artifact-signing))
+and passes it to Tauri as `bundle.windows.signCommand` through a generated `--config` file, so
+`tauri.conf.json` and local builds are unaffected. Tauri signs the app executable, the NSIS plugins it
+bundles, the uninstaller and the installer; the workflow signs `installer/theme/PumpkinTheme.dll`
+in its checkout before the build because Tauri does not know that plugin. Every signature carries an RFC 3161 timestamp from
+`http://timestamp.acs.microsoft.com`. The updater `.sig` is created by Tauri after all signing, so it covers the signed installer.
+Do not add `certificateThumbprint` or a fixed `signCommand` to `tauri.conf.json`: that would make every build require the certificate.
+
+**macOS (Developer ID and notarization).** With a paid Apple Developer Program membership, create a
+**Developer ID Application** certificate in your developer account, install it in Keychain Access,
+export it with its private key as `.p12` (set an export password), then encode it:
+`base64 -i certificate.p12 | pbcopy`. That text is `APPLE_CERTIFICATE`. Find the exact identity with
+`security find-identity -v -p codesigning`. Create the app-specific password at
+[appleid.apple.com](https://appleid.apple.com) and read the Team ID from your membership page.
+The workflow exports these values only when present, because Tauri prefers `APPLE_SIGNING_IDENTITY`
+over `signingIdentity: "-"` in `tauri.conf.json`, which stays as the ad hoc fallback. Tauri imports
+the certificate, signs the universal app and, with the notarization secrets, notarizes and staples it.
+
+#### Verify a signed release
+
+Windows (PowerShell), on the downloaded installer and on `pumpkin-launcher.exe` in the install folder:
+
+```powershell
+Get-AuthenticodeSignature .\Pumpkin.Launcher_x64-setup.exe | Format-List Status, SignerCertificate, TimeStamperCertificate
+```
+
+`Status` must be `Valid` and a timestamp certificate must be present.
+
+macOS, on the `.app` inside the mounted DMG (an ad hoc build shows `Signature=adhoc`):
+
+```bash
+codesign -dv --verbose=4 "/path/to/Pumpkin Launcher.app"
+spctl -a -vv "/path/to/Pumpkin Launcher.app"
+xcrun stapler validate "/path/to/Pumpkin Launcher.app"
+```
+
+`codesign` must list a `Developer ID Application` authority and your `TeamIdentifier`; `spctl`
+must report `accepted` with `source=Notarized Developer ID`.
+
+README and website wording that the installer is not code-signed or the app is not notarized
+([README.md](README.md) "Download and install", website download notes) is deliberately unchanged.
+The maintainer must update it once the first signed release has shipped and been verified as above.
+
 ### Publish the draft
 
 The pipeline attaches Windows x64 NSIS, Linux x64 AppImage/DEB and macOS universal DMG packages,
@@ -169,8 +248,9 @@ does not publish it. **Re-run failed jobs** reuses the draft; restarting the who
 workflow can create another draft. If concurrent installer uploads lose an entry in `latest.json`,
 the platform check fails and the missing platform's job can be restarted.
 
-Updater signatures are not OS code signatures: Windows installers are not Authenticode-signed
-and macOS apps are ad hoc signed, not notarized. User-facing platform warnings are in [README.md](README.md).
+Updater signatures are not OS code signatures. Whether the Windows installer is Authenticode-signed
+and the macOS app is notarized depends on the secrets described under [OS code signing](#os-code-signing-optional);
+without them Windows installers are unsigned and macOS apps are ad hoc signed. User-facing platform warnings are in [README.md](README.md).
 Build provenance can be checked with `gh attestation verify <file> --repo jonax1337/pumpkin-launcher`.
 
 ### Local package

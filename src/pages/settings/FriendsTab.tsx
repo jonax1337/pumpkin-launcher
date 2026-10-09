@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { type UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Buddy } from "@/branding/Brand";
 import { useAllAccounts } from "@/components/accounts/useAccounts";
 import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { QueryList } from "@/components/QueryList";
@@ -14,26 +15,40 @@ import { copyWithToast } from "@/lib/clipboard";
 import { formatDate } from "@/lib/format";
 import { type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
-import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, type IconName } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Actions, Button, ConfirmDialog, Count, FormRow, FormSection, Heading, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Surface, Switch, type IconName } from "@/ui";
 import { SettingsInfo } from "./SettingsInfo";
 
 const SECOND_MS = 1000;
 const ROW_SKELETON_HEIGHT_PX = 60;
 
-/** Schaltet Freunde ein (öffnet das Opt-in) oder aus; Ausschalten behält die Daten. */
-function EnableRow({ enabled, onEnable }: { enabled: boolean; onEnable: () => void }) {
+/** Schaltet Freunde aus; das behält die Daten. Einschalten geht über `EnableGate`. */
+function EnableRow() {
   const { t } = useI18n();
   const disable = useDisableFriends();
   return (
     <FormRow label={t("friendsSettings.enableLabel")} hint={t("friendsSettings.enableHint")}>
       <Switch
         label={t("friendsSettings.enableLabel")}
-        checked={enabled}
+        checked
         disabled={disable.isPending}
-        onChange={(on) => (on ? onEnable() : disable.mutate())}
+        onChange={() => disable.mutate()}
         stateText={[t("ui.switch.on"), t("ui.switch.off")]}
       />
     </FormRow>
+  );
+}
+
+/** Solange Freunde aus sind: Einstieg statt Schalter; „Freunde aktivieren“ öffnet das Opt-in. */
+function EnableGate({ onEnable }: { onEnable: () => void }) {
+  const { t } = useI18n();
+  return (
+    <Surface kind="pit" className="grid justify-items-center gap-2.5 px-5 py-8 text-center">
+      <Buddy size={96} mood="idle" />
+      <Heading level="sub">{t("friends.gate.disabled.title")}</Heading>
+      <p className="max-w-[52ch] text-(--fg-2)">{t("friendsSettings.enableAside")}</p>
+      <Button variant="primary" size="l" icon="friends" onClick={onEnable}>{t("friends.gate.disabled.action")}</Button>
+    </Surface>
   );
 }
 
@@ -166,7 +181,7 @@ function FingerprintRow({ me }: { me: Me }) {
   return (
     <FormRow label={t("friendsSettings.fingerprintLabel")} hint={t("friendsSettings.fingerprintHint")}>
       <Actions gap={12}>
-        <Count value={me.fingerprint} size={20} className="select-text" />
+        <Surface kind="slot" as="span" className="inline-flex min-h-10 items-center px-4 text-(--copper)"><Count value={me.fingerprint} size={20} className="select-text" /></Surface>
         <Button size="s" icon="copy" onClick={() => copyWithToast(me.peerId, t("friendsSettings.peerIdCopied"))}>{t("friendsSettings.copyPeerId")}</Button>
       </Actions>
     </FormRow>
@@ -207,13 +222,13 @@ function BlockedSection() {
       <QueryList
         query={blocked}
         error={t("friendsSettings.loadFailed")}
-        loading={<Skel h={ROW_SKELETON_HEIGHT_PX} />}
+        loading={<Skel style={{ height: ROW_SKELETON_HEIGHT_PX }} />}
         empty={<Hint>{t("friendsSettings.blockedNone")}</Hint>}
       >
         {(peers) => (
-          <List variant="accounts" aria-label={t("friendsSettings.sectionBlocked")}>
+          <List spaced aria-label={t("friendsSettings.sectionBlocked")}>
             {peers.map((peer) => (
-              <ListRow key={peer.peerId}>
+              <ListRow key={peer.peerId} plate="row">
                 <RowTitle title={peer.displayName} sub={t("friendsSettings.blockedSince", { date: formatDate(peer.blockedAt * SECOND_MS) })} />
                 <Button size="s" disabled={unblock.isPending} onClick={() => unblock.mutate(peer.peerId)}>{t("friendsSettings.unblock")}</Button>
               </ListRow>
@@ -243,7 +258,7 @@ function IdentityAction({ mutation, icon, buttonLabel, title, text, doneMessage 
 
   return (
     <>
-      <Button variant="danger" icon={icon} onClick={() => setAsking(true)}>{buttonLabel}</Button>
+      <Button variant="danger" size="s" icon={icon} onClick={() => setAsking(true)}>{buttonLabel}</Button>
       <ConfirmDialog open={asking} onOpenChange={setAsking} title={title} text={text} confirmLabel={buttonLabel} pending={mutation.isPending} onConfirm={() => void confirm()} />
     </>
   );
@@ -268,12 +283,12 @@ function DangerSection() {
   const { t } = useI18n();
   const rotate = useRotateFriendsIdentity();
   return (
-    <FormSection title={t("friendsSettings.sectionDanger")} level={3} className="settings-field-grid">
+    <FormSection title={t("friendsSettings.sectionDanger")} level={3}>
       <FormRow label={t("friendsSettings.rotateLabel")} hint={t("friendsSettings.rotateHint")}>
         <Actions>
           <IdentityAction
             mutation={rotate}
-            icon="redo"
+            icon="refresh"
             buttonLabel={t("friendsSettings.rotateButton")}
             title={t("friendsSettings.rotateTitle")}
             text={t("friendsSettings.rotateText")}
@@ -296,8 +311,8 @@ function AvailableSettings({ state }: { state: FriendsState }) {
   const [optingIn, setOptingIn] = useState(false);
   return (
     <>
-      <FormSection title={t("friendsSettings.sectionGeneral")} level={3} className="settings-field-grid">
-        <EnableRow enabled={state.enabled} onEnable={() => setOptingIn(true)} />
+      <FormSection title={t("friendsSettings.sectionGeneral")} level={3}>
+        {state.enabled ? <EnableRow /> : <EnableGate onEnable={() => setOptingIn(true)} />}
         {state.enabled && (
           <>
             <MinecraftNameRow />
@@ -335,7 +350,7 @@ export function FriendsTab() {
   const { t } = useI18n();
   const query = useFriendsState();
   if (query.error) return <ErrorBox title={t("friendsSettings.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />;
-  if (!query.data) return <Skel h={ROW_SKELETON_HEIGHT_PX * 3} />;
+  if (!query.data) return <Skel style={{ height: ROW_SKELETON_HEIGHT_PX * 3 }} />;
   const state = query.data;
   return (
     <>
@@ -347,7 +362,7 @@ export function FriendsTab() {
         <FormSection title={t("friendsSettings.ingameActions.label")} level={3}><p>{t("friendsSettings.ingameActions.hint")}</p></FormSection>
         <FormSection title={t("friendsSettings.fingerprintLabel")} level={3}><p>{t("friendsSettings.fingerprintAside")}</p></FormSection>
       </SettingsInfo>
-      <FormSection title={t("friendsSettings.ingameMenu.label")} level={3}>
+      <FormSection title={t("friendsSettings.ingameMenu.label")} srOnlyTitle level={3}>
         <IngameMenuRow settings={state.settings} />
       </FormSection>
       {state.availability === "available" ? <AvailableSettings state={state} /> : <UnavailableSettings availability={state.availability} />}

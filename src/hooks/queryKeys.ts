@@ -57,6 +57,9 @@ export const logKeys = {
   session: (instanceId: string, sessionId: string) => ["log-sessions", instanceId, sessionId] as const,
 };
 
+/** Befunde des Absturzassistenten zum letzten Absturz einer Instanz. */
+export const crashKeys = { diagnosis: (instanceId: string) => ["crash-diagnosis", instanceId] as const };
+
 export const screenshotKeys = { list: (instanceId: string) => ["screenshots", instanceId] as const };
 
 export const skinKeys = {
@@ -92,6 +95,9 @@ export const friendKeys = {
 
 export const importKeys = { foreign: ["foreign-instances"] as const };
 
+/** Ob `modrinth://` und `curseforge://` dem Launcher gehören (das System weiß es). */
+export const deepLinkKeys = { foreign: ["deep-link-foreign"] as const };
+
 export const appKeys = {
   update: ["app-update"] as const,
   systemMemory: ["system-memory"] as const,
@@ -110,8 +116,6 @@ export const catalogKeys = {
   /** Trefferzahl einer Suche (erste Seite), z. B. „Auch 12 Treffer unter Mods“. */
   searchTotal: (source: SourceChoice, type: CatalogType, query: string, mc: string | null, loader: string | null) =>
     ["catalog-search-total", source, type, query, mc, loader] as const,
-  /** Die kuratierte Einstiegsauswahl eines Typs. */
-  starter: (type: CatalogType) => ["modrinth-starter", type] as const,
   project: (source: Source, projectId: string) =>
     source === "modrinth" ? (["modrinth-project", projectId] as const) : (["catalog-project", source, projectId] as const),
   /** Versionen eines Projekts, mit `null` für Minecraft-Version und Loader alle. */

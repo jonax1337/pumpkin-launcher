@@ -1,0 +1,17 @@
+/* ---------- Start ---------- */
+.home { position: relative; min-height: 100%; display: grid; grid-template-rows: minmax(250px, 1fr) auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+/* Hero: Titel, Metazeile, Aktionen im Abstand 8 / 16 (Rhythmus-Tokens); der Rest der Szene gehört der Zeile darüber */
+.hero { position: relative; z-index: 2; align-self: end; padding: var(--pg-gap-l) var(--gut); display: flex; flex-direction: column; gap: var(--pg-gap-m); min-width: 0; }
+.hero-k { display: flex; flex-direction: column; gap: var(--pg-gap-s); }
+/* Instanzleiste und Hero teilen die Seitenränder; Sammlungsaktionen stehen direkt über den Karten. */
+.cont { position: relative; z-index: 2; width: 100%; min-width: 0; padding: 0 var(--gut) var(--pg-bottom); }
+/* Mindestfenster (800×600) und niedrige Fenster: Hero und Leiste rücken zusammen, damit die Startseite ohne Scrollen passt */
+@media (max-height: 700px) {
+  .hero { padding-block: var(--pg-gap-s); }
+  .cont { padding-bottom: var(--pg-gap-s); }
+}
+
+/* Kontrastmodus: die Szene ist Dekor hinter Text und nähme ihm den Kontrast: weg, der Grund bleibt Canvas */
+@media (forced-colors: active) {
+  .home > .scene { display: none; }
+}

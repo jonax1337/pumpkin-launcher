@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "0.4.0"
+version = "0.5.0"
 description = "Pumpkin Launcher – Jede Welt. Ein Klick."
 authors = ["LAUX DIGITAL"]
 edition = "2021"
@@ -46,6 +46,7 @@ keyring-core = "1.0.0"
 tauri-plugin-updater = "2.13.1"
 tauri-plugin-process = "2.4.0"
 tauri-plugin-single-instance = "2.5.2"
+tauri-plugin-deep-link = "2.6.1"
 regex = "1.13.1"
 fastnbt = "2.6.3"
 flate2 = "1.1.10"

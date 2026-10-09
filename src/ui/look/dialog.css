@@ -1,0 +1,18 @@
+/* Dialog = Steinplatte (Fläche auf ::before) mit eingelassenem Körper (.lk-pit). Nur Aussehen; Maße, Lage und Anordnung setzt Dialog.tsx per Tailwind.
+   Die Keyframes `fade`, `fadeout`, `dlgin`, `dlgout` stehen in ui/motion.css; `dlgin` rechnet mit transform: translate(-50%, -50%),
+   deshalb zentriert der Dialog über die Eigenschaft `transform` (nicht über Tailwinds `translate`). */
+
+.lk-scrim { background: rgba(4, 6, 11, .78); }
+.lk-scrim[data-state="open"] { animation: fade .18s var(--ease); }
+.lk-scrim[data-state="closed"] { animation: fadeout .14s var(--ease) forwards; }
+
+.lk-dlg { isolation: isolate; outline: none; }
+.lk-dlg::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--panel-2); clip-path: var(--n1);
+  box-shadow: inset 0 0 0 var(--px) var(--edge), inset var(--u3) var(--u3) 0 var(--line-2), inset calc(var(--u3) * -1) calc(var(--u3) * -1) 0 var(--bg-2); }
+.lk-dlg[data-state="open"] { animation: dlgin .22s var(--ease); }
+.lk-dlg[data-state="closed"] { animation: dlgout .14s var(--ease) forwards; }
+
+.lk-dlg-h h2 { letter-spacing: .02em; }
+.lk-dlg-sub { color: var(--fg-2); font-weight: 400; text-shadow: none; }
+.lk-dlg p { color: var(--fg); }
+.lk-dlg-left { color: var(--fg-3); }

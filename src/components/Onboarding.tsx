@@ -7,12 +7,22 @@ import { importable, useForeignInstances } from "@/hooks/useImport";
 import { useStarterInstance } from "@/hooks/useStarterInstance";
 import { discoverUrl, newInstanceUrl } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import { Button, Choice, Glyph, Hint, Icon, useRoving, type IconName } from "@/ui";
+import { Button, Choice, Glyph, Heading, Hint, Icon, Panel, Steps, useRoving, type IconName } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
 import { Buddy } from "@/branding/Brand";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
+
+/** Breite des Weiter-/Start-Knopfs: auf beiden Schritten gleich, damit er nicht springt. */
+const CTA_WIDTH = "w-[232px]";
+
+/** Karte vor der Szene: links am Rand, mittig; Innenabstand und Höhe schrumpfen in kleinen Fenstern. */
+const CARD = "onb-card absolute top-1/2 left-gut flex w-[min(540px,calc(calc(var(--vw1,1vw)*100)_-_32px))] -translate-y-1/2 flex-col p-[24px_28px_18px] [@media(max-height:700px)]:p-[18px_24px_14px]";
+/** Kopfzeile: Maskottchen und Titel; das Maskottchen schrumpft bei kleiner und weicht bei sehr kleiner Höhe (200 % Zoom). */
+const HEADING_ROW = "mb-3 flex items-center gap-3 [@media(max-height:700px)]:mb-2";
+const BUDDY = "[@media(max-height:700px)]:size-[52px] [@media(max-height:500px)]:hidden";
+const TITLE = "leading-[.95] [--hd-hero:36px] [@media(max-height:700px)]:[--hd-hero:30px] [@media(max-height:500px)]:mb-1 [@media(max-height:500px)]:[--hd-hero:var(--hd-dialog)]";
 
 type Start = "vanilla" | "faster" | "modpack" | "file" | "import";
 
@@ -77,38 +87,38 @@ export function Onboarding() {
     : null;
   const createsHere = start === "vanilla" || start === "faster";
 
-  const steps = (
-    <div className="steps" aria-label={t("components.onboarding.stepOf", { step })}>
-      <i className="on" />
-      <i className={cn(step > 1 && "on")} />
-    </div>
-  );
+  const steps = <Steps current={step} total={2} label={t("components.onboarding.stepOf", { step })} className="mb-4 [@media(max-height:700px)]:mb-2.5" />;
 
   return (
     <div className="onb">
       <PixelScene bio="forest" seed={12} mode="hero" className="scene" />
       <div className="shade-onb" />
       {/* Kein Modal: die Fensterleiste bleibt bedienbar, deshalb eine benannte Region */}
-      <section className="onb-card plate" aria-labelledby="onb-t">
+      <Panel
+        as="section"
+        level="raised"
+        className={cn(CARD, step === 1 ? "h-auto max-h-[min(620px,calc(calc(var(--vh1,1vh)*100)_-_var(--bar)_-_32px))]" : "h-[min(620px,calc(calc(var(--vh1,1vh)*100)_-_var(--bar)_-_32px))]")}
+        aria-labelledby="onb-t"
+      >
         {step === 1 ? (
-          <form onSubmit={next} className="contents">
+          <form onSubmit={next} className="onb-form">
             {steps}
-            <div className="onb-heading">
-              <Buddy mood="hello" size={72} />
-              <h1 id="onb-t">{t("components.onboarding.welcome")}</h1>
+            <div className={HEADING_ROW}>
+              <Buddy mood="hello" size={96} className={BUDDY} />
+              <Heading level="hero" id="onb-t" className={TITLE}>{t("components.onboarding.welcome")}</Heading>
             </div>
             <p>{offlineOk ? t("components.account.askName") : t("components.account.msLoginPrompt")}</p>
-            <div className="ob">
+            <div className="ob flex-initial">
               {offlineOk && <PlayerNameField value={name} onChange={setName} help={t("components.playerName.helpShort")} />}
               {offlineOk && <div className="or">{t("components.common.or")}</div>}
-              <Button icon="user" variant={offlineOk ? undefined : "primary"} width="full" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
-              <Hint className="ob-ms">
+              <Button icon="microsoft" variant={offlineOk ? undefined : "primary"} className="w-full" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>
+              <Hint>
                 {offlineOk ? t("components.onboarding.msHintOfflineOk") : t("components.onboarding.msHintRequired")}
               </Hint>
             </div>
             <div className="of">
               <span className="help">{t("components.onboarding.stepOf", { step: 1 })}</span>
-              <Button type="submit" variant="primary" width={140} iconEnd="chev" disabled={!offlineOk || !nameOk}>
+              <Button type="submit" variant="primary" size="l" className={CTA_WIDTH} iconEnd="chev-right" disabled={!offlineOk || !nameOk}>
                 {t("common.next")}
               </Button>
             </div>
@@ -116,13 +126,13 @@ export function Onboarding() {
         ) : (
           <>
             {steps}
-            <div className="onb-heading">
-              <Buddy mood={starter.busy ? "loading" : "hello"} size={72} />
-              <h1 id="onb-t">{t("components.onboarding.pickStart")}</h1>
+            <div className={HEADING_ROW}>
+              <Buddy mood={starter.busy ? "loading" : "hello"} size={96} className={BUDDY} />
+              <Heading level="hero" id="onb-t" className={TITLE}>{t("components.onboarding.pickStart")}</Heading>
             </div>
             <p>{t("components.onboarding.moreLater")}</p>
             <div className="ob">
-              <div className="starts" role="radiogroup" aria-label={t("components.onboarding.startGroup")} onKeyDown={roveStarts}>
+              <div className="flex flex-col gap-1.5 [@media(max-height:700px)]:gap-1" role="radiogroup" aria-label={t("components.onboarding.startGroup")} onKeyDown={roveStarts}>
                 {STARTS.map((s) => (
                   <Choice
                     key={s.id}
@@ -133,6 +143,7 @@ export function Onboarding() {
                     trail={start === s.id ? <Icon name="check" /> : undefined}
                     selected={start === s.id}
                     tabIndex={start === s.id ? 0 : -1}
+                    className="[@media(max-height:700px)]:h-[52px]"
                     disabled={starter.busy}
                     onClick={() => setStart(s.id)}
                   />
@@ -149,8 +160,8 @@ export function Onboarding() {
               <Button
                 variant="primary"
                 size="l"
-                icon={starter.busy ? "hour" : choice.ctaIcon}
-                width={232}
+                icon={starter.busy ? "hourglass" : choice.ctaIcon}
+                className={CTA_WIDTH}
                 disabled={starter.busy || (createsHere && !starter.ready)}
                 onClick={go}
               >
@@ -159,7 +170,7 @@ export function Onboarding() {
             </div>
           </>
         )}
-      </section>
+      </Panel>
     </div>
   );
 }

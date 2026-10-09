@@ -37,7 +37,7 @@ const CODE_LOADING_PREFIXES: [&str; 20] = [
 ];
 const CLASS_PATH_FLAGS: [&str; 3] = ["-cp", "-classpath", "-p"];
 
-fn well_formed(arg: &str) -> bool {
+pub(crate) fn well_formed(arg: &str) -> bool {
     !arg.is_empty() && arg.chars().count() <= MAX_ARG_CHARS && !arg.chars().any(char::is_control)
 }
 
