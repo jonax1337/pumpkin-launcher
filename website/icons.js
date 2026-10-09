@@ -1,8 +1,10 @@
-import { ICON_DATA } from "../src/pixel/icon-data.ts";
+import { iconShape, ICON_CELLS, isIconName } from "../src/pixel/icon-data.ts";
 
 export function renderIcons() {
   document.querySelectorAll("[data-icon]").forEach((element) => {
-    const rows = ICON_DATA[element.dataset.icon].g7;
-    element.innerHTML = `<svg viewBox="0 0 7 7" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">${rows.flatMap((row, y) => [...row].flatMap((pixel, x) => pixel === "#" ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : [])).join("")}</svg>`;
+    const name = element.dataset.icon;
+    if (!isIconName(name)) return;
+    const { solid, dim } = iconShape(name);
+    element.innerHTML = `<svg viewBox="0 0 ${ICON_CELLS} ${ICON_CELLS}" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="${solid}"/>${dim ? `<path d="${dim}" opacity=".5"/>` : ""}</svg>`;
   });
 }

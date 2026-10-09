@@ -134,6 +134,9 @@ export const ICON_CELLS = 8;
 
 export type IconName = keyof typeof ICON_SET;
 
+/** Gibt es ein Icon dieses Namens? (Website und Prüfskripte lesen Namen aus Markup.) */
+export const isIconName = (name: string): name is IconName => Object.hasOwn(ICON_SET, name);
+
 /** Pixelform eines Icons: Pfade (voll, zweiter Ton) in Zellen-Einheiten und leere Spalten rechts. */
 type IconShape = { solid: string; dim: string; blankEnd: number };
 

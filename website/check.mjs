@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { ICON_DATA } from "../src/pixel/icon-data.ts";
+import { isIconName } from "../src/pixel/icon-data.ts";
 import { detectDesktopOs } from "./download.js";
 
 // Resources stay local; external navigation is limited to the repository and official installation help.
@@ -37,7 +37,7 @@ const legalHtml = Object.fromEntries(LEGAL_PAGES.map((page) => {
 const files = readdirSync(new URL("assets/", output));
 
 // Catch broken build paths, invented icons and missing original branding assets.
-for (const [, name] of source.matchAll(/data-icon="([^"]+)"/g)) assert.ok(ICON_DATA[name], `Unknown launcher icon: ${name}`);
+for (const [, name] of source.matchAll(/data-icon="([^"]+)"/g)) assert.ok(isIconName(name), `Unknown launcher icon: ${name}`);
 for (const [name, page] of Object.entries({ "index.html": html, ...legalHtml })) {
   const pageUrl = new URL(name, output);
   assert.match(page, /<html\b[^>]*\blang="en"/, "Pages must declare English as their language");
