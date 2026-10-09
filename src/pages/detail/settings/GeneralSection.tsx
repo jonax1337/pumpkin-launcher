@@ -1,4 +1,4 @@
-import { Actions, Button, CardGrid, FormRow, FormSection, Menu, TextField, ThumbCard } from "@/ui";
+import { Actions, Button, CardGrid, FormRow, FormSection, Menu, Input, ThumbCard } from "@/ui";
 import { IconPicker } from "@/components/IconPicker";
 import { InstanceIcon } from "@/components/InstanceIcon";
 import { NAME_MAX_LENGTH, useGroupMenu } from "@/components/instance";
@@ -21,7 +21,7 @@ export function GeneralSection({ instance, form, locked }: { instance: Instance;
   return (
     <FormSection plate title={t("detail.settings.generalSection")}>
       <FormRow label={t("common.name")} htmlFor="inst-name">
-        <TextField
+        <Input
           id="inst-name"
           value={form.name}
           disabled={locked}

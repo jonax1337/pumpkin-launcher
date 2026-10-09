@@ -7,7 +7,7 @@ import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import type { Friend } from "@/lib/types";
-import { ConfirmDialog, Dialog, DialogActions, Hint } from "@/ui";
+import { ConfirmDialog, Dialog, DialogActions, Hint, Surface } from "@/ui";
 
 /** Wen eine Rückfrage meint: bei Freunden und bei Anfragen ist die ID die Peer-ID. */
 export type Person = { id: string; name: string };
@@ -87,18 +87,18 @@ function FingerprintDialog({ friend, label, onClose }: { friend: Friend; label: 
       onOpenChange={(open) => !open && onClose()}
       title={t("friends.fingerprint.title")}
       size="s"
-      footer={<DialogActions confirm={{ label: t("common.done"), width: 124, autoFocus: true, onClick: onClose }} />}
+      footer={<DialogActions confirm={{ label: t("common.done"), className: "w-[124px]", autoFocus: true, onClick: onClose }} />}
     >
       <div className="fr-person">
         <FriendAvatar friendId={friend.id} name={friend.mcName ?? friend.displayName} />
         <div className="fr-person-text">
-          <b className="vx-trunc fr-line">{label}</b>
-          {friend.mcName && <span className="vx-trunc fr-line-sub">{t("friends.fingerprint.mcName", { name: friend.mcName })}</span>}
+          <b className="truncate fr-line">{label}</b>
+          {friend.mcName && <span className="truncate fr-line-sub">{t("friends.fingerprint.mcName", { name: friend.mcName })}</span>}
         </div>
       </div>
-      <div className="vx-slot fr-print">
+      <Surface kind="slot" className="my-4 px-4 pt-3.5 pb-3 text-center select-text">
         <Fingerprint value={friend.fingerprint} size="l" />
-      </div>
+      </Surface>
       <Hint icon="info">{t("friends.fingerprint.hint", { name: label })}</Hint>
     </Dialog>
   );

@@ -19,8 +19,9 @@ export function NetworkBanner({ network }: { network: NetworkStatus }) {
         tone="acc"
         icon="wifi"
         role="status"
+        className="flex-wrap"
         title={t("friends.network.online.title", { host: network.relayHost })}
-        actions={<Chip tone="run" dot>{t("friends.presence.online")}</Chip>}
+        actions={<Chip tone="run">{t("friends.presence.online")}</Chip>}
       >
         {t("friends.network.online.body")}
       </StatusPanel>
@@ -28,7 +29,7 @@ export function NetworkBanner({ network }: { network: NetworkStatus }) {
   }
   if (network.type !== "degraded") return null;
   return (
-    <StatusPanel tone="bad" icon="wifi" role="status" title={t(`${REASON_KEY[network.reason]}.title`)}>
+    <StatusPanel tone="bad" icon="wifi" role="status" className="flex-wrap" title={t(`${REASON_KEY[network.reason]}.title`)}>
       {t(`${REASON_KEY[network.reason]}.body`)}
     </StatusPanel>
   );

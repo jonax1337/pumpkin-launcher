@@ -1,4 +1,5 @@
-import { Actions, ConfirmDialog, Dialog, DialogActions, Empty, Hint, IconButton, List, ListRow, RowTitle } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { Actions, ConfirmDialog, Dialog, DialogActions, Hint, IconButton, List, ListRow, RowTitle } from "@/ui";
 import { QueryList } from "@/components/QueryList";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useDeleteBackup, useWorldBackups, useWorldJobs } from "@/hooks/useWorlds";
@@ -30,10 +31,10 @@ export function BackupsDialog({ instance, world, busy, onClose }: {
       <QueryList
         query={backups}
         error={t("detail.worlds.backupsLoadError")}
-        empty={<Empty size="pane" title={t("detail.worlds.backupsEmptyTitle")}>{t("detail.worlds.backupsEmptyHint")}</Empty>}
+        empty={<EmptyState size="pane" title={t("detail.worlds.backupsEmptyTitle")}>{t("detail.worlds.backupsEmptyHint")}</EmptyState>}
       >
         {(list) => (
-          <List variant="versions" aria-label={t("detail.worlds.backupsTitle")}>
+          <List flat aria-label={t("detail.worlds.backupsTitle")}>
             {list.map((backup) => (
               <ListRow key={backup.id}>
                 {/* Für eine Welt zählt der Zeitpunkt; in der Liste aller Welten zuerst, welche es ist. */}

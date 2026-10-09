@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useI18n, type TKey } from "@/i18n";
-import { Actions, Checkbox, Disclosure, Field, Segmented, Select, Skel, TextField } from "@/ui";
+import { Actions, Checkbox, Disclosure, Field, Segmented, Select, Skel, Input } from "@/ui";
 import { MemoryChooser } from "@/components/common";
 import { IconPicker } from "@/components/IconPicker";
 import { IconView } from "@/components/InstanceIcon";
@@ -65,12 +65,12 @@ function BlankPane({ form }: { form: BlankForm }) {
   return (
     <>
       <Field label={t("common.name")} help={t("components.newInstance.nameHelp")}>
-        <TextField value={form.customName ?? form.suggestion} maxLength={64} onChange={(e) => form.setCustomName(e.target.value)} />
+        <Input value={form.customName ?? form.suggestion} maxLength={64} onChange={(e) => form.setCustomName(e.target.value)} />
       </Field>
       <Field label={t("components.newInstance.mcVersion")} reserveLines={2} help={t("components.version.help")}>
         <Actions gap={12} wrap>
           {versions.isPending ? (
-            <Skel w={220} h={40} />
+            <Skel className="h-10 w-[220px]" />
           ) : (
             <Select
               value={selectedVersion}
@@ -109,7 +109,7 @@ function BlankPane({ form }: { form: BlankForm }) {
       <Disclosure summary={t("components.newInstance.advanced")}>
         <Field label={t("components.newInstance.loaderVersion")} group={loader === "vanilla"}>
           {loader === "vanilla" ? (
-            <span className="ni-note">{t("components.loader.notNeededVanilla")}</span>
+            <span className="text-(--fg-2)">{t("components.loader.notNeededVanilla")}</span>
           ) : (
             <Select
               value={selectedLoader}

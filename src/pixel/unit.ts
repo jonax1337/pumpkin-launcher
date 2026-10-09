@@ -27,7 +27,7 @@ const AVATAR_BOX = 28;
 const AVATAR_BOX_LARGE = 32;
 const AVATAR_CELLS = 8;
 const GLYPH_CELLS = 10;
-/** Icon-Slots des Kits (ui/Icon): Box in CSS-px, gleiche Werte wie --vx-ico-* in ui/tokens.css; Raster 8×8. */
+/** Icon-Slots des Kits (ui/Icon): Box in CSS-px, gleiche Werte wie --lk-ico-* in ui/tokens.css; Raster 8×8. */
 const ICON_SLOT_BOXES = { s: 16, m: 24, l: 32, xl: 48 } as const;
 const ICON_CELLS = 8;
 /** Boxgrößen der Kit-Glyphen (--gl-<Box>); dieselbe Liste steht in ui/icon.css und ui/Icon.tsx. */

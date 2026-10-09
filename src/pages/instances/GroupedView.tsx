@@ -2,7 +2,7 @@ import { useI18n } from "@/i18n";
 import { ungrouped } from "@/hooks/useInstances";
 import { useLookStore } from "@/store/look";
 import { focusSoon } from "@/pages/detail/content/focus";
-import { Count, Disclosure, IconButton } from "@/ui";
+import { Count, Disclosure, Heading, IconButton } from "@/ui";
 import { InstanceItems, InstanceListHeader } from "./InstanceView";
 import { movedGroup, type Section } from "./libraryModel";
 
@@ -59,9 +59,10 @@ export function GroupedView({ sections, groups, reorderable }: { sections: Secti
           <div key={key} className="lib-group">
             {group !== null && reorderable && <MoveButtons group={group} groups={groups} onMove={move} />}
             <Disclosure
+              summaryClassName="ml-0 h-10 pl-2"
               open={!collapsed.includes(key)}
               onToggle={(open) => setCollapsed(key, !open)}
-              summary={<><span className="lib-group-name">{group ?? ungrouped()}</span> <Count value={members.length} muted /></>}
+              summary={<><Heading level="card" as="h3" zoom className="leading-[1.1] tracking-[.02em]">{group ?? ungrouped()}</Heading> <Count value={members.length} muted /></>}
             >
               <InstanceItems instances={members} label={group ?? ungrouped()} />
             </Disclosure>

@@ -6,7 +6,9 @@ import { ANNOUNCEMENTS_URL, type Announcement } from "@/lib/announcements";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { openPage } from "@/lib/links";
 import { useAnnouncementReadStore } from "@/store/announcementRead";
-import { Actions, Button, Chip, Empty, ErrorBox, Heading, Page, PageHeader, Panel, Skel, Workspace, WorkspaceRail } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Actions, Button, Chip, Heading, List, ListRow, Page, PageHeader, Panel, RowTitle, Skel, Workspace, WorkspaceRail } from "@/ui";
 import "./announcements.css";
 
 function uniqueAnnouncements(pages: Announcement[][]): Announcement[] {
@@ -55,10 +57,10 @@ export function AnnouncementsPage() {
     <Page className="announcements-page">
       <PageHeader title={t("ui.nav.announcements")}>
         <Actions wrap>
-          <Button icon="refresh" disabled={feed.isFetching} onClick={() => void feed.refetch()}>
+          <Button wrap icon="refresh" disabled={feed.isFetching} onClick={() => void feed.refetch()}>
             {t("ui.context.refresh")}
           </Button>
-          <Button icon="external" onClick={() => openPage(ANNOUNCEMENTS_URL)}>
+          <Button wrap icon="external" onClick={() => openPage(ANNOUNCEMENTS_URL)}>
             {t("pages.announcements.category")}
           </Button>
         </Actions>
@@ -68,7 +70,7 @@ export function AnnouncementsPage() {
           : feed.isFetching && feed.data ? t("pages.announcements.refreshing")
           : feed.isPending ? t("pages.announcements.loading") : ""}
       </p>
-      {feed.isPending && <Skel h={320} />}
+      {feed.isPending && <Skel className="h-80" />}
       {feed.isError && !feed.isFetchNextPageError && (
         <ErrorBox
           title={t(feed.data ? "pages.announcements.refreshError" : "pages.announcements.loadError")}
@@ -77,9 +79,9 @@ export function AnnouncementsPage() {
         />
       )}
       {feed.data && announcements.length === 0 && !feed.isError && (
-        <Empty title={t("pages.announcements.emptyTitle")}>
+        <EmptyState title={t("pages.announcements.emptyTitle")}>
           {t("pages.announcements.emptyBody")}
-        </Empty>
+        </EmptyState>
       )}
       {announcements.length > 0 && (
         <Workspace rail={
@@ -94,6 +96,7 @@ export function AnnouncementsPage() {
                 )}
               </div>
               <Button
+                wrap
                 size="s"
                 variant="ghost"
                 icon="check"
@@ -119,7 +122,7 @@ export function AnnouncementsPage() {
                   />
                 )}
                 {feed.hasNextPage && !feed.isFetchNextPageError && (
-                  <Button width="full" disabled={feed.isFetching} onClick={() => void feed.fetchNextPage()}>
+                  <Button wrap className="w-full" disabled={feed.isFetching} onClick={() => void feed.fetchNextPage()}>
                     {t(feed.isFetchingNextPage ? "pages.announcements.loadingMore" : "pages.announcements.loadMore")}
                   </Button>
                 )}
@@ -146,28 +149,29 @@ function AnnouncementList({ announcements, readIds, selectedId, onSelect }: {
 }) {
   const { t } = useI18n();
   return (
-    <ul className="announcements-list">
-      {announcements.map((announcement) => {
-        const isRead = readIds.has(announcement.id);
-        return (
-          <li key={announcement.id}>
-            <button
-              type="button"
-              className="announcement-list-item"
-              aria-current={selectedId === announcement.id ? "true" : undefined}
-              onClick={() => onSelect(announcement)}
-            >
-              <span className="announcement-list-meta">
-                <time dateTime={announcement.published}>{formatDate(Date.parse(announcement.published))}</time>
-                {isRead ? <span className="sr">{t("pages.announcements.read")}</span> : <Chip size="s" tone="acc">{t("pages.announcements.unread")}</Chip>}
-              </span>
-              <span className="announcement-list-title">{announcement.title}</span>
-              <span className="announcement-list-author">{t("pages.announcements.author", { author: announcement.author })}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="max-h-[max(280px,calc(100dvh_-_360px))] overflow-y-auto overscroll-y-contain le-960:max-h-[260px]">
+      <List feed aria-label={t("pages.announcements.listTitle")}>
+        {announcements.map((announcement) => {
+          const isRead = readIds.has(announcement.id);
+          const isSelected = selectedId === announcement.id;
+          return (
+            <ListRow key={announcement.id} hit={{ onClick: () => onSelect(announcement), label: `${announcement.title}, ${t(isRead ? "pages.announcements.read" : "pages.announcements.unread")}` }} selected={isSelected} current={isSelected}>
+              <RowTitle
+                size="display"
+                eyebrow={
+                  <>
+                    <time dateTime={announcement.published}>{formatDate(Date.parse(announcement.published))}</time>
+                    {isRead ? <span className="sr">{t("pages.announcements.read")}</span> : <Chip size="s" tone="acc">{t("pages.announcements.unread")}</Chip>}
+                  </>
+                }
+                title={announcement.title}
+                sub={t("pages.announcements.author", { author: announcement.author })}
+              />
+            </ListRow>
+          );
+        })}
+      </List>
+    </div>
   );
 }
 
@@ -180,16 +184,22 @@ function AnnouncementPreview({ latest, onSelect }: {
     <Panel as="section" className="announcements-preview" aria-labelledby="announcements-preview-title">
       <div className="announcements-latest">
         <p className="announcements-eyebrow">{t("pages.announcements.latest")}</p>
-        <Heading level="section" id="announcements-preview-title" className="announcements-latest-title">{latest.title}</Heading>
+        <Heading level="section" id="announcements-preview-title" className="text-hd-hero leading-[1.1] max-w-[32ch] [overflow-wrap:anywhere]">{latest.title}</Heading>
         <AnnouncementMeta announcement={latest} />
         <p className="announcements-excerpt">{excerpt(latest.body)}</p>
-        <Button variant="primary" onClick={() => onSelect(latest)}>
+        <Button wrap variant="primary" className="mt-6" onClick={() => onSelect(latest)}>
           {t("pages.announcements.readAnnouncement")}
         </Button>
       </div>
     </Panel>
   );
 }
+
+/** Titel des Beitrags: Größe der Szene, bekommt nach der Auswahl den Fokus und zeigt ihn als Umriss (kein Bedienelement, aber Ziel des Fokus). */
+const ARTICLE_TITLE = [
+  "text-hd-hero leading-[1.1] w-fit max-w-[min(100%,32ch)] scroll-mt-6 [overflow-wrap:anywhere]",
+  "focus-visible:outline-(length:--px) focus-visible:outline-solid focus-visible:outline-(color:--focus) focus-visible:outline-offset-2 forced-colors:focus-visible:outline-[Highlight]",
+].join(" ");
 
 function AnnouncementArticle({ announcement, headingRef }: {
   announcement: Announcement;
@@ -208,6 +218,7 @@ function AnnouncementArticle({ announcement, headingRef }: {
             {t(isRead ? "pages.announcements.read" : "pages.announcements.unread")}
           </Chip>
           <Button
+            wrap
             variant="ghost"
             size="s"
             onClick={() => isRead ? markUnread(announcement.id) : markRead(announcement.id)}
@@ -215,11 +226,11 @@ function AnnouncementArticle({ announcement, headingRef }: {
             {t(isRead ? "pages.announcements.markUnread" : "pages.announcements.markRead")}
           </Button>
         </div>
-        <Heading level="section" id="announcement-title" className="announcement-title" ref={headingRef} tabIndex={-1}>
+        <Heading level="section" id="announcement-title" className={ARTICLE_TITLE} ref={headingRef} tabIndex={-1}>
           {announcement.title}
         </Heading>
         <AnnouncementMeta announcement={announcement} />
-        <Button variant="ghost" size="s" icon="external" onClick={() => openPage(announcement.url)}>
+        <Button wrap variant="ghost" size="s" icon="external" className="mt-3.5" onClick={() => openPage(announcement.url)}>
           {t("pages.announcements.discussion")}
         </Button>
       </header>

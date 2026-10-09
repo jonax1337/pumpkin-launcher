@@ -39,8 +39,10 @@ const router = createBrowserRouter([
       { path: "mods", element: <Navigate to={discoverUrl({ tab: "mod" })} replace /> },
       { path: "modpacks", element: <Navigate to={discoverUrl()} replace /> },
       { path: "account", element: <Navigate to="/settings" replace /> },
-      // Nur Entwicklung: Vorschau des Pixel-Kits (fällt im Build weg)
-      ...(import.meta.env.DEV ? [{ path: "_kit", lazy: async () => ({ Component: (await import("@/ui/KitPage")).KitPage }) }] : []),
+      // Nur Entwicklung: Vorschau des Kits (fällt im Build weg)
+      ...(import.meta.env.DEV ? [
+        { path: "_kit", lazy: async () => ({ Component: (await import("@/ui/KitPage")).KitPage }) },
+      ] : []),
       { path: "*", element: <NotFoundPage /> },
     ],
   },

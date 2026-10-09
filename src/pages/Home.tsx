@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { PlayStatus } from "@/components/play/PlayStatus";
+import { PlayStatus, PlayStatusSkel } from "@/components/play/PlayStatus";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
 import { Onboarding } from "@/components/Onboarding";
 import { useInstanceMenu } from "@/components/instance";
@@ -11,7 +11,8 @@ import { PixelScene } from "@/pixel/PixelScene";
 import { newInstanceUrl } from "@/lib/routes";
 import type { Instance } from "@/lib/types";
 import { useLook } from "@/store/look";
-import { Actions, Button, ButtonLink, ContextMenu, ErrorBox, HeroMeta, HeroShade, Page, SectionHeader, Skel, type MenuEntry } from "@/ui";
+import { Actions, Button, ButtonLink, ContextMenu, HeroMeta, HeroShade, HeroTitleSkel, Page, SectionHeader, Skel, type MenuEntry } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { HeroActions } from "./home/HeroActions";
 import { HeroInfo } from "./home/HeroInfo";
 import { Rail, RailSkeleton } from "./home/Rail";
@@ -22,7 +23,8 @@ function HomeInstancesHeader() {
     <SectionHeader
       title={t("components.detail.yourInstances")}
       id="cont-h"
-      className="library-heading"
+      wrap
+      className="mb-pg-s"
       actions={
         <Actions wrap>
           <NewInstanceDialog>
@@ -42,16 +44,16 @@ function HomeSkeleton() {
       <h1 className="sr">{t("ui.nav.home")}</h1>
       <div className="hero">
         <div className="hero-k">
-          <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
-          <HeroMeta><Skel h={16} w={320} /></HeroMeta>
+          <HeroTitleSkel />
+          <HeroMeta><Skel className="h-4 w-[320px]" /></HeroMeta>
         </div>
-        <Actions gap={12}><Skel h="var(--vx-h-l)" w={272} /><Skel h="var(--vx-h-l)" w="var(--vx-h-l)" /></Actions>
+        <Actions gap={12}><Skel className="h-ctl-l w-[272px]" /><Skel className="size-ctl-l" /></Actions>
         {/* Statuszeile unter den Knöpfen: auch im echten Hero reserviert (PlayStatus), damit sich die Höhe nicht ändert */}
-        <div className="pstat" />
+        <PlayStatusSkel />
       </div>
       <div className="cont">
         <HomeInstancesHeader />
-        <div className="railwrap"><RailSkeleton n={4} /></div>
+        <RailSkeleton n={4} />
       </div>
     </section>
   );
@@ -95,8 +97,8 @@ function HomeContent({ instances, current, onPick }: {
   return (
     <ContextMenu items={items}>
     <section className="home">
-      <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene" />
-      <HeroShade />
+      <PixelScene bio={look.bio} seed={look.seed} mode="hero" className="scene z-0" />
+      <HeroShade side />
       <h1 className="sr">{t("ui.nav.home")}</h1>
       <div className="hero">
         <HeroInfo key={`info-${current.id}`} instance={current} />

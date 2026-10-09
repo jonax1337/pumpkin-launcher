@@ -16,7 +16,7 @@ import type { Instance, ModKind, World } from "@/lib/types";
 import { lookOf } from "@/store/look";
 import { fitsLabel, kindsFor, versionFits } from "./fit";
 import { hasIris, irisSupported } from "./iris";
-import { jobWidthOf, useJobProgressFor } from "./jobProgress";
+import { jobSizeOf, useJobProgressFor } from "./jobProgress";
 import { useAddContent, type AddRequest } from "./useAddContent";
 
 /** Auslöser für „Hinzufügen zu …“: groß im Projektkopf, klein in der Katalogzeile. `target` ist das Ziel („Instanz“, „Welt“). */
@@ -57,7 +57,7 @@ export function AddToInstanceMenu({ project, type, large, source }: { project: P
   const addFromMenu = useAddFromMenu();
   const navigate = useNavigate();
   const active = useContentState((s) => !!s.active);
-  const job = useJobProgressFor(project.id, jobWidthOf(large));
+  const job = useJobProgressFor(project.id, jobSizeOf(large));
   const [open, setOpen] = useState(false);
   const picked = usePicked();
   // Alle Versionen einmal laden, um Instanzen ohne passende Minecraft-Version vorab auszugrauen.
@@ -119,7 +119,7 @@ export function AddToInstanceMenu({ project, type, large, source }: { project: P
           <MenuSep />
           <MenuItem disabled={chosen.length === 0} onSelect={addChosen}>
             <Icon name="plus" size="s" />
-            <span className="vx-trunc">{addChosenLabel(chosen.length)}</span>
+            <span className="truncate">{addChosenLabel(chosen.length)}</span>
           </MenuItem>
         </>
       )}
@@ -128,7 +128,7 @@ export function AddToInstanceMenu({ project, type, large, source }: { project: P
           <MenuSep />
           <MenuItem onSelect={() => navigate(newInstanceUrl())}>
             <Icon name="plus" size="s" />
-            <span className="vx-trunc">{type === "resourcepack" ? t("components.content.newInstancePlain") : t("components.content.newInstanceFabric")}</span>
+            <span className="truncate">{type === "resourcepack" ? t("components.content.newInstancePlain") : t("components.content.newInstanceFabric")}</span>
           </MenuItem>
         </>
       )}
@@ -142,7 +142,7 @@ export function AddToWorldMenu({ project, large }: { project: ProjectRef; large?
   const instances = useInstances();
   const addFromMenu = useAddFromMenu();
   const active = useContentState((s) => !!s.active);
-  const job = useJobProgressFor(project.id, jobWidthOf(large));
+  const job = useJobProgressFor(project.id, jobSizeOf(large));
   const [open, setOpen] = useState(false);
   const list = instances.data ?? [];
   const worlds = useQueries({ queries: list.map((i) => ({ ...worldsQuery(i.id), enabled: open })) });

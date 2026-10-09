@@ -24,19 +24,22 @@ route with mock data, not a shipped player page.
 | App shell (window bar, side bar, plate, scenes) and shared page frame | `src/styles/shell.css` |
 | Page styles, next to their page | `src/pages/home/home.css`, `src/pages/instances/library.css`, `src/pages/detail/detail.css`, `src/pages/detail/screenshots/screenshots.css`, `src/pages/discover.css`, `src/pages/discover-project.css`, `src/pages/announcements.css`, `src/pages/settings/settings-layout.css`, `src/pages/skins/skins.css`, `src/pages/skins/skin-card.css`, `src/pages/friends/friends.css` |
 | Dialog, onboarding, account and friends content | `src/components/dialogs.css`, `src/components/onboarding.css`, `src/components/accounts/accounts.css`, `src/components/friends/friends.css` |
-| Kit tokens and surface recipes | `src/ui/tokens.css` (values), `src/ui/surface.css` (`.vx-slot`, `.vx-pit`, `.vx-stone`, `.vx-text`) |
-| Kit components | `src/ui/*.tsx` with `src/ui/*.css`, collected by `src/ui/ui.css`, imported through `@/ui` |
-| Kit specimen page (`/_kit`, development only) | `src/ui/kit/` (`kit.css`, `InventarSection.tsx`, …) |
+| Kit tokens and surface recipes | `src/ui/tokens.css` (values), `src/ui/surface.css` (`.lk-slot`, `.lk-pit`, `.lk-stone`, `.lk-text`) |
+| Kit components | `src/ui/*.tsx` (layout as Tailwind utilities), imported through `@/ui`; see `src/ui/README.md` |
+| Kit look (colours, borders, bevels, states) | `src/ui/look.css` and `src/ui/look/*.css` (`lk-*` classes), collected with the other kit styles by `src/ui/ui.css` |
+| Tailwind bridge for kit tokens | `src/ui/theme.css` (`@theme inline`, imported at the top level of `src/index.css`) |
+| Kit specimen page (`/_kit`, development only) | `src/ui/KitPage.tsx` |
 | Pixel unit and icon cell sizes | `src/pixel/unit.ts` |
 | Icon set (8×8 drawings) | `src/pixel/icon-data.ts`, rendered by `src/ui/Icon.tsx` |
 | Scene generation/configuration | `src/pixel/{scene,sceneBuilder,sceneConfig}.ts`, `PixelScene.tsx` |
 | Play/status controls | `src/components/play/`, `src/components/play.css` |
 | Motion and accessibility styles | `src/ui/motion.css`, `src/ui/a11y.css` |
+| Prose (Markdown) | `src/ui/prose.css` |
 | Appearance and shortcuts | `src/app/useAppearance.ts`, `shortcuts.ts`, `mainTabs.ts` |
 | Command palette (Ctrl/Cmd+K) | `src/app/palette/`; styles in `src/app/palette/palette.css` |
 | Seasonal branding | `src/branding/` (`branding.css`), repository `branding/` assets |
 
-All stylesheets are imported centrally by `src/index.css` into `@layer components`; components never import CSS themselves. Order: base, shell, pages, dialogs/onboarding/accounts/friends, kit (`ui/ui.css`), play, branding, palette, kit specimen. Kit classes use `vx-` and data attributes for variants. `index.html` establishes `theme, base, components, utilities` before stylesheets. Class names must not accidentally collide with Tailwind utilities.
+All stylesheets are imported centrally by `src/index.css` into `@layer components`; components never import CSS themselves. Order: base, shell, pages, dialogs/onboarding/accounts/friends, kit (`ui/ui.css`), play, branding, palette. Shared surfaces and icons use `lk-`, kit components use `lk-` plus data attributes for variants. `index.html` establishes `theme, base, components, utilities` before stylesheets. Class names must not accidentally collide with Tailwind utilities.
 
 ## Inventar style
 
@@ -44,18 +47,18 @@ One concept, one class: shared surfaces live in `src/ui/surface.css`; components
 
 | Surface | Class | Recipe |
 | --- | --- | --- |
-| Recessed slot | `.vx-slot` | `--sunk` fill, 1-unit border `--slot-bd` (dark top/left `--edge`, light bottom/right `--ctl`, ≥ 3:1), inset shadow `--slot-sh` (2 units dark top/left, 1 unit light bottom/right). Used by fields, selects, checkboxes, slider/progress tracks, icon tiles, chips, image frames, `kbd` caps. Hover: border `--fg-2`. Focus: border `--focus` + `--ring-i`. |
-| Recessed, not interactive | `.vx-pit` | Same look without hover/focus colouring: dialog bodies, note plates, progress tracks. |
-| Raised stone plate | `.vx-stone` | Face `--face` (default `--panel-3`), 1-unit `--edge` border, bevel `--bv` = 2 units (`--hi` top/left, `--lo` bottom/right); `--bv` is 1 unit for size `s`. Pressed reverses the bevel and moves content down 1 unit. Disabled is flat (`--panel`, `--line`). Used by buttons, tab handles, slider grips, toasts, dialogs, sheets. |
-| Hard text shadow | `.vx-text` | `text-shadow: var(--tsh)` = `0 var(--px) 0 #000`, on stone and slot labels. |
+| Recessed slot | `.lk-slot` | `--sunk` fill, 1-unit border `--slot-bd` (dark top/left `--edge`, light bottom/right `--ctl`, ≥ 3:1), inset shadow `--slot-sh` (2 units dark top/left, 1 unit light bottom/right). Used by fields, selects, checkboxes, slider/progress tracks, icon tiles, chips, image frames, `kbd` caps. Hover: border `--fg-2`. Focus: border `--focus` + `--ring-i`. |
+| Recessed, not interactive | `.lk-pit` | Same look without hover/focus colouring: dialog bodies, note plates, progress tracks. |
+| Raised stone plate | `.lk-stone` | Face `--face` (default `--panel-3`), 1-unit `--edge` border, bevel `--bv` = 2 units (`--hi` top/left, `--lo` bottom/right); `--bv` is 1 unit for size `s`. Pressed reverses the bevel and moves content down 1 unit. Disabled is flat (`--panel`, `--line`). Used by buttons, tab handles, slider grips, toasts, dialogs, sheets. |
+| Hard text shadow | `.lk-text` | `text-shadow: var(--tsh)` = `0 var(--px) 0 #000`, on stone and slot labels. |
 
 Components in this language:
 
-- **Buttons** (`button.css`): secondary = stone; primary and danger = stone in the instance accent (`--acc`, `--acc-hi`, `--acc-lo`) or red; ghost is flat and becomes a slot on hover. Hover brightens face and border, press reverses the bevel, focus is the double ring. Over scenes, ghost/secondary use a dark plate (`--scene-plate`) and a hard shadow.
-- **Tabs** (`tabs.css`): creative-inventory tabs. The bar variant rises from a baseline, the selected tab is taller, has an accent edge on top and no bottom border; vertical tabs are stacked plates and the selected one reaches the right edge; segments are a slot group whose selected item is a stone with an accent edge below.
-- **Menus, popovers, select lists, tooltips** (`overlay.css`): item-tooltip frame: `--tip-bg` fill, `--tip-a` border, inner `--tip-b` ring, 2-unit hard drop shadow. Highlighted entries use `--hl` plus a 2-unit focus bar; `MenuHead` provides an account-style header row. Dialogs and side sheets are stone plates with a recessed (`.vx-pit`) body.
-- **Overlay sizes** (`overlay.css`, no pixel values at the call site): `Dialog size` s/m/l = 480/640/860 px wide, `Dialog height` s/m/l = 380/580/700 px fixed (always capped by the window; without it the dialog fits its content). Header 40 (title 26, close `IconButton` s), footer 52 (ghost cancel, primary right), body padding 16. Menus: min 240, `wide` 320, items 36, icons 16; `Popover size` m/l = 320/400. Toasts are 460 wide, 12 apart, 24 from the corner.
-- **Progress** (`feedback.css`): XP bar. Track is a slot with grid ticks every 4 units; the fill is accent with light top and dark bottom row, segment gaps every 4 units, a highlight at the tip, rounded to whole segments. Sliders share the cell logic (16 cells, stone grip).
+- **Buttons** (`look.css`): secondary = stone; primary and danger = stone in the instance accent (`--acc`, `--acc-hi`, `--acc-lo`) or red; ghost is flat and becomes a slot on hover. Hover brightens face and border, press reverses the bevel, focus is the double ring. Over scenes, ghost/secondary use a dark plate (`--scene-plate`) and a hard shadow.
+- **Tabs** (`look/tabs.css`): creative-inventory tabs. The bar variant rises from a baseline, the selected tab is taller, has an accent edge on top and no bottom border; vertical tabs are stacked plates and the selected one reaches the right edge; segments are a slot group whose selected item is a stone with an accent edge below.
+- **Menus, popovers, select lists, tooltips** (`look/overlay.css`): item-tooltip frame: `--tip-bg` fill, `--tip-a` border, inner `--tip-b` ring, 2-unit hard drop shadow. Highlighted entries use `--hl` plus a 2-unit focus bar; `MenuHead` provides an account-style header row. Dialogs and side sheets are stone plates with a recessed (`.lk-pit`) body.
+- **Overlay sizes** (`Dialog.tsx`, `Menu.tsx`, `Popover.tsx`, no pixel values at the call site): `Dialog size` s/m/l = 480/640/860 px wide, `Dialog height` s/m/l = 380/580/700 px fixed (always capped by the window; without it the dialog fits its content). Header 40 (title 26, close `IconButton` s), footer 52 (ghost cancel, primary right), body padding 16. Menus: min 240, `wide` 320, items 36, icons 16; `Popover size` m/l = 320/400. Toasts are 460 wide, 12 apart, 24 from the corner.
+- **Progress** (`look/feedback.css`): XP bar. Track is a slot with grid ticks every 4 units; the fill is accent with light top and dark bottom row, segment gaps every 4 units, a highlight at the tip, rounded to whole segments. Sliders share the cell logic (16 cells, stone grip).
 - **Toasts**: advancement plates (icon slot, text, action, close).
 - **Selection**: chosen cards and tiles get an accent border and `--acc-dim` tint (choice rows add a ▶ arrow); chosen library rows get a hotbar notch (2-unit accent bar at the left); the current item is marked by an accent bar. Hover is a surface, never a line.
 - **Chips and keys**: small slot in pixel font with a square pip in the tone colour; `kbd` caps (palette, shortcuts overview) are slots in pixel font.
@@ -74,7 +77,7 @@ Palette and geometry live in `src/styles/base.css`; the Inventar block in `src/u
 | `--dia`, `--arrow` | Stepped diamond (5×5 units) and arrow (3×5 units) shapes |
 | `--u4` | 4 units (companion to `--u2`, `--u3` in base.css) |
 | `--hv-*`, `--pr-*`, `--sel-*`, `--scene-*` | Hover/pressed/selection/scene-plate surfaces, one step lighter in overlay contexts |
-| `--vx-h-*`, `--vx-ico-*`, `--hd-*` | Control heights, icon slots, heading sizes |
+| `--lk-h-*`, `--lk-ico-*`, `--hd-*` | Control heights, icon slots, heading sizes |
 | `--tip-bg`, `--tip-a`, `--tip-b`, `--hl` | Item-tooltip frame colours and highlighted menu row (in base.css) |
 
 ## Pixel grid and geometry
@@ -114,7 +117,7 @@ the available width; there is no global reading-width cap. `PageHeader` supplies
 compact title, small optional count, wrapping actions and a bottom divider.
 
 The shared workspace is a Kit API exported from `@/ui`, implemented in
-`src/ui/Layout.tsx` with `vx-*` styles in `src/ui/layout.css`:
+`src/ui/Layout.tsx` with Tailwind layout utilities and the look in `src/ui/look.css`:
 
 - `Workspace` takes an optional `rail` slot. Its rail column is 280 px; content
   fills the remaining width. Without a rail it is one full-width column.
@@ -126,9 +129,8 @@ The shared workspace is a Kit API exported from `@/ui`, implemented in
 
 Keyboard navigation of tabs follows the orientation; selected tabs remain
 visible while switching or resizing. `TabPanel` has a visible keyboard focus
-outline. The interactive workspace example in `/_kit` → **Seitengerüst**
-demonstrates selection, disabled navigation, editable content, reset and a
-rail-free layout. Use this structure for meaningful context/navigation, not as
+outline. The `/_kit` specimen page is itself built from `Workspace`, its rail
+and `WorkspaceContent`. Use this structure for meaningful context/navigation, not as
 a mandatory two-column wrapper for every collection.
 
 The library uses full-width grouped lists, with no grid/list toggle. Settings

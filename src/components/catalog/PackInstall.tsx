@@ -1,12 +1,13 @@
 import { useState, type ReactNode } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, Chip, Dialog, DialogActions, ErrorBox, Field, Hint, IconButton, JobProgress, Menu, Skel, TextField } from "@/ui";
+import { Button, Chip, DescriptionList, Dialog, DialogActions, Field, Hint, IconButton, Input, JobProgress, Menu, Skel } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { useInstallPack } from "@/hooks/usePackInstall";
 import { catalogApi } from "@/lib/catalogApi";
 import type { ContentVersion, ProjectRef, Source } from "@/lib/content-types";
 import { isPackVersionSupported, pickPackVersion } from "@/lib/mods";
-import { HEAD_JOB_WIDTH, ROW_JOB_WIDTH } from "./jobProgress";
+import { JOB } from "./jobProgress";
 import { versionLoadersOrVanilla, versionTypeSuffix } from "./labels";
 
 /** So viele weitere Versionen bietet „Andere Version“ an. */
@@ -23,36 +24,37 @@ function PackConfirmBody({ title, source, versions, picked, onConfirm }: {
   const [name, setName] = useState(title);
   const v = picked?.version ?? null;
   // Platzhalter rechtsbündig in der Wertspalte (Zeile bleibt 19 px hoch)
-  const val = (text: ReactNode) => (v ? text : versions.isPending ? <Skel w={90} h={12} className="pcf-skel" /> : "–");
+  const val = (text: ReactNode) => (v ? text : versions.isPending ? <Skel className="mt-1 ml-auto h-3 w-[90px]" /> : "–");
   const submit = () => v && onConfirm(v.id, name.trim() || title);
   return (
     <form
       id="pack-confirm"
-      className="pcf"
       onSubmit={(e) => {
         e.preventDefault();
         submit();
       }}
     >
       <Field label={t("components.instance.nameField")}>
-        <TextField value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
+        <Input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
       </Field>
-      <dl className="kv">
-        <dt>{t("components.pack.versionLabel")}</dt>
-        <dd className="vx-trunc">{val(v?.version_number)}</dd>
-        <dt>Minecraft</dt>
-        <dd>{val(v?.game_versions.at(-1))}</dd>
-        <dt>{t("components.common.loader")}</dt>
-        <dd>{val(v && versionLoadersOrVanilla(v))}</dd>
-      </dl>
+      <DescriptionList
+        size="s"
+        end
+        className="mt-1 mb-4"
+        items={[
+          { label: t("components.pack.versionLabel"), value: val(v?.version_number), valueClassName: "min-h-[19px] truncate" },
+          { label: "Minecraft", value: val(v?.game_versions.at(-1)), valueClassName: "min-h-[19px]" },
+          { label: t("components.common.loader"), value: val(v && versionLoadersOrVanilla(v)), valueClassName: "min-h-[19px]" },
+        ]}
+      />
       {versions.error ? (
-        <ErrorBox className="pcf-err" title={t("components.version.loadFailed")} error={versions.error} onRetry={() => void versions.refetch()} />
+        <ErrorBox className="mt-3" title={t("components.version.loadFailed")} error={versions.error} onRetry={() => void versions.refetch()} />
       ) : picked && !v ? (
         <Hint tone="bad" live>{picked.reason}</Hint>
       ) : (
         <Hint>{t("components.pack.confirmHint")}</Hint>
       )}
-      {source === "technic" && <Hint icon="info" className="pcf-hint">{t("components.security.technicHosts")}</Hint>}
+      {source === "technic" && <Hint icon="info" className="mt-2">{t("components.security.technicHosts")}</Hint>}
     </form>
   );
 }
@@ -78,7 +80,7 @@ export function usePackConfirm(pack: ProjectRef, source: Source) {
       title={t("components.pack.newInstanceTitle")}
       sub={pack.title}
       size="s"
-      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.createAction"), width: 170, form: "pack-confirm", disabled: !picked?.version || install.blocked }} />}
+      footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.createAction"), className: "w-[170px]", form: "pack-confirm", disabled: !picked?.version || install.blocked }} />}
     >
       <PackConfirmBody
         title={pack.title}
@@ -102,7 +104,7 @@ export function PackInstallButton({ project, source }: { project: ProjectRef; so
   return (
     <>
       {install.busy ? (
-        <JobProgress label={install.busy} p={install.p} width={ROW_JOB_WIDTH} onCancel={install.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: project.title })} />
+        <JobProgress label={install.busy} p={install.p} {...JOB.row} onCancel={install.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: project.title })} />
       ) : install.queued ? (
         <Chip icon="clock">{t("components.pack.queuedChip")}</Chip>
       ) : (
@@ -124,12 +126,12 @@ export function PackActions({ project, source }: { project: ProjectRef; source: 
   const fitting = versions.data?.filter(isPackVersionSupported) ?? [];
 
   if (install.busy) {
-    return <JobProgress label={install.busy} p={install.p} width={HEAD_JOB_WIDTH} onCancel={install.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: project.title })} />;
+    return <JobProgress label={install.busy} p={install.p} {...JOB.head} onCancel={install.cancel} cancelLabel={t("components.pack.cancelInstallPack", { name: project.title })} />;
   }
   if (install.queued) return <Chip icon="clock">{t("components.pack.queuedChip")}</Chip>;
   return (
     <>
-      <div className="vx-split">
+      <div className="inline-flex gap-(--px)">
         <Button variant="primary" size="l" icon="plus" disabled={!version || install.blocked} onClick={() => ask(version?.id)}>
           {reason ?? t("components.pack.createAsInstance")}
         </Button>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, ChipButton, FormRow, Hint, IconButton, TextField } from "@/ui";
+import { Button, ChipButton, FormRow, Hint, IconButton, Input } from "@/ui";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { useLatest } from "@/hooks/useLatest";
 import { useI18n, type TKey } from "@/i18n";
@@ -103,8 +103,8 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
       >
         {draft.env.map((row, index) => (
           <div key={index} className="st-env-row">
-            <TextField
-              width="m"
+            <Input
+              className="w-60"
               aria-label={t("launchSettings.env.name")}
               aria-invalid={problems[index] !== null || undefined}
               placeholder="NAME"
@@ -115,7 +115,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
               onChange={(e) => changeRow(index, { name: e.target.value })}
               onBlur={() => commit(draft)}
             />
-            <TextField
+            <Input
               aria-label={t("launchSettings.env.value")}
               placeholder="value"
               maxLength={MAX_ENV_VALUE_LENGTH}
@@ -139,7 +139,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
         </Button>
       </FormRow>
       <FormRow label={t("launchSettings.wrapper.label")} htmlFor={id("wrapper")} hint={t("launchSettings.wrapper.hint")}>
-        <TextField
+        <Input
           id={id("wrapper")}
           placeholder="gamemoderun"
           maxLength={MAX_COMMAND_LENGTH}
@@ -154,7 +154,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
         htmlFor={id("pre-launch")}
         hint={t("launchSettings.preLaunch.hint", { seconds: PRE_LAUNCH_TIMEOUT_SECONDS })}
       >
-        <TextField
+        <Input
           id={id("pre-launch")}
           maxLength={MAX_COMMAND_LENGTH}
           value={draft.preLaunch}
@@ -165,7 +165,7 @@ export function LaunchFields({ scope, value, disabled = false, onCommit }: {
         <Hint tone="warn" className="st-hint">{t("launchSettings.preLaunch.consent")}</Hint>
       </FormRow>
       <FormRow label={t("launchSettings.postExit.label")} htmlFor={id("post-exit")} hint={t("launchSettings.postExit.hint")}>
-        <TextField
+        <Input
           id={id("post-exit")}
           maxLength={MAX_COMMAND_LENGTH}
           value={draft.postExit}

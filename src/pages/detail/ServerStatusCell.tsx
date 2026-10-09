@@ -10,14 +10,14 @@ export function ServerStatusCell({ status }: { status: UseQueryResult<ServerStat
   return (
     <Cell flex align="end">
       {status.isError ? (
-        <Chip size="s" tone="bad" dot>{t("detail.servers.unreachable")}</Chip>
+        <Chip size="s" tone="bad">{t("detail.servers.unreachable")}</Chip>
       ) : data ? (
         <>
-          <Chip size="s" tone="run" dot>
+          <Chip size="s" tone="run">
             {data.playersOnline}/{data.playersMax}
             <span className="sr">{t("detail.servers.playersSr", { online: data.playersOnline, max: data.playersMax })}</span>
           </Chip>
-          <Chip size="s" data-hide="720">{t("detail.servers.latency", { ms: data.latencyMs })}</Chip>
+          <Chip size="s" className="le-720:hidden">{t("detail.servers.latency", { ms: data.latencyMs })}</Chip>
         </>
       ) : (
         <span role="status">{t("detail.servers.checking")}</span>

@@ -22,7 +22,7 @@ export const Icon = memo(function Icon({ name, size = "m", tone, edge, className
   const { solid, dim, blankEnd } = iconShape(name);
   return (
     <span
-      className={cn("vx-ico", className)}
+      className={cn("lk-ico", className)}
       data-size={size}
       data-tone={tone}
       data-edge={edge}
@@ -46,7 +46,7 @@ export type GlyphBox = 40 | 52 | 64 | 72 | 104;
  */
 export const Glyph = memo(function Glyph({ name, pal, box = 40, className }: { name: GlyphName; pal: GlyphPalette; box?: GlyphBox; className?: string }) {
   return (
-    <span className={cn("vx-gl", className)} data-box={box} aria-hidden>
+    <span className={cn("lk-gl", className)} data-box={box} aria-hidden>
       <GlyphSvg name={name} pal={pal} />
     </span>
   );
@@ -60,22 +60,39 @@ export function ProjectIcon({ url, seed, box = 40, className }: { url?: string |
     return <Glyph name={g} pal={p} box={box} className={className} />;
   }
   return (
-    <span className={cn("vx-gl", className)} data-box={box} data-img="" aria-hidden>
+    <span className={cn("lk-gl", className)} data-box={box} data-img="" aria-hidden>
       <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(url)} />
     </span>
   );
 }
 
+const AVATAR_SIZE = {
+  28: "var(--avs, calc(var(--iu, 3px) * 8))",
+  32: "var(--av-32, calc(var(--iu, 3px) * 8))",
+  48: "48px",
+} as const;
+export type AvatarBox = keyof typeof AVATAR_SIZE;
+
 /**
- * Spielerkopf (8×8) in fester Box 28 oder 32; Kantenlänge ganzzahlige Zellen (--avs bzw. --av-32). Mit `skin` (Adresse der
- * Skin-Textur) der echte Kopf, solange sie lädt oder wenn sie fehlt ein Pixelgesicht, fest aus dem Namen abgeleitet.
+ * Spielerkopf (8×8) in fester Box 28, 32 oder 48; Kantenlänge ganzzahlige Zellen (--avs bzw. --av-32; 48 = 6 px je Zelle). Mit `skin`
+ * (Adresse der Skin-Textur) der echte Kopf, solange sie lädt oder wenn sie fehlt ein Pixelgesicht, fest aus dem Namen abgeleitet.
+ * `className` platziert den Kopf in der Umgebung (z. B. `justify-self-center` in einer breiteren Rasterspalte).
  */
-export function Avatar({ name, skin, box = 32, className }: { name: string; skin?: string | null; box?: 28 | 32; className?: string }) {
-  const size = box === 32 ? "var(--av-32, calc(var(--iu, 3px) * 8))" : "var(--avs, calc(var(--iu, 3px) * 8))";
+export function Avatar({ name, skin, box = 32, className }: { name: string; skin?: string | null; box?: AvatarBox; className?: string }) {
+  const size = AVATAR_SIZE[box];
   const face = <Face name={name} size={size} />;
   return (
-    <span className={cn("vx-av", className)} data-box={box} aria-hidden>
+    <span className={cn("lk-av", className)} data-box={box} aria-hidden>
       {skin ? <SkinHead src={skin} size={size} fallback={face} /> : face}
     </span>
   );
+}
+
+/**
+ * Statusquadrat (6 Einheiten, Rand in Plattenfarbe) an der unteren rechten Ecke des nächsten positionierten Elternelements,
+ * z. B. eines `relative`-Wrappers um einen `Avatar`. `tone="run"`: online/aktiv (grün), sonst gedämpft. Nur Zierde: die Zeile nennt den
+ * Zustand zusätzlich im Text (nie nur Farbe).
+ */
+export function StatusDot({ tone, className }: { tone?: "run"; className?: string }) {
+  return <span className={cn("lk-dot absolute right-[calc(var(--px)*-2)] bottom-[calc(var(--px)*-2)] size-[calc(var(--px)*6)]", className)} data-tone={tone} aria-hidden />;
 }

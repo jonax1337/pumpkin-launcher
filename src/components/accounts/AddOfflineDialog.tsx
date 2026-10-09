@@ -49,7 +49,7 @@ export function AddOfflineDialog() {
           cancel={t("common.cancel")}
           confirm={{
             label: then ? t("components.account.saveAndPlay") : t("common.add"),
-            width: then ? 196 : 140,
+            className: then ? "w-[196px]" : "w-[140px]",
             form: "off-form",
             icon: then ? "play" : undefined,
             disabled: !isValidPlayerName(name),
@@ -69,7 +69,7 @@ export function AddOfflineDialog() {
       {then && (
         <>
           <div className="or">{t("components.common.or")}</div>
-          <Button icon="microsoft" width="full" onClick={microsoft}>{t("components.account.msLogin")}</Button>
+          <Button icon="microsoft" className="w-full" onClick={microsoft}>{t("components.account.msLogin")}</Button>
           <Hint className="add-offline-hint">{t("components.account.neededForServers")}</Hint>
         </>
       )}

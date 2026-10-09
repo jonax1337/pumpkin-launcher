@@ -1,13 +1,10 @@
-import { useEffect, type MouseEvent } from "react";
 import { useI18n } from "@/i18n";
 import { shortcutLabel } from "../shortcuts";
-import { Icon } from "@/ui";
+import { Kbd, Listbox, ListboxGroup, ListboxOption } from "@/ui";
 import type { PaletteItem, PaletteSection } from "./paletteModel";
 
 /** DOM-Kennung eines Eintrags; `aria-activedescendant` des Eingabefelds zeigt darauf. */
 export const optionId = (listId: string, item: PaletteItem) => `${listId}-${item.id}`;
-
-const groupHeadId = (listId: string, section: PaletteSection) => `${listId}-group-${section.id}`;
 
 interface PaletteOptionProps {
   id: string;
@@ -19,35 +16,25 @@ interface PaletteOptionProps {
 
 function PaletteOption({ id, item, active, onActivate, onRun }: PaletteOptionProps) {
   const { t } = useI18n();
-  const detail = item.disabledReason ?? item.subtitle;
-  // Ein Scrollen unter dem ruhenden Zeiger löst eine Mausbewegung ohne Weg aus und risse die Markierung von der Tastatur weg.
-  function followPointer(e: MouseEvent) {
-    if (e.movementX !== 0 || e.movementY !== 0) onActivate(item);
-  }
   return (
-    <div
+    <ListboxOption
       id={id}
-      role="option"
-      aria-selected={active}
-      aria-disabled={item.disabledReason ? true : undefined}
-      className="vx-pal-opt"
-      data-active={active ? "" : undefined}
-      onMouseMove={followPointer}
-      // Der Fokus bleibt im Eingabefeld.
-      onMouseDown={(e) => e.preventDefault()}
+      icon={item.icon}
+      sub={item.disabledReason ?? item.subtitle}
+      active={active}
+      disabled={!!item.disabledReason}
+      onActivate={() => onActivate(item)}
       onClick={() => onRun(item)}
+      // Rechts: Tastenkürzel des Befehls; der markierte, ausführbare Eintrag zeigt zusätzlich Enter
+      trail={
+        <>
+          {item.shortcut && <Kbd size="s">{shortcutLabel(item.shortcut, t)}</Kbd>}
+          {active && !item.disabledReason && <Kbd size="s">{t("palette.key.enter")}</Kbd>}
+        </>
+      }
     >
-      <Icon name={item.icon} size="s" />
-      <span className="vx-pal-t">
-        <span className="vx-pal-n">{item.title}</span>
-        {detail && <span className="vx-pal-s">{detail}</span>}
-      </span>
-      {/* Rechts: Tastenkürzel des Befehls; der markierte, ausführbare Eintrag zeigt zusätzlich Enter */}
-      <span className="vx-pal-keys" aria-hidden="true">
-        {item.shortcut && <kbd className="vx-pal-kbd vx-slot">{shortcutLabel(item.shortcut, t)}</kbd>}
-        {active && !item.disabledReason && <kbd className="vx-pal-kbd vx-slot">{t("palette.key.enter")}</kbd>}
-      </span>
-    </div>
+      {item.title}
+    </ListboxOption>
   );
 }
 
@@ -60,17 +47,10 @@ export function PaletteList({ id, sections, active, onActivate, onRun }: {
   onRun: (item: PaletteItem) => void;
 }) {
   const { t } = useI18n();
-  const activeDomId = active && optionId(id, active);
-
-  useEffect(() => {
-    if (activeDomId) document.getElementById(activeDomId)?.scrollIntoView({ block: "nearest" });
-  }, [activeDomId]);
-
   return (
-    <div id={id} role="listbox" aria-label={t("palette.listLabel")} className="vx-pal-list">
+    <Listbox id={id} label={t("palette.listLabel")} className="min-h-0 flex-1">
       {sections.map((section) => (
-        <div key={section.id} role="group" aria-labelledby={groupHeadId(id, section)}>
-          <div id={groupHeadId(id, section)} className="vx-mlabel">{t(`palette.group.${section.id}`)}</div>
+        <ListboxGroup key={section.id} label={t(`palette.group.${section.id}`)}>
           {section.items.map((item) => (
             <PaletteOption
               key={item.id}
@@ -81,8 +61,8 @@ export function PaletteList({ id, sections, active, onActivate, onRun }: {
               onRun={onRun}
             />
           ))}
-        </div>
+        </ListboxGroup>
       ))}
-    </div>
+    </Listbox>
   );
 }

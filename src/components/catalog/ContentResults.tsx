@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, ButtonLink, Cell, Chip, ChipButton, Count, Empty, ErrorBox, Hint, Icon, IconButton, List, ListRow, ProjectIcon, RowTitle, SectionHeader, SkelRow, StatusPanel, Tip, type GlyphBox, type ListVariant } from "@/ui";
+import { Button, ButtonLink, Cell, Chip, ChipButton, Count, Hint, Icon, IconButton, List, ListRow, ProjectIcon, RowTitle, SectionHeader, SkelRow, StatusPanel, Tip, type GlyphBox, type ListLayout } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBox } from "@/components/ErrorBox";
 import { useDebounced } from "@/hooks/useDebounced";
-import { WIDTH } from "@/lib/breakpoints";
 import { catalogSearchQuery } from "@/lib/catalogSearch";
 import {
   ALL_SOURCES, defaultSort, installedKey, SOURCES, type CatalogHit, type CatalogType, type SearchIndex, type Source, type SourceChoice,
@@ -34,10 +35,17 @@ export interface SearchFilter {
   sort: SearchIndex | null;
 }
 
+/** Katalog: 84 px, Bild 72, Aktion 190; kompakt (Seitenpanel) 76 px. */
+const CATALOG_LIST: ListLayout = { cols: "72px minmax(0,1fr) 190px", gap: 14, pad: "0 10px 0 8px", rowHeight: 84 };
+const CATALOG_COMPACT_LIST: ListLayout = { cols: "48px minmax(0,1fr) 128px", gap: 14, pad: "0 4px 0 8px", rowHeight: 76 };
+
 /** Wie die Trefferliste aussieht: als Seite in „Entdecken“ oder schmal im Seitenpanel einer Instanz. */
 export interface ResultsLayout {
-  list: ListVariant;
-  heading: { as: "h2" | "h3"; size: "section" | "card" };
+  /** Maße der Liste (Spalten, Abstand, Zeilenhöhe). */
+  list: ListLayout;
+  heading: "section" | "card";
+  /** Die Überschrift darf umbrechen (Aktionen unter dem Titel in schmalen oder stark gezoomten Fenstern). */
+  wrapHeader: boolean;
   emptySize: "section" | "pane";
   offlineSize: "page" | "pane";
   /** Offline führt die Seite zur Bibliothek; das Seitenpanel bleibt, wo es ist. */
@@ -49,12 +57,12 @@ export interface ResultsLayout {
 }
 
 export const PAGE_LAYOUT: ResultsLayout = {
-  list: "catalog", heading: { as: "h2", size: "section" }, emptySize: "section", offlineSize: "page", offlineLibraryLink: true,
+  list: CATALOG_LIST, heading: "section", wrapHeader: true, emptySize: "section", offlineSize: "page", offlineLibraryLink: true,
   iconBox: 72, categories: 2, showAuthor: true,
 };
 
 const SIDE_LAYOUT: ResultsLayout = {
-  list: "catalog-compact", heading: { as: "h3", size: "card" }, emptySize: "pane", offlineSize: "pane", offlineLibraryLink: false,
+  list: CATALOG_COMPACT_LIST, heading: "card", wrapHeader: false, emptySize: "pane", offlineSize: "pane", offlineLibraryLink: false,
   iconBox: 40, categories: 0, showAuthor: false,
 };
 
@@ -81,7 +89,7 @@ export type CatalogSearch = ReturnType<typeof useCatalogSearch>;
 function Offline({ onRetry, layout }: { onRetry: () => void; layout: ResultsLayout }) {
   const { t } = useI18n();
   return (
-    <Empty
+    <EmptyState
       title={t("components.offline.title")}
       size={layout.offlineSize}
       actions={
@@ -92,7 +100,7 @@ function Offline({ onRetry, layout }: { onRetry: () => void; layout: ResultsLayo
       }
     >
       {t("components.offline.text")}
-    </Empty>
+    </EmptyState>
   );
 }
 
@@ -116,9 +124,9 @@ export function ResultRow({ hit, index, feature, layout, showSource, parts, onOp
             <span><Count value={formatDownloads(hit.downloads)} /> {t("components.stats.downloads")}</span>
             {categoryList(hit.categories, layout.categories).map(({ slug, name }) =>
               onCategory && SOURCES[hit.source].categories ? (
-                <ChipButton key={slug} size="s" data-hide={WIDTH.sm} aria-label={t("pages.discover.filterByCategory", { name })} onClick={() => onCategory(slug)}>{name}</ChipButton>
+                <ChipButton key={slug} size="s" className="le-900:hidden" aria-label={t("pages.discover.filterByCategory", { name })} onClick={() => onCategory(slug)}>{name}</ChipButton>
               ) : (
-                <Chip key={slug} size="s" data-hide={WIDTH.sm}>{name}</Chip>
+                <Chip key={slug} size="s" className="le-900:hidden">{name}</Chip>
               ),
             )}
             {parts.meta}
@@ -142,7 +150,7 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
   const { t } = useI18n();
   const { results, hits, total, query, index, failed } = search;
   const hint = !query ? sortHint(index) : undefined;
-  const featureFirst = layout.list === "catalog" && matchesExactly(hits[0], query);
+  const featureFirst = layout === PAGE_LAYOUT && matchesExactly(hits[0], query);
   // Ohne Treffer sagt die Leerseite alles: keine zweite Überschrift „0 Treffer“
   const showHeading = !results.error && !(results.data && hits.length === 0);
   return (
@@ -151,8 +159,9 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
       {showHeading && (
         <div aria-live="polite" className="cat-head">
           <SectionHeader
-            as={layout.heading.as}
-            size={layout.heading.size}
+            wrap={layout.wrapHeader}
+            className={layout.wrapHeader ? "gap-x-3" : undefined}
+            level={layout.heading}
             title={!query ? sortHeading(index) : results.data ? <>{formatCount(total)} {t("components.search.hits")}</> : t("components.search.searching")}
             info={hint && <Tip label={hint} describe><IconButton icon="info" size="s" label={t("components.sort.infoLabel")} tip={false} /></Tip>}
             actions={headerEnd}
@@ -168,21 +177,21 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
           <ErrorBox title={t("components.source.unreachable", { source: sourceChoiceLabel(source) })} error={results.error} onRetry={() => void results.refetch()} />
         )
       ) : results.isPending ? (
-        <List variant={layout.list} aria-busy aria-label={t("components.common.loadingAria")}>
-          {Array.from({ length: SKELETON_ROWS }, (_, i) => <SkelRow key={i} />)}
+        <List {...layout.list} aria-busy aria-label={t("components.common.loadingAria")}>
+          {Array.from({ length: SKELETON_ROWS }, (_, i) => <SkelRow key={i} compact={layout === SIDE_LAYOUT} />)}
         </List>
       ) : hits.length === 0 ? (
-        <Empty
+        <EmptyState
           title={query ? t("components.search.nothingFoundFor", { query }) : t("components.search.nothingFound")}
           size={layout.emptySize}
           actions={onReset ? <Button onClick={onReset}>{t("components.search.resetFilters")}</Button> : undefined}
         >
           {emptyText}
-        </Empty>
+        </EmptyState>
       ) : (
         <>
           {failed.length > 0 && <StatusPanel tone="warn" className="cat-note">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</StatusPanel>}
-          <List variant={layout.list} divided aria-label={typeLabel(type)}>
+          <List {...layout.list} divided aria-label={typeLabel(type)}>
             {hits.map((hit, k) => (
               <ResultRow
                 key={`${hit.source}-${hit.project_id}`}
@@ -203,7 +212,7 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
                 {results.isFetchingNextPage ? t("components.search.loadingMore") : t("components.search.loadMore")}
               </Button>
             ) : (
-              <Hint>{hits.length === 1 ? t("components.search.oneResult") : t("components.search.allLoaded", { n: hits.length })}</Hint>
+              <Hint className="self-center">{hits.length === 1 ? t("components.search.oneResult") : t("components.search.allLoaded", { n: hits.length })}</Hint>
             )}
           </div>
         </>

@@ -1,6 +1,6 @@
 import { Fragment, useState, type ReactNode } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Chip, IconButton } from "@/ui";
+import { Button, Chip, IconButton, Table, Td, Th, Tr } from "@/ui";
 import { Description } from "@/components/Description";
 import type { ContentVersion } from "@/lib/content-types";
 import { formatDate } from "@/lib/format";
@@ -18,6 +18,9 @@ const publishedOn = ({ date_published: published }: ContentVersion) => (publishe
 /** Beta und Alpha sind Vorabversionen und fallen auf; ein Release ist der Normalfall. */
 const typeTone = (version: ContentVersion) => (version.version_type === "release" ? undefined : "warn");
 
+/** Spalten, die in schmalen Containern (unter 600 px) entfallen: Loader und Datum. */
+const OPTIONAL = "@max-[600px]:hidden";
+
 /**
  * Alle Versionen eines Projekts als Tabelle: Nummer, Art (Release, Beta, Alpha), Minecraft, Loader, Datum und, wo der
  * Anbieter sie mitliefert, die Änderungen zum Aufklappen. `action` ist die Aktion je Version (z. B. „Anlegen“).
@@ -29,16 +32,16 @@ export function VersionTable({ versions, action }: { versions: ContentVersion[];
   const columns = action ? 6 : 5;
   return (
     <>
-      <table className="vtab">
+      <Table>
         <caption className="sr">{t("components.detail.allVersions")}</caption>
         <thead>
           <tr>
-            <th scope="col">{t("common.version")}</th>
-            <th scope="col">{t("components.detail.colType")}</th>
-            <th scope="col">Minecraft</th>
-            <th scope="col" className="vtab-opt">{t("components.common.loader")}</th>
-            <th scope="col" className="vtab-opt">{t("components.detail.colDate")}</th>
-            <th scope="col"><span className="sr">{t("components.detail.colActions")}</span></th>
+            <Th>{t("common.version")}</Th>
+            <Th>{t("components.detail.colType")}</Th>
+            <Th>Minecraft</Th>
+            <Th className={OPTIONAL}>{t("components.common.loader")}</Th>
+            <Th className={OPTIONAL}>{t("components.detail.colDate")}</Th>
+            <Th><span className="sr">{t("components.detail.colActions")}</span></Th>
           </tr>
         </thead>
         <tbody>
@@ -47,16 +50,16 @@ export function VersionTable({ versions, action }: { versions: ContentVersion[];
             const logOpen = openLog === v.id;
             return (
               <Fragment key={v.id}>
-                <tr>
-                  <td>
-                    <b className="vtab-name">{v.version_number}</b>
-                    {v.name !== v.version_number && <span className="vtab-sub">{v.name}</span>}
-                  </td>
-                  <td><Chip size="s" tone={typeTone(v)}>{versionTypeName(v)}</Chip></td>
-                  <td>{minecraftOf(v)}</td>
-                  <td className="vtab-opt">{versionLoadersOrVanilla(v)}</td>
-                  <td className="vtab-opt">{publishedOn(v)}</td>
-                  <td className="vtab-act">
+                <Tr>
+                  <Td>
+                    <b className="block font-bold text-(color:--fg)">{v.version_number}</b>
+                    {v.name !== v.version_number && <span className="block max-w-[40ch] truncate text-ctl-s text-(color:--fg-3)">{v.name}</span>}
+                  </Td>
+                  <Td><Chip size="s" tone={typeTone(v)}>{versionTypeName(v)}</Chip></Td>
+                  <Td>{minecraftOf(v)}</Td>
+                  <Td className={OPTIONAL}>{versionLoadersOrVanilla(v)}</Td>
+                  <Td className={OPTIONAL}>{publishedOn(v)}</Td>
+                  <Td className="pr-0 text-right whitespace-nowrap [&>*]:align-middle">
                     {v.changelog?.trim() && (
                       <IconButton
                         size="s"
@@ -68,18 +71,18 @@ export function VersionTable({ versions, action }: { versions: ContentVersion[];
                       />
                     )}
                     {action?.(v)}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
                 {logOpen && v.changelog && (
-                  <tr id={logId} className="vtab-log">
-                    <td colSpan={columns}><Description body={v.changelog} /></td>
-                  </tr>
+                  <Tr sub id={logId}>
+                    <Td colSpan={columns} className="p-0 pb-3.5"><Description body={v.changelog} className="mt-3.5 max-w-none min-w-0" /></Td>
+                  </Tr>
                 )}
               </Fragment>
             );
           })}
         </tbody>
-      </table>
+      </Table>
       {versions.length > limit && (
         <div className="morebar">
           <Button onClick={() => setLimit(limit + MORE_ROWS)}>{t("components.detail.moreVersions", { n: versions.length - limit })}</Button>

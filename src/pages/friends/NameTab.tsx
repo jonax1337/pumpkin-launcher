@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS, type DirectoryStatus } from "@/lib/friends-types";
-import { Button, ButtonLink, Field, Hint, StatusPanel, TextField } from "@/ui";
+import { Button, ButtonLink, Field, Hint, Input, StatusPanel } from "@/ui";
 import { isMcName, REQUEST_TTL_DAYS } from "./friendsModel";
 
 type NameTabProps = {
@@ -36,7 +36,8 @@ export function NameTab({ formId, input, onInput, onSubmit, notFindable, directo
         error={wrongShape ? t("friends.name.wrongShape", { max: FRIENDS_LIMITS.mcNameMax }) : undefined}
         reserveLines={2}
       >
-        <TextField
+        <Input
+          className="w-full"
           value={input}
           onChange={(event) => onInput(event.target.value)}
           onBlur={() => setTouched(true)}

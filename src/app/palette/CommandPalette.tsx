@@ -1,11 +1,11 @@
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
 import { create } from "zustand";
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { usePlay } from "@/hooks/usePlay";
 import { useI18n } from "@/i18n";
 import { usePaletteRecent } from "@/store/paletteRecent";
-import { Dialog, TextField } from "@/ui";
+import { Dialog, Input, Kbd } from "@/ui";
 import {
   arrangeItems, firstRunnableIndex, flattenSections, moveActive,
   type ActiveMove, type PaletteItem, type PaletteSection,
@@ -84,8 +84,8 @@ function PaletteBody({ play }: { play: InstanceActions["play"] }) {
   }
 
   return (
-    <div className="vx-pal">
-      <TextField
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <Input
         icon="search"
         role="combobox"
         aria-expanded
@@ -95,13 +95,13 @@ function PaletteBody({ play }: { play: InstanceActions["play"] }) {
         aria-label={t("palette.inputLabel")}
         placeholder={t("palette.placeholder")}
         value={query}
-        onChange={(e) => {
+        onChange={(e: ChangeEvent<HTMLInputElement>) => {
           setQuery(e.target.value);
           setActiveId(null);
         }}
         onKeyDown={onKeyDown}
       />
-      {text && matchCount === 0 && <div className="vx-pal-empty">{t("palette.noResults", { query: text })}</div>}
+      {text && matchCount === 0 && <div className="help px-1">{t("palette.noResults", { query: text })}</div>}
       <PaletteList id={listId} sections={sections} active={active} onActivate={(item) => setActiveId(item.id)} onRun={runItem} />
       <div className="sr" role="status" aria-live="polite" aria-atomic="true">{said}</div>
     </div>
@@ -124,8 +124,9 @@ export function CommandPalette() {
       onOpenChange={(next) => usePaletteOpen.setState({ open: next })}
       title={t("palette.title")}
       height="m"
+      fill
       footLeft={t("palette.hint")}
-      footer={<kbd className="vx-pal-kbd vx-slot">Esc</kbd>}
+      footer={<Kbd size="s">Esc</Kbd>}
     >
       <PaletteBody play={startGame} />
     </Dialog>

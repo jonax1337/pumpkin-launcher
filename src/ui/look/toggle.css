@@ -1,0 +1,46 @@
+/* Schalter, Checkbox, Radio. Nur Aussehen; Maße, Abstände und Anordnung setzt Toggle.tsx per Tailwind.
+   Bahnen und Kästchen sind Slots (.lk-slot), der Knauf eine Steinplatte. Der Zustand kommt vom echten <input> (:checked, :disabled, :focus-visible). */
+.lk-toggle { color: var(--fg); font-weight: 500; cursor: pointer; user-select: none; }
+.lk-toggle[data-disabled] { color: var(--fg-3); cursor: default; }
+.lk-toggle input { cursor: inherit; }
+
+/* Aus: ringsum sichtbare Kante (--ctl, ≥ 3:1) auf hellerer Fläche als der Slot-Grund */
+:is(.lk-cb-box, .lk-rb, .lk-sw-tr).lk-slot { border-color: var(--ctl); background: var(--panel-2); }
+
+/* ---------- Schalter: an = Akzentbahn, Knauf springt in 2 Stufen (Position setzt die Komponente) ---------- */
+.lk-sw-kn { clip-path: var(--n1); background: var(--line-2); transition: left .12s steps(2);
+  box-shadow: inset var(--px) var(--px) 0 var(--ctl-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--bg-2); }
+.lk-sw input:checked ~ .lk-sw-tr { background: var(--acc-mid); border-color: var(--acc); }
+.lk-toggle:not([data-disabled]):is(:hover, [data-force="hover"]) .lk-sw-tr { border-color: var(--fg-2); }
+.lk-toggle:not([data-disabled]):is(:hover, [data-force="hover"]) .lk-sw-kn { background: var(--ctl); }
+.lk-sw input:focus-visible ~ .lk-sw-tr { border-color: var(--focus); box-shadow: var(--ring-i); }
+.lk-sw input:disabled ~ .lk-sw-tr { background: var(--panel); border-color: var(--line); box-shadow: none; }
+.lk-sw input:disabled ~ .lk-sw-kn { background: var(--line); box-shadow: none; }
+/* Zustandswort: beide Wörter übereinander, eines sichtbar; an = Akzent, aus = gedämpft */
+.lk-sw-st { font-family: var(--f-px); font-weight: 400; text-shadow: var(--tsh); }
+.lk-sw-st > span { visibility: hidden; }
+.lk-sw-st > span[data-on] { visibility: visible; }
+.lk-sw-st > span:first-child { color: var(--acc); }
+.lk-sw-st > span:last-child { color: var(--fg-3); }
+.lk-toggle[data-disabled] .lk-sw-st > span { color: var(--fg-3); }
+
+/* ---------- Checkbox: an = Akzent-Haken auf getönter Fläche, teilweise = Strich ---------- */
+.lk-cb-ico { color: var(--acc-hi); opacity: 0; pointer-events: none; }
+.lk-cb-dash { background: var(--acc-hi); opacity: 0; }
+.lk-cb input:is(:checked, :indeterminate) ~ .lk-cb-box { background: color-mix(in oklab, var(--acc) 30%, var(--sunk)); border-color: var(--acc); }
+.lk-cb input:checked:not(:indeterminate) ~ .lk-cb-ico { opacity: 1; }
+.lk-cb input:indeterminate ~ .lk-cb-dash { opacity: 1; }
+
+/* ---------- Radio: an = Akzent-Raute (Form --dia, fest 10 px = Zelle 2 px wie die 8×8-Symbole) ---------- */
+.lk-rb::after { content: ""; width: 10px; height: 10px; background: var(--acc-hi); clip-path: var(--dia); visibility: hidden; }
+.lk-radio input:checked + .lk-rb { background: color-mix(in oklab, var(--acc) 30%, var(--sunk)); border-color: var(--acc); }
+.lk-radio input:checked + .lk-rb::after { visibility: visible; }
+
+/* Kästchen und Raute: Hover über die ganze Zeile, Fokus am Kästchen, Aus = flach */
+:is(.lk-check, .lk-radio):not([data-disabled]):is(:hover, [data-force="hover"]) :is(.lk-cb-box, .lk-rb) { border-color: var(--fg-2); }
+:is(.lk-cb input, .lk-radio input):focus-visible ~ .lk-cb-box,
+.lk-radio input:focus-visible + .lk-rb { border-color: var(--focus); box-shadow: var(--ring-i); }
+.lk-cb input:disabled ~ .lk-cb-box, .lk-radio input:disabled + .lk-rb { background: var(--panel); border-color: var(--line); box-shadow: none; }
+.lk-cb input:disabled ~ .lk-cb-ico { color: var(--fg-3); }
+.lk-cb input:disabled ~ .lk-cb-dash, .lk-radio input:disabled + .lk-rb::after { background: var(--fg-3); }
+.lk-cb input:disabled:not(:checked, :indeterminate) ~ .lk-cb-ico { opacity: 0; }

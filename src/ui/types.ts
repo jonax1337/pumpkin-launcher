@@ -1,4 +1,4 @@
-/* Gemeinsame Typen des Pixel-Kits (src/ui). */
+/* Gemeinsame Typen des Kits (src/ui). */
 import type { WIDTH } from "@/lib/breakpoints";
 
 export type { IconName } from "@/pixel/icon-data";

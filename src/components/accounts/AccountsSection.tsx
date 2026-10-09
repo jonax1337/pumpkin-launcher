@@ -1,5 +1,7 @@
 import { useI18n } from "@/i18n";
-import { Button, Chip, Empty, ErrorBox, Hint, Icon, IconButton, List, ListRow, RowTitle, Skel } from "@/ui";
+import { Button, Chip, Hint, Icon, IconButton, List, ListRow, RowTitle, Skel } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBox } from "@/components/ErrorBox";
 import { openAddOffline, startMsLogin } from "@/store/accountUi";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, useSettings, type ActiveAccount } from "@/store/settings";
@@ -29,20 +31,20 @@ export function AccountsSection() {
   return (
     <>
       {query.isPending && accounts.length === 0 ? (
-        <Skel h={60} />
+        <Skel className="h-[60px]" />
       ) : accounts.length ? (
-        <List variant="accounts" aria-label={t("components.account.accounts")}>
+        <List spaced aria-label={t("components.account.accounts")}>
           {accounts.map((account) => (
             <AccountRow key={keyOf(account)} account={account} active={active} onRemove={remove} removing={pending} />
           ))}
         </List>
       ) : (
-        <Empty
+        <EmptyState
           size="pane"
           title={t("components.account.noneYet")}
         >
           {offlineAllowed ? t("components.account.noneOfflineAllowed") : t("components.account.msLoginPrompt")}
-        </Empty>
+        </EmptyState>
       )}
       {query.error && (
         <ErrorBox className="accounts-note" title={t("components.account.msLoadFailed")} error={query.error} onRetry={() => void query.refetch()} />
@@ -64,12 +66,12 @@ function AccountRow({ account, active, onRemove, removing }: {
   const isActive = isActiveAccount(active, account);
   const microsoft = account.kind === "microsoft";
   return (
-    <ListRow selected={isActive} className="account-row">
-      <AccountAvatar account={account} />
+    <ListRow plate="row" selected={isActive}>
+      <AccountAvatar account={account} box={48} />
       <RowTitle
         title={name}
         sub={
-          <span className="account-kind">
+          <span className="inline-flex items-center gap-1.5">
             <Icon name={microsoft ? "microsoft" : "user"} size="s" />
             {kindLabel(account)}
           </span>

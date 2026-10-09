@@ -63,9 +63,9 @@ function hostsByOperator(relays: RelayInfo[]) {
 
 function ServiceRow({ label, purpose, hosts }: { label: string; purpose: string; hosts: readonly string[] }) {
   return (
-    <FormRow label={label}>
+    <FormRow divided className="py-3.5" label={label}>
       <span>{purpose}</span>
-      <span className="privacy-hosts">{hosts.join(", ")}</span>
+      <span className="font-mono text-ctl-s wrap-break-word text-(--fg-3)">{hosts.join(", ")}</span>
     </FormRow>
   );
 }
@@ -104,7 +104,7 @@ function FriendsServices() {
 export function PrivacyNotice() {
   const { t } = useI18n();
   return (
-    <div className="privacy-notice">
+    <>
       <Hint icon="info">{t("components.privacy.intro")}</Hint>
       {SERVICES.map((service) => (
         <ServiceRow key={service.name} label={service.name} purpose={t(service.purpose)} hosts={service.hosts} />
@@ -112,7 +112,7 @@ export function PrivacyNotice() {
       <FriendsServices />
       <ServiceRow label="Discord" purpose={t("components.privacy.discord")} hosts={[t("components.privacy.discordWhere")]} />
       <ServiceRow label={t("components.privacy.imagesName")} purpose={t("components.privacy.images")} hosts={TRUSTED_IMAGE_HOSTS} />
-      <Hint icon="info" className="privacy-foot">{t("components.security.noScan")}</Hint>
-    </div>
+      <Hint icon="info" className="mt-3.5">{t("components.security.noScan")}</Hint>
+    </>
   );
 }

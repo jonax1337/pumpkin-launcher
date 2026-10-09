@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
-import { Heading, Hint, Icon, Panel, type IconName } from "@/ui";
+import { Heading, Hint, LinkList, LinkRow, Panel } from "@/ui";
 import { BrandWordmark, Buddy } from "@/branding/Brand";
 import { UpdateCheckButton, UpdateChip, UpdateDetails } from "@/components/AppUpdate";
 import { PrivacyNotice } from "@/components/PrivacyNotice";
@@ -21,37 +21,23 @@ function useAppVersion() {
   return version;
 }
 
-/** Eine Zeile der Linkliste: Symbol, Name mit Zusatz, Pfeil nach außen; `onOpen` öffnet die Seite oder einen Dialog. */
-function LinkRow({ icon, label, hint, external = true, onOpen }: { icon: IconName; label: string; hint?: string; external?: boolean; onOpen: () => void }) {
-  return (
-    <button type="button" className="about-link fx" onClick={onOpen}>
-      <Icon name={icon} size="s" />
-      <span className="about-link-t">
-        <span>{label}</span>
-        {hint && <small>{hint}</small>}
-      </span>
-      <Icon name={external ? "external" : "chev-right"} size="s" className="about-link-out" />
-    </button>
-  );
-}
-
 /** Quellcode, Lizenz, Fragen, Fehler melden und Datenschutz an einer Stelle. */
 function AboutLinks() {
   const { t } = useI18n();
   const [privacyOpen, setPrivacyOpen] = useState(false);
   return (
     <div>
-      <Heading level="sub" className="about-sub">{t("settings.about.linksTitle")}</Heading>
-      <div className="vx-slot about-links">
-        <LinkRow icon="link" label={t("settings.about.source")} hint={t("settings.about.sourceHint")} onOpen={() => openPage(REPO_URL)} />
-        <LinkRow icon="book" label={t("settings.about.license")} hint={t("settings.about.licenseHint")} onOpen={() => openPage(`${REPO_URL}/blob/main/LICENSE`)} />
-        <LinkRow icon="bug" label={t("components.support.reportBug")} hint={t("components.support.reportHint")} onOpen={() => openPage(`${REPO_URL}/issues/new/choose`)} />
-        <LinkRow icon="question" label={t("components.support.questionsLabel")} hint={t("components.support.questionsHint")} onOpen={() => openPage(`${REPO_URL}/discussions`)} />
-        <LinkRow icon="shield" label={t("components.privacy.title")} external={false} onOpen={() => setPrivacyOpen(true)} />
-      </div>
+      <Heading level="sub" className="mb-3">{t("settings.about.linksTitle")}</Heading>
+      <LinkList>
+        <LinkRow icon="link" label={t("settings.about.source")} hint={t("settings.about.sourceHint")} onClick={() => openPage(REPO_URL)} />
+        <LinkRow icon="book" label={t("settings.about.license")} hint={t("settings.about.licenseHint")} onClick={() => openPage(`${REPO_URL}/blob/main/LICENSE`)} />
+        <LinkRow icon="bug" label={t("components.support.reportBug")} hint={t("components.support.reportHint")} onClick={() => openPage(`${REPO_URL}/issues/new/choose`)} />
+        <LinkRow icon="question" label={t("components.support.questionsLabel")} hint={t("components.support.questionsHint")} onClick={() => openPage(`${REPO_URL}/discussions`)} />
+        <LinkRow icon="shield" label={t("components.privacy.title")} external={false} onClick={() => setPrivacyOpen(true)} />
+      </LinkList>
       <InfoDialog open={privacyOpen} onOpenChange={setPrivacyOpen} title={t("components.privacy.title")}>
         <PrivacyNotice />
-        <Hint className="about-sources">{t("pages.settings.aboutSources")}</Hint>
+        <Hint>{t("pages.settings.aboutSources")}</Hint>
       </InfoDialog>
     </div>
   );
@@ -63,17 +49,17 @@ export function AboutTab() {
   const version = useAppVersion();
   return (
     <>
-      <Panel level="raised" className="about-card">
+      <Panel level="raised" className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
         <Buddy mood="hello" size={48} />
-        <div className="about-name">
+        <div className="grid min-w-0 flex-[1_1_220px] gap-1">
           <BrandWordmark />
-          <span className="about-meta">{t("common.version")} {version} · {t("components.update.hint")}</span>
+          <span className="text-ctl-s text-(--fg-2)">{t("common.version")} {version} · {t("components.update.hint")}</span>
         </div>
         <UpdateChip />
         <UpdateCheckButton />
       </Panel>
       <UpdateDetails />
-      <div className="about-grid">
+      <div className="mt-7 grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-x-7 *:min-w-0">
         <AboutLinks />
         <SupportSection version={version} />
       </div>

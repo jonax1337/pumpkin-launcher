@@ -177,10 +177,12 @@ type MenuButtonProps = {
   /** Über einer Szene (Grundplatte, harter Schatten). */
   onScene?: boolean;
   showOpen?: boolean;
+  /** Platzierung des Knopfes in der Umgebung (Tailwind, z. B. Spalte und Zeile im Raster). */
+  className?: string;
 };
 
 /** Symbolknopf „Weitere Aktionen“ mit dem Instanz-Menü. */
-export function InstanceMenuButton({ instance, size = "m", variant = "secondary", onScene, showOpen }: MenuButtonProps) {
+export function InstanceMenuButton({ instance, size = "m", variant = "secondary", onScene, showOpen, className }: MenuButtonProps) {
   const { t } = useI18n();
   const items = useInstanceMenu(instance, { showOpen });
   return (
@@ -192,6 +194,7 @@ export function InstanceMenuButton({ instance, size = "m", variant = "secondary"
           size={size}
           onScene={onScene}
           icon="more"
+          className={className}
           label={t("components.instance.moreActionsFor", { name: instance.name })}
           tip={t("components.instance.moreActions")}
         />

@@ -2,7 +2,8 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { Description } from "@/components/Description";
 import { installAppUpdate, useAppUpdate, waitForIdle } from "@/hooks/useAppUpdate";
 import { useUpdateRun } from "@/store/updateRun";
-import { Actions, Button, Chip, Count, ErrorBox, Hint, Icon, JobProgress, Panel } from "@/ui";
+import { Actions, Button, Chip, Count, Hint, Icon, JobProgress, Panel, Surface } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { useI18n } from "@/i18n";
 
 /** Stand der Suche als Chip in der Versionskarte: „Aktuell“ nach einer Suche ohne Fund, sonst die gefundene Version. */
@@ -11,7 +12,7 @@ export function UpdateChip() {
   const { data: update, error, isFetching, isFetched } = useAppUpdate();
   if (update) return <Chip tone="acc">{t("components.update.newChip", { version: update.version })}</Chip>;
   if (error || !isFetched || isFetching) return null;
-  return <Chip tone="run" dot>{t("components.update.currentChip")}</Chip>;
+  return <Chip tone="run">{t("components.update.currentChip")}</Chip>;
 }
 
 /** „Nach Updates suchen“; solange ein Update geladen oder installiert wird, gibt es ihn nicht. */
@@ -32,7 +33,7 @@ export function UpdateDetails() {
   const { t } = useI18n();
   const { data: update, error } = useAppUpdate();
   if (update) return <UpdateOffer update={update} />;
-  if (error) return <ErrorBox className="update-error" title={t("components.update.searchFailed")} error={error} />;
+  if (error) return <ErrorBox className="mt-4" title={t("components.update.searchFailed")} error={error} />;
   return null;
 }
 
@@ -42,16 +43,16 @@ function UpdateOffer({ update }: { update: Update }) {
   const { phase, p } = useUpdateRun();
   const [availableBefore, availableAfter] = tAround("components.update.available", "version");
   return (
-    <Panel level="sunk" pad="m" className="update-offer">
-      <div className="update-offer-head">
-        <span className="vx-slot update-offer-tile"><Icon name="update" size="l" /></span>
-        <div className="update-offer-name">
+    <Panel level="sunk" className="mt-4 grid gap-3.5 p-4">
+      <div className="flex items-center gap-3.5">
+        <Surface kind="slot" as="span" className="grid size-12 flex-none place-items-center text-[color:var(--acc-hi,var(--acc))]"><Icon name="update" size="l" /></Surface>
+        <div className="grid gap-1">
           <b>
             {availableBefore}
             <Count value={update.version} />
             {availableAfter}
           </b>
-          <span>{t("components.update.current", { version: update.currentVersion })}</span>
+          <span className="text-ctl-s text-(--fg-2)">{t("components.update.current", { version: update.currentVersion })}</span>
         </div>
       </div>
       {update.body && <Description body={update.body} />}

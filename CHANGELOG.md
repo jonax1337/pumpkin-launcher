@@ -6,6 +6,17 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 
 ## Unreleased
 
+### Interface kit rebuilt
+
+- The interface kit in `src/ui` was rebuilt: the Pixelkino look stays in CSS
+  (`look.css`, `look/*.css`), layout is Tailwind utilities in the components
+  and can be overridden per call with `className`. The whole app was migrated
+  to it and the old component and stylesheet set was removed. Covers buttons,
+  chips, tabs, forms, lists, cards, progress, panels, dialogs, menus, tooltips
+  and toasts plus the page frame. Preview at `/_kit` (development only).
+- Toasts and empty states no longer carry the Buddy mascot; Buddy is placed
+  explicitly where it is wanted.
+
 ### Interface polish
 
 - Menus and popovers stay on screen and scroll in small windows; the settings

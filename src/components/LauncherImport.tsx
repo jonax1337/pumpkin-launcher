@@ -1,8 +1,9 @@
 import { toast } from "sonner";
 import { loaderLine } from "@/components/common";
 import { ChoiceList, ChoiceListSkeleton } from "@/components/newInstance/ChoiceList";
-import { Actions, Button, Chip, Choice, Empty, ErrorBox, Field, Glyph, Hint, Meta, Panel, TextField } from "@/ui";
-import { ROW_JOB_WIDTH, useJobProgressFor } from "@/components/catalog/jobProgress";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Actions, Button, Chip, Choice, Empty, Field, Glyph, Hint, Meta, Panel, Input } from "@/ui";
+import { useJobProgressFor } from "@/components/catalog/jobProgress";
 import { importTarget, type ForeignSelection } from "@/hooks/useImport";
 import { useI18n, type TKey } from "@/i18n";
 import { api } from "@/lib/api";
@@ -51,8 +52,8 @@ function useContentsLine(f: ForeignInstance): string {
 /** Ein Abschnitt unter einer gewählten Instanz: Überschrift und Einträge hintereinander. */
 function DetailLine({ label, items, tone }: { label: string; items: string[]; tone?: "warn" }) {
   return (
-    <div className="li-detail" data-tone={tone}>
-      <b>{label}</b>
+    <div>
+      <b className={tone === "warn" ? "text-(--warn)" : "text-(--fg-2)"}>{label}</b>
       <Meta items={items} wrap />
     </div>
   );
@@ -63,9 +64,9 @@ function ImportDetails({ f, name, busy, onRename }: { f: ForeignInstance; name: 
   const { t } = useI18n();
   const adopted = useAdoptedSettings(f);
   return (
-    <Panel level="sunk" pad="s" className="li-details">
+    <Panel level="sunk" className="mb-2 flex flex-col gap-2 p-3">
       <Field label={t("components.import.nameLabel")} error={name.trim() ? undefined : t("components.import.nameEmpty")}>
-        <TextField value={name} maxLength={NAME_MAX_LENGTH} disabled={busy} onChange={(e) => onRename(e.target.value)} />
+        <Input value={name} maxLength={NAME_MAX_LENGTH} disabled={busy} onChange={(e) => onRename(e.target.value)} />
       </Field>
       {adopted.length > 0 && <DetailLine label={t("components.import.adoptedLabel")} items={adopted} />}
       {f.notAdopted.length > 0 && (
@@ -79,7 +80,7 @@ function ImportDetails({ f, name, busy, onRename }: { f: ForeignInstance; name: 
 function UnsupportedNote({ reason }: { reason: string }) {
   const { t } = useI18n();
   return (
-    <Panel level="sunk" pad="s" className="li-unsupported">
+    <Panel level="sunk" className="mb-2 flex flex-col gap-1 p-3">
       <Hint tone="warn">{reason}</Hint>
       <Hint icon={false}>{t("components.import.unsupportedAlternative")}</Hint>
     </Panel>
@@ -88,7 +89,7 @@ function UnsupportedNote({ reason }: { reason: string }) {
 
 function ImportRow({ f, selection, busy }: { f: ForeignInstance; selection: ForeignSelection; busy: boolean }) {
   const { t } = useI18n();
-  const job = useJobProgressFor(importTarget(f), ROW_JOB_WIDTH);
+  const job = useJobProgressFor(importTarget(f), "row");
   const contents = useContentsLine(f);
   const chosen = selection.isChosen(f);
   const trail =
@@ -121,8 +122,8 @@ function SelectionBar({ selection, busy }: { selection: ForeignSelection; busy: 
   if (!selectable.length) return null;
   const all = chosen.length === selectable.length;
   return (
-    <Actions gap={12} wrap className="li-bar">
-      <span className="li-bar-t">{chosen.length ? t("components.import.selectedCount", { n: chosen.length, total: selectable.length }) : t("components.import.pickHint")}</span>
+    <Actions gap={12} wrap className="mb-3">
+      <span className="text-(--fg-2)">{chosen.length ? t("components.import.selectedCount", { n: chosen.length, total: selectable.length }) : t("components.import.pickHint")}</span>
       <Button variant="ghost" size="s" disabled={busy} onClick={all ? selection.clear : selection.chooseAll}>
         {all ? t("components.import.clearSelection") : t("components.import.chooseAll")}
       </Button>
@@ -164,7 +165,7 @@ export function ImportPane({ selection, busy }: { selection: ForeignSelection; b
           ))}
         </>
       )}
-      <Button variant="ghost" size="s" icon="folder" bleed="start" className="li-folder" disabled={!api.capabilities.pickPaths || busy} onClick={() => void chooseFolder()}>
+      <Button variant="ghost" size="s" icon="folder" bleed="start" className="mt-2.5" disabled={!api.capabilities.pickPaths || busy} onClick={() => void chooseFolder()}>
         {t("components.import.chooseFolder")}
       </Button>
     </>

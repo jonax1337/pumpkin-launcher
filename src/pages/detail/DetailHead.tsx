@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { Actions, BackLink, Chip, ChipButton, Count, HeroMeta, HeroShade, HeroTitle, IconButton, Meta, Tip } from "@/ui";
+import { Actions, BackLink, Chip, ChipButton, Count, Heading, HeroMeta, HeroShade, HeroTitle, IconButton, Meta, Tip } from "@/ui";
 import { playtimeLine } from "@/components/common";
 import { InstanceMenuButton } from "@/components/instance";
 import { PlayButton } from "@/components/play/PlayButton";
@@ -38,10 +38,10 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
       <div className="dh-full" aria-hidden={compact || undefined}>
         <div className="dh-info">
           <div className="dh-back"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
-          <HeroTitle className="vx-trunc" title={instance.name}>{instance.name}</HeroTitle>
+          <HeroTitle className="truncate" title={instance.name}>{instance.name}</HeroTitle>
           {/* Infos als ruhiger Text, Updates als Knopf: was klickbar ist, sieht so aus. Einen Absturz melden Spielen-Knopf, Protokoll und Hinweis. */}
           <HeroMeta>
-            <Chip className="dh-ver">{minecraft}</Chip>
+            <Chip className="self-center">{minecraft}</Chip>
             <Meta
               size="l"
               onScene
@@ -53,14 +53,14 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
               ]}
             />
             {updateCount > 0 && (
-              <ChipButton icon="update" data-tone="warn" onClick={onShowUpdates} tabIndex={compact ? -1 : undefined}>
+              <ChipButton icon="update" tone="warn" onClick={onShowUpdates} tabIndex={compact ? -1 : undefined}>
                 {updatesLabel(updateCount)}
                 <Count value={updateCount} />
               </ChipButton>
             )}
             {pack?.latest && (
               <Tip label={t("detail.pack.headUpdateTip", { name: pack.name ?? instance.name, version: pack.latest.version_number })}>
-                <ChipButton icon="modpack" data-tone="acc" onClick={onShowPack} tabIndex={compact ? -1 : undefined}>
+                <ChipButton icon="modpack" tone="acc" onClick={onShowPack} tabIndex={compact ? -1 : undefined}>
                   {t("detail.pack.headUpdate")}
                 </ChipButton>
               </Tip>
@@ -72,7 +72,7 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
             <PlayButton instance={instance} onLaunched={onLaunched} tabIndex={compact ? -1 : undefined} main />
             <InstanceMenuButton instance={instance} showOpen={false} />
           </Actions>
-          <PlayStatus instance={instance} />
+          <PlayStatus instance={instance} className="max-w-[360px] justify-end le-720:w-auto le-720:justify-start" />
         </div>
       </div>
       <div className="dh-compact" aria-hidden={!compact}>
@@ -84,8 +84,8 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
           tabIndex={compact ? 0 : -1}
           onClick={() => navigate("/instances")}
         />
-        <h2 title={instance.name}>{instance.name}</h2>
-        {!narrow && <Meta onScene items={[loaderName, minecraft]} />}
+        <Heading level="section" as="h2" size="bar" plain className="flex-1 truncate" title={instance.name}>{instance.name}</Heading>
+        {!narrow && <Meta onScene className="flex-none" items={[loaderName, minecraft]} />}
         <PlayButton instance={instance} size="m" onLaunched={onLaunched} tabIndex={compact ? 0 : -1} main />
       </div>
     </header>

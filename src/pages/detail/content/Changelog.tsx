@@ -19,7 +19,7 @@ export function Changelog({ instance, mod, versionId }: { instance: Instance; mo
   const versions = useQuery({ ...catalogApi("modrinth").versionsQuery(projectId ?? "", fitFilter(instance, mod.kind)), enabled: !!projectId });
   const changelog = versions.data?.find((v) => v.id === versionId)?.changelog?.trim();
 
-  if (versions.isPending) return <Skel h={48} />;
+  if (versions.isPending) return <Skel className="h-12" />;
   if (changelog) return <Description body={changelog} className="dc-changelog" />;
   return (
     <div className="dc-changelog-miss">

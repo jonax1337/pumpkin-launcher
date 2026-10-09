@@ -32,7 +32,7 @@ const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, TKey> = {
 };
 
 /** Breite (px) der Anzeige, solange eine Sicherung läuft. */
-const BACKUP_PROGRESS_WIDTH = 120;
+const BACKUP_PROGRESS_CLASS = "w-[120px] flex-none";
 
 /** „Hardcore · 1.21.4 · 182 MB · vor 2 Stunden“ */
 const worldLine = (w: World) =>
@@ -74,7 +74,7 @@ function WorldRow({ instance, world, menu, playBlocked, onPlay }: {
       <RowTitle title={world.name} aside={world.name === world.id ? undefined : world.id} sub={worldLine(world)} />
       <Cell flex align="end">
         {backingUp ? (
-          <JobProgress label={t("detail.worlds.backingUp")} p={progressShare(progress)} width={BACKUP_PROGRESS_WIDTH} />
+          <JobProgress label={t("detail.worlds.backingUp")} p={progressShare(progress)} className={BACKUP_PROGRESS_CLASS} />
         ) : (
           <GuardedButton
             size="s"
@@ -155,7 +155,7 @@ function WorldsSection({ instance, busy, onPlay }: SectionProps) {
           }
         >
           {(list) => (
-            <List variant="worlds" className="dc-table vx-pit" divided aria-label={t("common.worlds")}>
+            <List framed divided cols="40px minmax(0,1fr) 120px 36px" density="compact" aria-label={t("common.worlds")}>
               {list.map((world) => (
                 <WorldRow
                   key={world.id}

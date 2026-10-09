@@ -2,12 +2,19 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import type { Friend, HostSession, Invite } from "@/lib/types";
-import { Count, Empty, IconButton, List, SearchField, SectionHeader, Segmented, Toolbar } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { Count, IconButton, List, SearchField, SectionHeader, Segmented, Toolbar, type ListLayout } from "@/ui";
 import { FriendRow } from "./FriendRow";
 import { friendLabels, inviteFrom, onlineCount, visibleFriends } from "./friendsModel";
 import type { FriendActions } from "./useFriendDialogs";
 
 type Scope = "all" | "online";
+
+/** Personenliste (Freunde, Gäste einer Sitzung): Kopf, Name, Status, Aktion, Menü; im schmalen Fenster etwas schmaler. */
+export const PERSON_LIST: ListLayout = {
+  cols: { base: "40px minmax(0,1fr) 150px 120px 36px", 720: "40px minmax(6rem,1fr) 124px 112px 36px" },
+  density: "compact",
+};
 
 /** Suche, Filter „Alle/Online“ und die Liste der Freunde; ohne Freunde der Leerzustand (die Wege zum Hinzufügen stehen im Seitenkopf). */
 export function FriendsSection({ friends, invites, session, actions }: {
@@ -19,13 +26,12 @@ export function FriendsSection({ friends, invites, session, actions }: {
   const [scope, setScope] = useState<Scope>("all");
   const labels = useMemo(() => friendLabels(friends), [friends]);
 
-  if (friends.length === 0) return <Empty title={t("friends.empty.title")}>{t("friends.empty.body")}</Empty>;
+  if (friends.length === 0) return <EmptyState title={t("friends.empty.title")}>{t("friends.empty.body")}</EmptyState>;
   const visible = visibleFriends(friends, labels, { query, onlineOnly: scope === "online" });
   return (
     <section>
       <SectionHeader
         title={<>{t("friends.list.title")}<Count value={friends.length} muted /></>}
-        as="h2"
         actions={
           <>
             <span className="friends-online">{t("friends.presence.online")}: {onlineCount(friends)}</span>
@@ -33,7 +39,7 @@ export function FriendsSection({ friends, invites, session, actions }: {
           </>
         }
       />
-      <Toolbar search="m" className="friends-toolbar">
+      <Toolbar search="m" className="friends-toolbar items-start">
         <SearchField value={query} onChange={setQuery} placeholder={t("friends.search.placeholder")} />
         <Segmented
           label={t("friends.filter.label")}
@@ -46,9 +52,9 @@ export function FriendsSection({ friends, invites, session, actions }: {
         />
       </Toolbar>
       {visible.length === 0 ? (
-        <Empty size="pane" title={t("friends.search.noMatches")} />
+        <EmptyState size="pane" title={t("friends.search.noMatches")} />
       ) : (
-        <List variant="friends" aria-label={t("friends.list.title")}>
+        <List {...PERSON_LIST} aria-label={t("friends.list.title")}>
           {visible.map((friend) => (
             <FriendRow key={friend.id} friend={friend} label={labels.get(friend.id)!} invite={inviteFrom(invites, friend)} session={session} actions={actions} />
           ))}

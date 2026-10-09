@@ -4,7 +4,7 @@ import type { IconName } from "@/ui";
 import { formatClock } from "@/lib/format";
 import type { Phase } from "./phase";
 
-/** Was der große Spielen-Knopf in einer Phase zeigt; `state` ist der Schalter für `data-st` in play.css. */
+/** Was der große Spielen-Knopf in einer Phase zeigt; `state` bestimmt Variante und Zustand von `PlayPlate`. */
 export type PlayState = {
   state: "idle" | "prep" | "start" | "run" | "error";
   icon: IconName;
@@ -72,7 +72,7 @@ const runningState = ({ instanceName, runMs }: PlayContext): PlayState => ({
   label: t("components.game.quit"),
   compactLabel: t("components.game.quit"),
   detail: runMs != null
-    ? <>{t("components.game.runningSince")} <span className="num">{formatClock(runMs)}</span></>
+    ? <>{t("components.game.runningSince")} <span className="num text-[16px] leading-none">{formatClock(runMs)}</span></>
     : t("components.game.running"),
   progress: 0,
   ariaLabel:

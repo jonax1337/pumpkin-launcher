@@ -10,7 +10,7 @@ export function CapesPanel({ accountId }: { accountId: string }) {
   const { t } = useI18n();
   const profile = useSkinProfile(accountId);
   const setCape = useSetCape();
-  const roving = useRovingItems<HTMLDivElement>({ item: ".vx-pickcard", primary: ".vx-pickcard" });
+  const roving = useRovingItems<HTMLDivElement>({ item: "[data-kit-item=pick]", primary: "[data-kit-item=pick]" });
   const capes = profile.data?.capes;
   if (!capes) return null;
 
@@ -29,7 +29,7 @@ export function CapesPanel({ accountId }: { accountId: string }) {
       {capes.length === 0 ? (
         <Hint>{t("pages.skins.noCapesHint")}</Hint>
       ) : (
-        <CardGrid variant="pick" className="skins-capes" role="radiogroup" aria-label={t("pages.skins.capeField")} {...roving}>
+        <CardGrid variant="pick" className="mt-3 grid-cols-[repeat(auto-fill,minmax(min(188px,100%),1fr))] gap-4" role="radiogroup" aria-label={t("pages.skins.capeField")} {...roving}>
           <PickCard
             media={<Icon name="close" size="l" />}
             title={t("pages.skins.capeNone")}

@@ -38,7 +38,7 @@ function JavaRow() {
         name="gjava"
         value={javaPath}
         onChange={(path) => set({ javaPath: path })}
-        fallback={<>{t("components.memory.auto")} <span className="settings-note">{t("pages.settings.javaAutomaticNote")}</span></>}
+        fallback={<>{t("components.memory.auto")} <span className="text-(--fg-3)">{t("pages.settings.javaAutomaticNote")}</span></>}
       />
     </FormRow>
   );
@@ -76,10 +76,10 @@ function JvmRow() {
   const set = useSettings((s) => s.set);
   return (
     <FormRow label={t("settings.jvm.label")} hint={t("settings.jvm.hint")} group="radiogroup">
-      <div className="settings-radios">
+      <div className="flex flex-wrap gap-x-[22px] gap-y-2">
         {JVM_PRESETS.map((value) => (
           <Radio key={value} name="gjvm" checked={preset === value} onChange={() => set({ jvmPreset: value })}>
-            {t(JVM_PRESET_KEYS[value].name)} <span className="settings-note">({t(JVM_PRESET_KEYS[value].note)})</span>
+            {t(JVM_PRESET_KEYS[value].name)} <span className="text-(--fg-3)">({t(JVM_PRESET_KEYS[value].note)})</span>
           </Radio>
         ))}
       </div>
@@ -102,7 +102,7 @@ function LauncherOnPlayRow() {
   const friendsEnabled = useFriendsState().data?.enabled ?? null;
   return (
     <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup" aside={friendsEnabled ? t("friendsSettings.onPlayAside") : undefined}>
-      <div className="settings-radios">
+      <div className="flex flex-wrap gap-x-[22px] gap-y-2">
         {LAUNCHER_ON_PLAY.map((value) => (
           <Radio key={value} name="gonplay" checked={mode === value} onChange={() => set({ launcherOnPlay: value })}>
             {t(LAUNCHER_ON_PLAY_KEYS[value])}

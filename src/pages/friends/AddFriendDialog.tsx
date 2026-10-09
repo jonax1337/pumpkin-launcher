@@ -84,11 +84,11 @@ export function AddFriendDialog({ initialTab, onClose }: { initialTab: AddFriend
       busy={pending}
       footer={
         tab === "mine" ? (
-          <DialogActions cancel={{ label: t("common.close"), width: 124 }} />
+          <DialogActions cancel={{ label: t("common.close"), className: "w-[124px]" }} />
         ) : (
           <DialogActions
             cancel={{ label: t("common.cancel"), disabled: pending }}
-            confirm={{ label: pending ? t("friends.add.sending") : t("friends.add.send"), width: 160, form: formId, disabled: !ready }}
+            confirm={{ label: pending ? t("friends.add.sending") : t("friends.add.send"), className: "w-[160px]", form: formId, disabled: !ready }}
           />
         )
       }

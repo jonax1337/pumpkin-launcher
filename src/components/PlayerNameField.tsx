@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/i18n";
 import { isValidPlayerName } from "@/store/settings";
-import { Field, TextField } from "@/ui";
+import { Field, Input } from "@/ui";
 
 /** Längster Spielername, den Minecraft annimmt. */
 const MAX_PLAYER_NAME = 16;
@@ -27,7 +27,7 @@ export function PlayerNameField({ value, onChange, help, reserveLines }: {
   const invalid = showNameError(value, touched);
   return (
     <Field label={t("components.playerName.label")} reserveLines={reserveLines} help={help} error={invalid && t("components.playerName.invalid")}>
-      <TextField
+      <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onBlur={() => setTouched(true)}

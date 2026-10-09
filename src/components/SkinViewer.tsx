@@ -4,7 +4,19 @@ import { useReducedMotion } from "@/hooks/useMediaQuery";
 import type { SkinVariant } from "@/lib/types";
 import { TurnedSkin } from "@/pixel/SkinFigure";
 import { useSettings } from "@/store/settings";
-import { IconButton } from "@/ui";
+import { cn } from "@/lib/utils";
+import { IconButton, Surface } from "@/ui";
+
+/**
+ * Bühne: Slot mit der Figur unten in der Mitte auf einem gestuften Podest (drei harte Bänder, oben um eine Stufe eingezogen);
+ * der Knopf zum Umdrehen sitzt oben rechts.
+ */
+const STAGE = [
+  "relative isolate grid items-end justify-items-center self-stretch overflow-hidden p-(--u4)",
+  "before:pointer-events-none before:absolute before:bottom-(--u4) before:left-1/2 before:z-0 before:h-[calc(var(--u4)*3)] before:w-[min(calc(var(--u4)*21),86%)] before:-translate-x-1/2",
+  "before:bg-[linear-gradient(var(--ctl-hi)_0_var(--u4),var(--ctl)_var(--u4)_calc(var(--u4)*2),var(--line)_calc(var(--u4)*2)_100%)]",
+  "before:[clip-path:polygon(var(--u4)_0,calc(100%_-_var(--u4))_0,calc(100%_-_var(--u4))_var(--u4),100%_var(--u4),100%_100%,0_100%,0_var(--u4),var(--u4)_var(--u4))]",
+].join(" ");
 
 /** Schritt einer Pfeiltaste in Grad. */
 const KEY_STEP_DEG = 15;
@@ -84,7 +96,7 @@ function useTurn(animate: boolean) {
  * Spielerfigur zum Drehen und Neigen: Ziehen mit der Maus, ← → in 15°-Schritten (↑ ↓ neigen), Pos1/Ende für vorn/hinten. Der Knopf daneben
  * wechselt zwischen Vorder- und Rückseite, beim Umhang die Seite, auf der er hängt. Reduzierte Bewegung: kein Auslaufen.
  */
-export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string | undefined; variant: SkinVariant; capeSrc?: string; zoom?: number; label: string }) {
+export function SkinViewer({ src, variant, capeSrc, zoom, label, className }: { src: string | undefined; variant: SkinVariant; capeSrc?: string; zoom?: number; label: string; className?: string }) {
   const { t } = useI18n();
   const reducedMotion = useReducedMotion();
   const sceneMotion = useSettings((s) => s.motion);
@@ -116,9 +128,9 @@ export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string
   }
 
   return (
-    <div className="skin-turn vx-slot">
+    <Surface kind="slot" className={cn(STAGE, className)}>
       <div
-        className="skin-turn-view fx"
+        className="fx relative isolate z-1 block cursor-grab touch-none active:cursor-grabbing"
         role="slider"
         tabIndex={0}
         aria-label={label}
@@ -139,7 +151,7 @@ export function SkinViewer({ src, variant, capeSrc, zoom, label }: { src: string
       >
         <TurnedSkin src={src} variant={variant} capeSrc={capeSrc} turn={turn} tilt={tilt} zoom={zoom} />
       </div>
-      <IconButton className="skin-turn-flip" icon="refresh" size="s" label={t("pages.skins.turnAround")} onClick={flip} />
-    </div>
+      <IconButton className="absolute top-(--u2) right-(--u2) z-2" icon="refresh" size="s" label={t("pages.skins.turnAround")} onClick={flip} />
+    </Surface>
   );
 }

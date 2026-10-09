@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { Button, Choice, Count, ErrorBox, Hint, ProjectIcon, SearchField } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Button, Choice, Count, Hint, ProjectIcon, SearchField } from "@/ui";
 import { SourceSelect } from "@/components/catalog/SourceSelect";
 import { SourceTag } from "@/components/catalog/SourceTag";
 import { useCatalogSearch } from "@/components/catalog/ContentResults";
@@ -29,15 +30,15 @@ function PackPane({ selected, onSelect }: { selected: PackChoice | null; onSelec
   const { results, hits, query, failed } = useCatalogSearch(source, "modpack", { query: input, mc: null, loader: null, category: null, sort: null });
   return (
     <>
-      <div className="ni-find">
-        <SearchField value={input} onChange={setInput} placeholder={t("components.pack.searchPlaceholder")} autoFocus className="ni-find-field" />
+      <div className="mb-4 flex gap-2">
+        <SearchField value={input} onChange={setInput} placeholder={t("components.pack.searchPlaceholder")} autoFocus className="min-w-0 flex-1" />
         <SourceSelect value={source} onChange={setSource} />
       </div>
       {results.error ? (
         <ErrorBox title={t("components.catalog.unreachable")} error={results.error} onRetry={() => void results.refetch()} />
       ) : (
         <>
-          {failed.length > 0 && <Hint tone="warn" className="ni-partial">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</Hint>}
+          {failed.length > 0 && <Hint tone="warn" className="mb-2">{t("components.source.partial", { sources: failed.map((s) => SOURCES[s].label).join(", ") })}</Hint>}
           <ChoiceList aria-busy={results.isPending || undefined}>
             {results.isPending && <ChoiceListSkeleton n={SKELETON_ROWS} />}
             {hits.map((hit) => (
@@ -59,7 +60,7 @@ function PackPane({ selected, onSelect }: { selected: PackChoice | null; onSelec
             {results.data && hits.length === 0 && <Hint>{t("components.pack.noneFound", { query })}</Hint>}
           </ChoiceList>
           {results.hasNextPage && (
-            <Button className="ni-more" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
+            <Button className="mt-2" disabled={results.isFetchingNextPage} onClick={() => void results.fetchNextPage()}>
               {results.isFetchingNextPage ? t("components.search.loadingMore") : t("components.search.loadMore")}
             </Button>
           )}
@@ -95,7 +96,7 @@ export function usePackTab(ctx: TabContext): TabModel {
           size="s"
           icon="chev-right"
           bleed="start"
-          className="ni-discover"
+          className="mt-2.5"
           onClick={() => {
             ctx.close();
             navigate(discoverUrl({ tab: "modpack", project: pack?.id, projectSource: pack?.source }));

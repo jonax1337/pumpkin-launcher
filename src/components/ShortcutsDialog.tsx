@@ -3,7 +3,7 @@ import { TABS } from "@/app/mainTabs";
 import { HELP_KEY, SEARCH_KEY, SHORTCUT, shortcutLabel } from "@/app/shortcuts";
 import { useI18n } from "@/i18n";
 import { platform } from "@/lib/platform";
-import { Dialog, DialogActions } from "@/ui";
+import { Dialog, DialogActions, ShortcutList, type ShortcutRow } from "@/ui";
 
 const useShortcutHelp = create<{ open: boolean }>(() => ({ open: false }));
 
@@ -12,35 +12,13 @@ export const showShortcuts = () => useShortcutHelp.setState({ open: true });
 
 type Row = { label: string; keys: string[] };
 
-/** Eine Gruppe der Übersicht: Überschrift, darunter Zeilen mit Beschreibung links und Tasten rechts. */
-function KeyGroup({ title, rows }: { title: string; rows: Row[] }) {
-  const { t } = useI18n();
-  return (
-    <section className="vx-keys-group">
-      <h3 className="vx-keys-h">{title}</h3>
-      <dl className="vx-keys">
-        {rows.map(({ label, keys }) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd>
-              {keys.map((key) => (
-                // Jede Taste einer Kombination ist eine eigene Kappe (Strg + K)
-                <span key={key} className="vx-keys-combo">
-                  {shortcutLabel(key, t).split("+").map((part, i) => <kbd key={i} className="vx-slot">{part}</kbd>)}
-                </span>
-              ))}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-}
-
 /** Übersicht aller Kürzel; Texte und Tasten kommen aus derselben Tabelle wie Tooltips und `aria-keyshortcuts`. */
 export function ShortcutsDialog() {
   const { t } = useI18n();
   const open = useShortcutHelp((s) => s.open);
+  /** Jede Taste einer Kombination ist eine eigene Kappe (Strg + K). */
+  const toRows = (rows: Row[]): ShortcutRow[] =>
+    rows.map(({ label, keys }) => ({ label, combos: keys.map((key) => shortcutLabel(key, t).split("+")) }));
   const general: Row[] = [
     { label: t("palette.shortcut"), keys: [SHORTCUT.palette] },
     { label: t("ui.shortcut.settings"), keys: [SHORTCUT.settings] },
@@ -58,12 +36,12 @@ export function ShortcutsDialog() {
       size="l"
       footer={<DialogActions cancel={t("common.close")} />}
     >
-      <div className="vx-keys-grid">
-        <KeyGroup title={t("ui.shortcut.groupGeneral")} rows={general} />
-        <KeyGroup title={t("ui.shortcut.groupAreas")} rows={areas} />
+      <div className="grid grid-cols-2 items-start gap-6 le-720:grid-cols-1">
+        <ShortcutList title={t("ui.shortcut.groupGeneral")} rows={toRows(general)} />
+        <ShortcutList title={t("ui.shortcut.groupAreas")} rows={toRows(areas)} />
       </div>
-      <p className="help vx-keys-note">{t("ui.shortcut.tabHint")}</p>
-      {platform === "windows" && <p className="help vx-keys-note">{t("ui.shortcut.windowHint")}</p>}
+      <p className="help mt-4">{t("ui.shortcut.tabHint")}</p>
+      {platform === "windows" && <p className="help mt-2">{t("ui.shortcut.windowHint")}</p>}
     </Dialog>
   );
 }

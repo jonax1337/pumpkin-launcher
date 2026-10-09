@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Actions, Radio, TextField } from "@/ui";
+import { Actions, Radio, Input } from "@/ui";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
 import { useI18n } from "@/i18n";
 import { blurOnEnter } from "@/lib/dom";
@@ -11,7 +11,7 @@ type Size = { width: number; height: number };
 const DEFAULT_SIZE: Size = { width: 1280, height: 720 };
 
 /** Breite des Zahlenfelds in px; fünf Stellen reichen für jede Auflösung. */
-const SIZE_FIELD_WIDTH = 96;
+const SIZE_FIELD_WIDTH = "w-24";
 const SIZE_FIELD_MAX_DIGITS = 5;
 
 const validSize = ({ width, height }: Size) => Number.isInteger(width) && Number.isInteger(height) && width > 0 && height > 0;
@@ -45,8 +45,8 @@ export function WindowChooser({ name, value, onChange, disabled }: {
   });
 
   const sizeField = (label: string, text: string, setText: (v: string) => void) => (
-    <TextField
-      width={SIZE_FIELD_WIDTH}
+    <Input
+      className={SIZE_FIELD_WIDTH}
       inputMode="numeric"
       maxLength={SIZE_FIELD_MAX_DIGITS}
       aria-label={label}

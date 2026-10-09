@@ -18,8 +18,8 @@ function versionText(i: Instance) {
 }
 
 /** Breite von Knopf und Balken beim Reparieren in px; fest, damit der Balken erscheinen kann, ohne dass etwas springt. */
-const REPAIR_BUTTON_WIDTH = 160;
-const REPAIR_PROGRESS_WIDTH = 180;
+const REPAIR_BUTTON = "w-40";
+const REPAIR_PROGRESS = "w-45 flex-none";
 
 /** Spielversion samt Wechsel und Reparieren. */
 export function VersionSection({ instance }: { instance: Instance }) {
@@ -45,7 +45,7 @@ export function VersionSection({ instance }: { instance: Instance }) {
           <Button
             size="s"
             icon="refresh"
-            width={REPAIR_BUTTON_WIDTH}
+            className={REPAIR_BUTTON}
             disabled={isBusy(phase) || install.isPending}
             onClick={() => install.mutate(instance)}
           >
@@ -54,8 +54,7 @@ export function VersionSection({ instance }: { instance: Instance }) {
           {/* Platz bleibt reserviert: der Balken erscheint, ohne dass etwas springt */}
           <Progress
             p={(percent ?? 0) / 100}
-            width={REPAIR_PROGRESS_WIDTH}
-            className={cn(!repairing && "st-ghosted")}
+            className={cn(REPAIR_PROGRESS, !repairing && "st-ghosted")}
             label={t("detail.settings.repairProgress")}
           />
         </Actions>
@@ -70,7 +69,7 @@ export function DangerSection({ instance }: { instance: Instance }) {
   const { t } = useI18n();
   const phase = usePhase(instance.id);
   return (
-    <FormSection plate title={t("detail.settings.dangerSection")} className="st-danger">
+    <FormSection plate danger title={t("detail.settings.dangerSection")}>
       <FormRow label={t("detail.settings.deleteInstance")} hint={t("detail.settings.deleteInstanceText")}>
         <Button size="s" variant="danger" icon="trash" disabled={isBusy(phase)} onClick={() => askDelete(instance)}>
           {t("common.delete")}

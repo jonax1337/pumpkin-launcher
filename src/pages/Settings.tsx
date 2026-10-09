@@ -4,7 +4,7 @@ import { useI18n } from "@/i18n";
 import { useView } from "@/app/Layout";
 import { AccountAddButtons, AccountsSection } from "@/components/accounts/AccountsSection";
 import { showShortcuts } from "@/components/ShortcutsDialog";
-import { Button, ContextMenu, Heading, Page, PageHeader, TabPanel, Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type MenuEntry } from "@/ui";
+import { Button, ContextMenu, Form, Heading, Page, PageHeader, TabPanel, Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type MenuEntry } from "@/ui";
 import { AboutTab } from "./settings/AboutTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
 import { FriendsTab } from "./settings/FriendsTab";
@@ -61,7 +61,7 @@ export function SettingsPage() {
 
   return (
     <ContextMenu items={menu}>
-      <Page className="settings-page">
+      <Page>
         <PageHeader title={t("common.settings")}>
           <Button onClick={showShortcuts}>{t("pages.settings.shortcutsButton")}</Button>
         </PageHeader>
@@ -77,16 +77,16 @@ export function SettingsPage() {
             />
           </WorkspaceRail>
         }>
-          <WorkspaceContent id="settings-content" className="settings-content">
+          <WorkspaceContent id="settings-content" className="@container/settings-content min-h-[480px]">
             <TabPanel idBase="settings" value={section.value} tabIndex={0}>
-              <header className="settings-head">
-                <Heading level="section">{t(section.key)}</Heading>
-                <div className="settings-head-actions" ref={setActionsTarget} />
+              <header className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+                <Heading level="section" className="mr-auto">{t(section.key)}</Heading>
+                <div className="contents" ref={setActionsTarget} />
               </header>
               <PanelActionsProvider value={actionsTarget}>
-                <div key={section.value} className="settings-body">
+                <Form flat key={section.value}>
                   <SectionBody id={section.value} />
-                </div>
+                </Form>
               </PanelActionsProvider>
             </TabPanel>
           </WorkspaceContent>

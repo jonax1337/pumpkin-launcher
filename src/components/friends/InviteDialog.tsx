@@ -6,11 +6,12 @@ import { useLaunchAccount } from "@/components/accounts/useAccounts";
 import { useCreateInstance } from "@/hooks/useInstances";
 import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS, LOADER_LABELS, type InstanceCandidate, type InstanceSummary, type Invite, type JoinPlan, type ModRef } from "@/lib/types";
-import { Button, Chip, Dialog, DialogActions, ErrorBox, Field, Heading, Hint, Select, Skel, StatusPanel } from "@/ui";
+import { Button, Chip, Dialog, DialogActions, Field, Heading, Hint, Select, Skel, StatusPanel } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { actionAllowed, canJoinWith, chosenCandidate, inviteAction, needsMicrosoftAccount } from "./inviteModel";
 
-const PRIMARY_WIDTH_PX = 200;
-const PLAN_SKELETON_HEIGHT_PX = 96;
+const PRIMARY_WIDTH = "w-[200px]";
+const PLAN_SKELETON_HEIGHT = "h-24";
 
 /** Minecraft-Version, Loader und Zahl der Mods der Welt: was der Gastgeber teilt (Spezifikation 5.5). */
 function SummaryChips({ summary }: { summary: InstanceSummary }) {
@@ -32,10 +33,10 @@ function Sender({ invite }: { invite: Invite }) {
       <FriendAvatar friendId={invite.from} name={invite.fromName} />
       <div className="fr-person-text">
         <div className="fr-person-line">
-          <SelfAsserted><b className="vx-trunc">{invite.fromName}</b></SelfAsserted>
+          <SelfAsserted><b className="truncate">{invite.fromName}</b></SelfAsserted>
           <Fingerprint value={invite.fromFingerprint} />
         </div>
-        <span className="vx-trunc fr-line-sub">{t("friendsInvite.invites", { title: invite.title })}</span>
+        <span className="truncate fr-line-sub">{t("friendsInvite.invites", { title: invite.title })}</span>
       </div>
     </div>
   );
@@ -46,12 +47,12 @@ function ModList({ title, mods }: { title: string; mods: ModRef[] }) {
   if (mods.length === 0) return null;
   return (
     <section className="fr-mods">
-      <Heading level="card" className="fr-mods-title">{title}</Heading>
+      <Heading level="card" className="mb-1">{title}</Heading>
       <ul className="fr-mods-list">
         {mods.map((mod) => (
           <li key={mod.fileName}>
-            <b className="vx-trunc fr-line">{mod.title}</b>
-            {mod.title !== mod.fileName && <span className="vx-trunc fr-line-sub">{mod.fileName}</span>}
+            <b className="truncate fr-line">{mod.title}</b>
+            {mod.title !== mod.fileName && <span className="truncate fr-line-sub">{mod.fileName}</span>}
           </li>
         ))}
       </ul>
@@ -67,7 +68,7 @@ function MissingContent({ candidate }: { candidate: InstanceCandidate }) {
       <StatusPanel tone="warn" title={t("friendsInvite.missing.title", { name: candidate.name })}>{t("friendsInvite.missing.body")}</StatusPanel>
       <ModList title={t("friendsInvite.missing.listMissing")} mods={candidate.missing} />
       <ModList title={t("friendsInvite.missing.listExtra")} mods={candidate.extra} />
-      <Hint className="fr-hint-above" icon="info">{t("friendsInvite.missing.hint")}</Hint>
+      <Hint className="mt-3" icon="info">{t("friendsInvite.missing.hint")}</Hint>
     </>
   );
 }
@@ -79,10 +80,10 @@ function MissingContent({ candidate }: { candidate: InstanceCandidate }) {
 function InstancePicker({ plan, candidate, onPick }: { plan: JoinPlan; candidate: InstanceCandidate; onPick: (instanceId: string) => void }) {
   const { t } = useI18n();
   if (plan.candidates.length === 1) {
-    return candidate.matches && <p className="fr-pick"><b>{t("friendsInvite.instance.single", { name: candidate.name })}</b></p>;
+    return candidate.matches && <p className="mb-3"><b>{t("friendsInvite.instance.single", { name: candidate.name })}</b></p>;
   }
   return (
-    <Field label={t("friendsInvite.instance.label")} className="fr-pick">
+    <Field label={t("friendsInvite.instance.label")} className="mb-3">
       <Select
         value={candidate.instanceId}
         onChange={onPick}
@@ -99,7 +100,7 @@ function PlanView({ plan, candidate, onPick }: { plan: JoinPlan; candidate: Inst
   const { summary } = plan;
   return (
     <>
-      {plan.lookupFailed && <Hint className="fr-hint-below" icon="info">{t("friendsInvite.lookupFailed")}</Hint>}
+      {plan.lookupFailed && <Hint className="mb-3" icon="info">{t("friendsInvite.lookupFailed")}</Hint>}
       {plan.verdict === "versionUnsupported" && (
         <StatusPanel tone="bad" title={t("friendsInvite.unsupported.title", { min: FRIENDS_LIMITS.minMcLabel })}>
           {t("friendsInvite.unsupported.body", { version: summary.minecraftVersion, min: FRIENDS_LIMITS.minMcLabel })}
@@ -155,12 +156,12 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
           )}
           <DialogActions cancel={{ label: t("friendsInvite.later"), autoFocus: true, disabled: busy }} />
           {action === "join" && (
-            <Button variant="primary" icon="play" width={PRIMARY_WIDTH_PX} disabled={!actionAllowed(action, hasMicrosoftAccount)} onClick={() => candidate && onJoin(candidate.instanceId)}>
+            <Button variant="primary" icon="play" className={PRIMARY_WIDTH} disabled={!actionAllowed(action, hasMicrosoftAccount)} onClick={() => candidate && onJoin(candidate.instanceId)}>
               {t("friendsInvite.join")}
             </Button>
           )}
           {action === "createVanilla" && (
-            <Button variant="primary" width={PRIMARY_WIDTH_PX} disabled={busy} onClick={makeVanillaInstance}>
+            <Button variant="primary" className={PRIMARY_WIDTH} disabled={busy} onClick={makeVanillaInstance}>
               {createVanilla.isPending ? t("friendsInvite.creating") : t("friendsInvite.createVanilla")}
             </Button>
           )}
@@ -169,17 +170,17 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
     >
       <Sender invite={invite} />
       <SummaryChips summary={invite.instance} />
-      {!invite.hostOnline && <Hint className="fr-hint-above" tone="warn">{t("friendsInvite.hostOffline")}</Hint>}
+      {!invite.hostOnline && <Hint className="mt-3" tone="warn">{t("friendsInvite.hostOffline")}</Hint>}
       <div className="fr-plan">
         {plan.isFetching ? (
-          <Skel h={PLAN_SKELETON_HEIGHT_PX} />
+          <Skel className={PLAN_SKELETON_HEIGHT} />
         ) : plan.error ? (
           <ErrorBox title={t("friendsInvite.planFailed")} error={plan.error} onRetry={() => void plan.refetch()} />
         ) : (
           verdict && <PlanView plan={verdict} candidate={candidate} onPick={setPickedId} />
         )}
       </div>
-      {needsMicrosoftAccount(action, hasMicrosoftAccount) && <Hint className="fr-hint-above" tone="warn" live>{t("friendsInvite.offlineAccount")}</Hint>}
+      {needsMicrosoftAccount(action, hasMicrosoftAccount) && <Hint className="mt-3" tone="warn" live>{t("friendsInvite.offlineAccount")}</Hint>}
     </Dialog>
   );
 }

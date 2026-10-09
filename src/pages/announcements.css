@@ -5,59 +5,21 @@
 .announcements-rail { padding: 0; }
 .announcements-rail-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .announcements-rail-header { display: grid; gap: 8px; justify-items: start; padding: var(--pg-pad); border-bottom: var(--px) solid var(--line); }
-.announcements-list { list-style: none; margin: 0; padding: 0; max-height: max(280px, calc(100dvh - 360px)); overflow-y: auto; overscroll-behavior-y: contain; }
-.announcements-list > li { border-bottom: var(--px) solid var(--line); }
-.announcement-list-item {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  width: 100%;
-  padding: 12px var(--pg-pad);
-  color: var(--fg);
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--st);
-}
-.announcement-list-item:hover { background: var(--panel-2); }
-.announcement-list-item:active { background: var(--pr-row); }
-/* Gewählt: Akzentbalken links (Zustand steht zusätzlich in aria-current) */
-.announcement-list-item[aria-current="true"] { background: color-mix(in srgb, var(--acc) 10%, var(--panel)); box-shadow: inset var(--u2) 0 0 var(--acc); }
-.announcement-list-item:focus-visible { outline: var(--px) solid var(--focus); outline-offset: calc(var(--px) * -1); }
-.announcement-list-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 22px; }
-.announcement-list-meta time, .announcement-list-author { color: var(--fg-2); font-size: calc(13px * var(--tz)); overflow-wrap: anywhere; }
-.announcement-list-title { font: 800 var(--hd-card)/1.15 var(--f-display); letter-spacing: .01em; overflow-wrap: anywhere; }
 .announcements-rail-footer { padding: var(--pg-pad); }
 /* Lesefläche: Platte des Kits, Titel mit hartem Schatten */
 .announcements-preview, .announcement-article { min-width: 0; padding: var(--pg-pad); }
 .announcements-eyebrow { margin: 0 0 14px; color: var(--acc-hi); font: var(--hd-card)/1.2 var(--f-px); text-transform: uppercase; letter-spacing: .04em; }
-.announcements-latest .announcements-latest-title { font-size: var(--hd-hero); line-height: 1.1; max-width: 32ch; overflow-wrap: anywhere; }
 .announcements-excerpt { max-width: 80ch; margin: 16px 0 0; color: var(--fg-2); line-height: 1.6; }
-.announcements-latest .vx-btn { margin-top: 24px; }
 .announcement-article-header { padding-bottom: 20px; border-bottom: var(--px) solid var(--line); }
 .announcement-article-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-.announcement-article .announcement-title { font-size: var(--hd-hero); line-height: 1.1; width: fit-content; max-width: min(100%, 32ch); overflow-wrap: anywhere; scroll-margin-top: 24px; }
-.announcement-title:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 2px; }
 .announcement-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 14px; color: var(--fg-2); font-size: calc(13px * var(--tz)); overflow-wrap: anywhere; }
-.announcement-article-header > .vx-btn { margin-top: 14px; }
 .announcement-article .desc { max-width: 80ch; min-width: 0; margin-top: 24px; }
 .announcements-page .desc a[href]:focus-visible,
 .announcements-page .desc summary:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 3px; }
-.announcements-page .vx-btn { max-width: 100%; height: auto; min-height: var(--vx-h-m); white-space: normal; }
-.announcements-page .vx-btn[data-size="s"] { min-height: var(--vx-h-s); }
-.announcements-page .vx-btn .vx-bc { white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 960px) {
-  .announcements-list { max-height: 260px; }
   .announcements-rail-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .announcement-list-item { transition: none; }
-}
 @media (forced-colors: active) {
-  .announcement-list-item[aria-current="true"] { outline: 2px solid Highlight; outline-offset: -2px; }
   .announcements-page .desc a[href]:focus-visible,
-  .announcements-page .desc summary:focus-visible,
-  .announcement-list-item:focus-visible,
-  .announcement-title:focus-visible { outline-color: Highlight; }
+  .announcements-page .desc summary:focus-visible { outline-color: Highlight; }
 }

@@ -1,5 +1,6 @@
 import { useI18n } from "@/i18n";
-import { Button, Dialog, DialogActions, ErrorBox, Hint, Panel, Progress, Skel } from "@/ui";
+import { Button, Dialog, DialogActions, Hint, Panel, Progress, Skel, Surface } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { copyWithToast } from "@/lib/clipboard";
 import { openPage } from "@/lib/links";
 import type { MsLoginStart } from "@/lib/types";
@@ -40,14 +41,14 @@ export function MsLoginDialog() {
 
 function MsLoginFooter({ state }: { state: LoginState }) {
   const { t } = useI18n();
-  if (state.step === "done") return <DialogActions confirm={{ label: t("common.done"), width: 124, autoFocus: true, onClick: closeMsLogin }} />;
+  if (state.step === "done") return <DialogActions confirm={{ label: t("common.done"), className: "w-[124px]", autoFocus: true, onClick: closeMsLogin }} />;
   return (
     <>
       {state.step === "code" && state.info.mode === "browser" && (
         <Button variant="ghost" onClick={() => void startMsLogin("device")}>{t("components.ms.useCodeInstead")}</Button>
       )}
       <DialogActions
-        cancel={{ label: state.step === "error" ? t("common.close") : t("common.cancel"), width: 124 }}
+        cancel={{ label: state.step === "error" ? t("common.close") : t("common.cancel"), className: "w-[124px]" }}
         confirm={state.step === "code" ? { label: t("components.ms.openPage"), icon: "external", onClick: () => openPage(state.info.verificationUri) } : undefined}
       />
     </>
@@ -73,7 +74,7 @@ function MsLoginStep({ state }: { state: LoginState }) {
 function MsLoginInfo() {
   const { t } = useI18n();
   return (
-    <Panel level="sunk" pad="m" className="ms-info">
+    <Panel level="sunk" className="ms-info p-4">
       <div className="ms-info-head">
         <b>{t("components.ms.javaTitle")}</b>
         <Button variant="ghost" size="s" icon="external" bleed="end" onClick={() => openPage(JAVA_EDITION_URL)}>
@@ -89,9 +90,9 @@ function MsLoginInfo() {
 function StartingStep() {
   return (
     <div className="ms-starting" aria-busy>
-      <Skel h={20} w="80%" />
-      <Skel h={64} w={280} />
-      <Skel h={16} w="60%" />
+      <Skel className="h-5 w-4/5" />
+      <Skel className="h-16 w-[280px]" />
+      <Skel className="h-4 w-3/5" />
     </div>
   );
 }
@@ -119,32 +120,43 @@ function BrowserStep({ info }: { info: MsLoginStart }) {
   );
 }
 
+/** Schritt der Geräteanmeldung: Ziffer in einem kleinen Slot (Pixelschrift, Kupfer), daneben der Text. */
+const STEP = "flex items-center gap-3";
+
+function StepNumber({ n }: { n: number }) {
+  return (
+    <Surface kind="slot" as="span" className="grid size-7 flex-none place-items-center text-[18px] leading-none font-normal font-(family-name:--f-px) text-(--copper)">
+      {n}
+    </Surface>
+  );
+}
+
 function DeviceStep({ info }: { info: MsLoginStart }) {
   const { t, tAround } = useI18n();
   const [openBefore, openAfter] = tAround("components.ms.stepOpen", "address");
   return (
     <>
       {/* Code-Anzeige: große Pixelschrift in eingelassenem Slot, Kopieren daneben */}
-      <div className="ms-codebox">
-        <span className="ms-code-label">{t("components.ms.yourCode")}</span>
-        <div className="vx-slot ms-code">
-          <b className="ms-code-text" aria-label={t("components.ms.codeSpaced", { code: info.userCode.split("").join(" ") })}>
+      <div className="grid gap-2">
+        <span className="text-[length:calc(12px*var(--tz))] font-semibold tracking-[.06em] text-(--fg-3) uppercase">{t("components.ms.yourCode")}</span>
+        <Surface kind="slot" className="flex min-w-0 items-center justify-between gap-3.5 py-2.5 pr-2.5 pl-[18px]">
+          <b className="text-[44px] leading-none font-normal font-(family-name:--f-px) tracking-[.14em] whitespace-nowrap text-(--copper) select-all [text-shadow:var(--tsh)]" aria-label={t("components.ms.codeSpaced", { code: info.userCode.split("").join(" ") })}>
             {info.userCode}
           </b>
           <Button icon="copy" onClick={() => copyWithToast(info.userCode, t("components.ms.codeCopied"))}>{t("common.copy")}</Button>
-        </div>
+        </Surface>
       </div>
-      <ol className="ms-steps">
-        <li>
-          <span className="vx-slot ms-step-n">1</span>
+      <ol className="m-0 grid list-none gap-2.5 p-0">
+        <li className={STEP}>
+          <StepNumber n={1} />
           <span>{openBefore}<b className="ms-address">{addressOf(info)}</b>{openAfter}</span>
         </li>
-        <li>
-          <span className="vx-slot ms-step-n">2</span>
+        <li className={STEP}>
+          <StepNumber n={2} />
           <span>{t("components.ms.stepCode")}</span>
         </li>
-        <li>
-          <span className="vx-slot ms-step-n">3</span>
+        <li className={STEP}>
+          <StepNumber n={3} />
           <span>{t("components.ms.stepAccount")}</span>
         </li>
       </ol>

@@ -16,18 +16,11 @@
 /* Einladung: Chips, Modliste und Abstände der Blöcke */
 .fr-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .fr-mods { margin-top: 12px; }
-.fr-mods-title { margin-bottom: 4px; }
 .fr-mods-list { display: flex; flex-direction: column; gap: 4px; }
 .fr-mods-list > li { min-width: 0; }
-.fr-hint-above { margin-top: 12px; }
-.fr-hint-below { margin-bottom: 12px; }
 .fr-plan { margin-top: 16px; }
-.fr-pick { margin-bottom: 12px; }
-.fr-kv { margin-top: 12px; }
-.fr-kv > dd { min-width: 0; overflow-wrap: anywhere; }
 
 /* Sitzungsmarke und ihr Popover */
-.fr-session-chip { width: 248px; }
 .fr-session-tail { flex: none; }
 .fr-session-pop { display: flex; flex-direction: column; gap: 16px; padding: 4px; }
 .fr-facts { display: flex; flex-direction: column; gap: 8px; }
@@ -38,4 +31,3 @@
 /* Fingerabdruck in Pixelschrift; im Dialog auf einer Slot-Fläche */
 .fr-fingerprint { font: 400 calc(17px * var(--tz))/1 var(--f-px); letter-spacing: .04em; white-space: nowrap; }
 .fr-fingerprint[data-size="l"] { font-size: calc(30px * var(--tz)); letter-spacing: .06em; }
-.fr-print { margin-block: 16px; padding: 14px 16px 12px; text-align: center; user-select: text; }

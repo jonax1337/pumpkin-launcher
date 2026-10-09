@@ -14,7 +14,8 @@ import { copyWithToast } from "@/lib/clipboard";
 import { formatDate } from "@/lib/format";
 import { type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
-import { Actions, Button, ConfirmDialog, Count, ErrorBox, FormRow, FormSection, Heading, Hint, Icon, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Switch, type IconName } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Actions, Button, ConfirmDialog, Count, FormRow, FormSection, Heading, Hint, Icon, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Surface, Switch, type IconName } from "@/ui";
 import { SettingsInfo } from "./SettingsInfo";
 
 const SECOND_MS = 1000;
@@ -41,12 +42,12 @@ function EnableRow() {
 function EnableGate({ onEnable }: { onEnable: () => void }) {
   const { t } = useI18n();
   return (
-    <div className="friends-gate vx-pit">
-      <Icon name="pumpkin" size="xl" />
+    <Surface kind="pit" className="grid justify-items-center gap-2.5 px-5 py-8 text-center">
+      <Icon name="pumpkin" size="xl" className="text-(--copper)" />
       <Heading level="sub">{t("friends.gate.disabled.title")}</Heading>
-      <p>{t("friendsSettings.enableAside")}</p>
+      <p className="max-w-[52ch] text-(--fg-2)">{t("friendsSettings.enableAside")}</p>
       <Button variant="primary" size="l" icon="friends" onClick={onEnable}>{t("friends.gate.disabled.action")}</Button>
-    </div>
+    </Surface>
   );
 }
 
@@ -179,7 +180,7 @@ function FingerprintRow({ me }: { me: Me }) {
   return (
     <FormRow label={t("friendsSettings.fingerprintLabel")} hint={t("friendsSettings.fingerprintHint")}>
       <Actions gap={12}>
-        <span className="vx-slot friends-code"><Count value={me.fingerprint} size={20} /></span>
+        <Surface kind="slot" as="span" className="inline-flex min-h-10 items-center px-4 text-(--copper)"><Count value={me.fingerprint} size={20} className="select-text" /></Surface>
         <Button size="s" icon="copy" onClick={() => copyWithToast(me.peerId, t("friendsSettings.peerIdCopied"))}>{t("friendsSettings.copyPeerId")}</Button>
       </Actions>
     </FormRow>
@@ -216,17 +217,17 @@ function BlockedSection() {
   const unblock = useUnblockPeer();
   return (
     <FormSection title={t("friendsSettings.sectionBlocked")} level={3}>
-      <Hint icon="info" className="blocked-hint">{t("friendsSettings.blockedHint")}</Hint>
+      <Hint icon="info" className="mb-2.5">{t("friendsSettings.blockedHint")}</Hint>
       <QueryList
         query={blocked}
         error={t("friendsSettings.loadFailed")}
-        loading={<Skel h={ROW_SKELETON_HEIGHT_PX} />}
+        loading={<Skel style={{ height: ROW_SKELETON_HEIGHT_PX }} />}
         empty={<Hint>{t("friendsSettings.blockedNone")}</Hint>}
       >
         {(peers) => (
-          <List variant="accounts" aria-label={t("friendsSettings.sectionBlocked")}>
+          <List spaced aria-label={t("friendsSettings.sectionBlocked")}>
             {peers.map((peer) => (
-              <ListRow key={peer.peerId}>
+              <ListRow key={peer.peerId} plate="row">
                 <RowTitle title={peer.displayName} sub={t("friendsSettings.blockedSince", { date: formatDate(peer.blockedAt * SECOND_MS) })} />
                 <Button size="s" disabled={unblock.isPending} onClick={() => unblock.mutate(peer.peerId)}>{t("friendsSettings.unblock")}</Button>
               </ListRow>
@@ -348,7 +349,7 @@ export function FriendsTab() {
   const { t } = useI18n();
   const query = useFriendsState();
   if (query.error) return <ErrorBox title={t("friendsSettings.loadFailed")} error={query.error} onRetry={() => void query.refetch()} />;
-  if (!query.data) return <Skel h={ROW_SKELETON_HEIGHT_PX * 3} />;
+  if (!query.data) return <Skel style={{ height: ROW_SKELETON_HEIGHT_PX * 3 }} />;
   const state = query.data;
   return (
     <>

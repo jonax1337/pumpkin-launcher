@@ -7,8 +7,8 @@ import { installedPackVersion, usePackChangelog, usePackUpdate, type PackStatus 
 import type { ContentVersion } from "@/lib/content-types";
 import { LOADER_LABELS, type Instance, type ModLoader } from "@/lib/types";
 
-const CONFIRM_WIDTH = 150;
-const CHANGELOG_SKELETON_HEIGHT = 160;
+const CONFIRM_BUTTON = "w-[150px]";
+const CHANGELOG_SKELETON = "h-40";
 
 const loaderLabel = (loader: string | undefined) => LOADER_LABELS[loader as ModLoader] ?? loader ?? "";
 
@@ -46,7 +46,7 @@ export function PackUpdateDialog({ instance, status, onClose }: { instance: Inst
           cancel={t("common.cancel")}
           confirm={{
             label: newer ? t("detail.pack.apply") : t("detail.pack.switch"),
-            width: CONFIRM_WIDTH,
+            className: CONFIRM_BUTTON,
             disabled: !version || picked === installedId || update.isPending,
             onClick: confirm,
           }}
@@ -88,7 +88,7 @@ function GameChange({ instance, version }: { instance: Instance; version: Conten
 function Changelog({ instanceId, versionId }: { instanceId: string; versionId: string }) {
   const { t } = useI18n();
   const changelog = usePackChangelog(instanceId, versionId || null);
-  if (changelog.isPending) return <Skel h={CHANGELOG_SKELETON_HEIGHT} />;
+  if (changelog.isPending) return <Skel className={CHANGELOG_SKELETON} />;
   if (changelog.error) return <Hint tone="bad">{t("detail.pack.changelogError")}</Hint>;
   if (!changelog.data) return <Hint>{t("detail.pack.noChangelog")}</Hint>;
   return <Description body={changelog.data} />;

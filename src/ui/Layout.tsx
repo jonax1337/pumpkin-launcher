@@ -1,141 +1,130 @@
 /**
- * Seitengerüst des Kits. Seitenschema, in dieser Reihenfolge und überall gleich:
- * `Page` → `PageHeader` (Titel · Zähler · Aktionen, optional `tabs`) → [Hinweis] → [`Toolbar`] → eine Fläche (`Workspace` mit `WorkspaceContent`, optional `WorkspaceRail`).
- * Szenenseiten (Start, Instanz) tragen `HeroTitle`, `HeroMeta` und `HeroShade`. Dazu Überschriftenstufen, Abschnittskopf, Aktionsreihe.
- * Maße fest in px (nie von --px abhängig). Aussehen und Werte: ui/layout.css (vx-*), Tokens: ui/tokens.css (--pg-*).
+ * Seitengerüst des Kits: die Reihenfolge Page → PageHeader → Hinweis → Toolbar → Workspace),
+ * aber das Layout steht vollständig als Tailwind-Utilities in diesen Komponenten, nicht in einem Stylesheet.
+ * Jede Komponente nimmt `className`; Utilities des Aufrufers ersetzen die gleichartigen Utilities hier (cn merged), z. B.
+ * `<Page className="max-w-5xl mx-auto">` oder `<Toolbar className="gap-2">`. Das Aussehen (Linie, Platte, Überschrift) bleibt in look.css.
  */
 import { Children, isValidElement, type ComponentProps, type ReactNode } from "react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { cn } from "@/lib/utils";
+import { flag } from "./util";
 import { Count } from "./Chip";
+import { Skel } from "./Feedback";
+import { Heading, Panel, type HeadingLevel } from "./Panel";
 import { Tabs, type TabsProps } from "./Tabs";
-import { flag, hasContent } from "./util";
-
-/** Überschriftenstufen (Display, Versalien): Szene (hero) 52, xl 72 · Seite 40 · Dialog 26 · Abschnitt 22 · Unterabschnitt 20 · Karte 18. */
-export type HeadingLevel = "hero" | "page" | "dialog" | "section" | "sub" | "card";
-type HTag = "h1" | "h2" | "h3" | "h4";
-
-const TAG: Record<HeadingLevel, HTag> = { hero: "h1", page: "h1", dialog: "h2", section: "h2", sub: "h3", card: "h3" };
-
-/** Überschrift einer Stufe; das Element (`as`) folgt der Dokumentstruktur, die Größe der Stufe. */
-export function Heading({ level, as, className, children, ...props }: { level: HeadingLevel; as?: HTag } & ComponentProps<"h2">) {
-  const H = as ?? TAG[level];
-  return <H className={cn("vx-h", className)} data-level={level} {...props}>{children}</H>;
-}
+import { Surface } from "./Surface";
 
 /**
- * Seitenrahmen: Rand links/rechts `--gut`, oben/unten fest (`--pg-top`/`--pg-bottom`), Kinder im Abstand `--pg-gap-m`.
- * Jede Seite benutzt ihn; Abstände zwischen Kopf, Hinweis, Leiste und Fläche gibt allein der Rahmen vor (keine Außenabstände an den Kindern).
+ * Sprunglink: erstes Bedienelement der App, nur bei Tastaturfokus im Bild (sonst oberhalb des Fensters). `onClick` setzt den Fokus
+ * auf den Inhalt. Als erstes Kind des App-Rahmens (`position: relative`) setzen.
  */
+export function SkipLink({ className, ...props }: Omit<ComponentProps<"button">, "type">) {
+  return (
+    <Surface
+      kind="stone"
+      as="button"
+      text
+      type="button"
+      className={cn("lk-skip absolute top-2 left-gut z-100 h-(--lk-h-s) -translate-y-[200%] px-3.5 focus-visible:translate-y-0", className)}
+      {...props}
+    />
+  );
+}
+
+/** Seitenrahmen: Rand links/rechts `--gut`, oben/unten fest, Kinder im Abstand 16. Abstände gibt allein der Rahmen vor. */
 export function Page({ className, ...props }: ComponentProps<"section">) {
-  return <section className={cn("vx-page", className)} {...props} />;
+  return <section className={cn("flex w-full min-w-0 flex-col gap-pg-m px-gut pt-pg-top pb-pg-bottom", className)} {...props} />;
 }
 
 /**
- * Seitenkopf: Titel (Display, harter Schatten) mit kompaktem Zähler, Aktionen rechts, darunter die Trennlinie.
- * `tabs` (Reiterleiste) sitzt direkt darunter; ihre Grundlinie ersetzt dann die Trennlinie, die Abstände bleiben dieselben.
- * Das h1 bekommt nach dem Seitenwechsel den Fokus (app/Layout).
+ * Seitenkopf: Titel (Display) mit Zähler, Aktionen rechts, darunter die Trennlinie.
+ * `tabs` sitzt direkt darunter; ihre Grundlinie ersetzt dann die Trennlinie.
  */
 export function PageHeader({ title, count, id, tabs, children, className }: {
   title: ReactNode; count?: number; id?: string; tabs?: ReactNode; children?: ReactNode; className?: string;
 }) {
   return (
-    <div className={cn("vx-pageh", className)} data-tabs={flag(hasContent(tabs))}>
-      <div className="vx-pageh-row">
-        <div className="vx-pageh-t">
-          <Heading level="page" id={id} className="vx-trunc">{title}</Heading>
-          {count != null && <Count value={count} size={18} muted className="vx-pageh-n" />}
+    <header className={cn("lk-rule flex min-w-0 flex-col gap-pg-s", tabs ? "pb-0 [&>.lk-tabs]:[--t-px:0px]" : "pb-pg-m", className)} data-rule={flag(!tabs)}>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-pg-m gap-y-pg-s">
+        <div className="flex min-w-0 flex-1 items-baseline gap-pg-s">
+          <Heading level="page" id={id}>{title}</Heading>
+          {count != null && <Count value={count} size={26} muted className="shrink-0" />}
         </div>
-        {children && <div className="vx-pageh-a">{children}</div>}
+        {Children.count(children) > 0 && <div className="ms-auto flex min-w-0 flex-wrap items-center gap-pg-s">{children}</div>}
       </div>
       {tabs}
-    </div>
-  );
-}
-
-/** Titel einer Szenenseite (Start, Instanz): Display, harter Schatten; `xl` für den großen Start-Titel. */
-export function HeroTitle({ size, as, className, ...props }: { size?: "xl"; as?: HTag } & ComponentProps<"h1">) {
-  return <Heading level="hero" as={as} className={className} data-size={size} {...props} />;
-}
-
-/** Metazeile unter dem Szenentitel: Text (`Meta`) und kleine Knöpfe in einer Reihe, bei Platzmangel umbrechend. */
-export function HeroMeta({ className, ...props }: ComponentProps<"div">) {
-  return <div className={cn("vx-hero-meta", className)} {...props} />;
-}
-
-/** Abdunklung der Szene in weichen Verläufen; füllt den Szenenkopf, Text steht unten. */
-export function HeroShade() {
-  return <div className="vx-shade" aria-hidden />;
-}
-
-/** Seitenraster mit optionalem Kontextbereich; ohne `rail` nutzt der Inhalt die volle Breite. */
-export function Workspace({ rail, className, children, ...props }: ComponentProps<"div"> & { rail?: ReactNode }) {
-  return (
-    <div className={cn("vx-workspace", className)} data-rail={flag(hasContent(rail))} {...props}>
-      {rail}
-      {children}
-    </div>
-  );
-}
-
-/** Kontext oder Navigation neben dem Inhalt, auf schmalen Fenstern darüber. */
-export function WorkspaceRail({ className, ...props }: ComponentProps<"aside">) {
-  return <aside className={cn("vx-workspace-rail", className)} data-ctx="overlay" {...props} />;
-}
-
-/** Inhaltsfläche; `plain` übernimmt die bereits vorhandene Oberfläche eines eingebetteten Bereichs. */
-export function WorkspaceContent({ variant = "panel", className, ...props }: ComponentProps<"div"> & { variant?: "panel" | "plain" }) {
-  return <div className={cn("vx-workspace-content", className)} data-variant={variant} data-ctx={variant === "panel" ? "overlay" : undefined} {...props} />;
-}
-
-export type WorkspaceTabsProps<V extends string> = Omit<TabsProps<V>, "variant" | "sticky">;
-
-/** Kit-Navigation für das Seitenraster: Pixel-Platten links, kompakte Segmente über dem Inhalt. */
-export function WorkspaceTabs<V extends string>({ className, ...props }: WorkspaceTabsProps<V>) {
-  const stacked = useMediaQuery("(max-width: 960px)");
-  return <Tabs {...props} variant={stacked ? "segment" : "vertical"} className={cn("vx-workspace-tabs", className)} />;
-}
-
-/**
- * Abschnittskopf: 32 px, Titel links (Stufe section 22 / sub 20 / card 18), Aktionen rechts (meist Geist s, bündig per bleed="end").
- * `info` steht neben dem Titel, aber außerhalb der Überschrift (z. B. ein Info-Knopf): sein Text gehört nicht zum Namen der Überschrift.
- */
-export function SectionHeader({ title, as, size = "section", id, info, actions, className }: {
-  title: ReactNode; as?: "h2" | "h3" | "h4"; size?: "section" | "sub" | "card"; id?: string; info?: ReactNode; actions?: ReactNode; className?: string;
-}) {
-  const heading = <Heading level={size} as={as} id={id} className="vx-trunc">{title}</Heading>;
-  return (
-    <div className={cn("vx-sech", className)} data-size={size}>
-      {info ? <div className="vx-sech-t">{heading}{info}</div> : heading}
-      {actions && <div className="vx-sech-a">{actions}</div>}
-    </div>
+    </header>
   );
 }
 
 /**
- * Werkzeugleiste unter dem Seitenkopf: Steuerelemente 40 (dicht 32) im Abstand 12 (`--tb-gap`); Mindesthöhe 32 (dichte Leisten innerhalb von Reitern), 40 (Suche, Sortieren, Ansicht) oder 56 (Inhalte mit Auswahl).
- * `alt`: zweite Leiste deckungsgleich darüber (Auswahl-/Bulk-Leiste), sichtbar bei `altActive`; die Höhe bleibt, nichts springt.
- * Die Leiste bricht um, wenn die Breite nicht reicht (die Höhe ist Mindesthöhe); alles nach einem `Spacer` bildet eine Gruppe,
- * die rechts bleibt und beim Umbruch zusammenbleibt.
- * `search`: Breite der Suchfelder darin (zentral, nie breiter als die Leiste): s 220 · m 260 · l 320, unter 1180 px Fensterbreite 184 · 240 · 280.
- * `label`: macht die Leiste zur benannten Gruppe (role=toolbar nur mit echter Pfeiltasten-Bedienung, daher group).
+ * Abschnittskopf: 32 px hoch, Titel links (Stufe section / sub / card), Aktionen rechts.
+ * `info` steht neben dem Titel, aber außerhalb der Überschrift (sein Text gehört nicht zum Namen der Überschrift).
  */
-export function Toolbar({ height = 40, alt, altActive, search, label, className, children }: {
-  height?: 32 | 40 | 56; alt?: ReactNode; altActive?: boolean; search?: "s" | "m" | "l"; label?: string; className?: string; children: ReactNode;
+export function SectionHeader({ title, as, level = "section", id, info, actions, wrap, className }: {
+  title: ReactNode; as?: "h1" | "h2" | "h3" | "h4"; level?: Extract<HeadingLevel, "section" | "sub" | "card">; id?: string; info?: ReactNode; actions?: ReactNode;
+  /** Aktionen dürfen umbrechen: der Kopf ist dann mindestens 32 px hoch und wächst mit (große Schrift, schmale Fenster). */
+  wrap?: boolean; className?: string;
 }) {
+  return (
+    <div className={cn("flex min-w-0 items-center justify-between gap-3 [&_.lk-count]:ml-2", wrap ? "min-h-ctl-s flex-wrap gap-x-pg-m gap-y-pg-s" : "h-ctl-s", className)}>
+      <div className="flex min-w-0 items-center gap-1">
+        <Heading level={level} as={as} id={id} className="truncate pt-0.5 leading-none">{title}</Heading>
+        {info}
+      </div>
+      {actions && <div className={cn("flex items-center gap-0.5", wrap ? "min-w-0 max-w-full" : "shrink-0")}>{actions}</div>}
+    </div>
+  );
+}
+
+const TOOLBAR_H = { 32: "min-h-ctl-s", 40: "min-h-ctl-m", 56: "min-h-ctl-l" } as const;
+
+/** Suchfeldbreite als Token (s 220 · m 260 · l 320 px, unter 1180 px Fensterbreite 184 · 220 · 280). */
+const TOOLBAR_SEARCH = {
+  s: "[--tb-search:220px] le-1180:[--tb-search:184px]",
+  m: "[--tb-search:260px] le-1180:[--tb-search:220px]",
+  l: "[--tb-search:320px] le-1180:[--tb-search:280px]",
+} as const;
+/** Das Token gilt für Eingabefelder mit Symbol (Suchfelder) in der Leiste; nie breiter als die Leiste. */
+const TOOLBAR_SEARCH_FIELD = "[&_.lk-input[data-lead]]:w-(--tb-search) [&_.lk-input[data-lead]]:max-w-full [&_.lk-input[data-lead]]:flex-none";
+/** Unter 900 px Fensterbreite nimmt das Suchfeld eine eigene Zeile. */
+const TOOLBAR_SEARCH_WRAP = "le-900:[&_.lk-input[data-lead]]:w-auto le-900:[&_.lk-input[data-lead]]:flex-[1_1_100%]";
+const TOOLBAR_LAYER = "col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-tb [transition:opacity_var(--st),visibility_var(--st)]";
+const TOOLBAR_HIDDEN = "invisible opacity-0";
+
+/**
+ * Werkzeugleiste unter dem Seitenkopf: Steuerelemente im Abstand 12, Mindesthöhe 32 (dicht), 40 oder 56 (Inhalte mit Auswahl).
+ * Bricht um, sobald die Breite nicht reicht; alles hinter einem `Spacer` bildet eine Gruppe, die rechts bleibt und erst innen umbricht.
+ * `alt`: zweite Leiste deckungsgleich in derselben Rasterzelle (Auswahl-/Bulk-Leiste), sichtbar bei `altActive`;
+ * die inaktive ist `inert` und unsichtbar, die Höhe bleibt, nichts springt.
+ * `search`: Breite der Suchfelder darin (zentral, nie breiter als die Leiste): s 220 · m 260 · l 320, unter 1180 px 184 · 220 · 280.
+ * `searchWrap`: unter 900 px Fensterbreite füllt das Suchfeld eine eigene Zeile (Breite auto, flex 1 1 100 %); nur mit `search`.
+ * `label`: macht die Leiste zur benannten Gruppe (role=group; role=toolbar bräuchte echte Pfeiltasten-Bedienung).
+ */
+export function Toolbar({ height = 40, alt, altActive, search, searchWrap, label, className, children, ...props }: {
+  height?: keyof typeof TOOLBAR_H; alt?: ReactNode; altActive?: boolean; search?: keyof typeof TOOLBAR_SEARCH; searchWrap?: boolean;
+  /** Name der Leiste (aria-label); macht sie zur Gruppe. */
+  label?: string;
+} & ComponentProps<"div">) {
+  const hasAlt = alt != null;
   return (
     <div
-      className={cn("vx-toolbar", className)}
-      data-h={height}
-      data-search={search}
-      data-alt={alt != null ? (altActive ? "on" : "off") : undefined}
+      className={cn(
+        "relative min-w-0",
+        hasAlt ? "grid grid-cols-[minmax(0,1fr)]" : "flex flex-wrap items-center gap-tb gap-y-2",
+        TOOLBAR_H[height],
+        search && [TOOLBAR_SEARCH[search], TOOLBAR_SEARCH_FIELD, searchWrap && TOOLBAR_SEARCH_WRAP],
+        className,
+      )}
+      data-alt={hasAlt ? (altActive ? "on" : "off") : undefined}
       role={label ? "group" : undefined}
       aria-label={label}
+      {...props}
     >
-      {alt != null ? (
+      {hasAlt ? (
         <>
-          <div className="vx-tb-main" inert={altActive || undefined}><ToolbarItems>{children}</ToolbarItems></div>
-          <div className="vx-tb-alt" inert={!altActive || undefined}><ToolbarItems>{alt}</ToolbarItems></div>
+          <div className={cn(TOOLBAR_LAYER, TOOLBAR_H[height], altActive && TOOLBAR_HIDDEN)} inert={altActive || undefined}><ToolbarItems>{children}</ToolbarItems></div>
+          <div className={cn(TOOLBAR_LAYER, TOOLBAR_H[height], !altActive && TOOLBAR_HIDDEN)} inert={!altActive || undefined}><ToolbarItems>{alt}</ToolbarItems></div>
         </>
       ) : (
         <ToolbarItems>{children}</ToolbarItems>
@@ -153,21 +142,106 @@ function ToolbarItems({ children }: { children: ReactNode }) {
   return (
     <>
       {items.slice(0, split)}
-      {end.length > 0 && <div className="vx-tb-end">{end}</div>}
+      {end.length > 0 && <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-tb">{end}</div>}
     </>
   );
 }
 
-/** Freier Raum in der Werkzeugleiste: alles danach steht rechts. */
+/** Freier Raum in einer Leiste: alles danach steht rechts. */
 export function Spacer() {
-  return <span className="vx-sp" aria-hidden />;
+  return <span className="flex-1" aria-hidden />;
 }
 
+const ACTION_GAP = { 4: "gap-1", 8: "gap-2", 12: "gap-3" } as const;
+const ACTION_ALIGN = { start: "", end: "justify-end", between: "justify-between" } as const;
+
 /** Reihe von Aktionen (Knöpfe): Abstand 8 (oder 4/12), Ausrichtung start/end/between; `wrap` erlaubt Umbruch. */
-export function Actions({ gap = 8, align = "start", wrap, className, children }: { gap?: 4 | 8 | 12; align?: "start" | "end" | "between"; wrap?: boolean; className?: string; children: ReactNode }) {
+export function Actions({ gap = 8, align = "start", wrap, className, ...props }: {
+  gap?: keyof typeof ACTION_GAP; align?: keyof typeof ACTION_ALIGN; wrap?: boolean;
+} & ComponentProps<"div">) {
+  return <div className={cn("flex min-w-0 items-center", ACTION_GAP[gap], ACTION_ALIGN[align], wrap && "flex-wrap gap-y-2", className)} {...props} />;
+}
+
+/**
+ * Seitenraster mit optionalem Kontextbereich (`rail`, 280 px); ohne `rail` nutzt der Inhalt die volle Breite.
+ * Unter 960 px stehen Leiste und Inhalt untereinander.
+ */
+export function Workspace({ rail, className, children, ...props }: ComponentProps<"div"> & { rail?: ReactNode }) {
   return (
-    <div className={cn("vx-acts", className)} data-gap={gap} data-align={align} data-wrap={flag(wrap)}>
+    <div className={cn("grid items-start gap-pg-m", rail ? "grid-cols-[280px_minmax(0,1fr)] le-960:grid-cols-1" : "grid-cols-1", className)} {...props}>
+      {rail}
       {children}
     </div>
+  );
+}
+
+/** Kontext oder Navigation neben dem Inhalt (Platte), auf schmalen Fenstern darüber. `bare` für Navigation ohne Platte. */
+export function WorkspaceRail({ bare, className, ...props }: { bare?: boolean } & ComponentProps<"div">) {
+  // Enthält die Rail nur die Navigation (`WorkspaceTabs`), steht sie ohne Platte und Innenabstand direkt auf dem Grund.
+  return <Panel as="aside" bare={bare} className={cn("lk-rail sticky top-pg-m le-960:static has-[>.lk-tabs]:p-0", bare && "p-0", className)} {...props} />;
+}
+
+/** Inhaltsfläche des Arbeitsbereichs: Platte, oder mit `plain` nur der Rahmen eines eingebetteten Bereichs. */
+export function WorkspaceContent({ plain, className, ...props }: { plain?: boolean } & ComponentProps<"div">) {
+  return <Panel bare={plain} className={cn(plain && "p-0", className)} {...props} />;
+}
+
+/** Der große Start-Titel: höchstens zwei Zeilen, ausgeglichen; der Schlagschatten liegt im Polster (der Zeilenschnitt würde ihn sonst kappen), die negativen Ränder halten den Text an seinem Platz. */
+const HERO_XL = "line-clamp-2 text-balance p-u1 pb-u2 -m-u1 -mb-u2";
+/** Der Kasten des großen Titels reserviert zwei Zeilen (je 0,95 Zeilenhöhe), damit die Seite beim Instanzwechsel nicht springt. */
+const HERO_XL_BOX = "flex h-[calc(var(--hd-hero-xl)*1.9)] items-end";
+
+/**
+ * Titel einer Szenenseite (Start, Instanz): Display, harter Schatten. `xl` ist der große Start-Titel: höchstens zwei Zeilen,
+ * in einem Kasten, der zwei Zeilen Höhe reserviert.
+ */
+export function HeroTitle({ size, as, className, ...props }: { size?: "xl"; as?: "h1" | "h2" | "h3" | "h4" } & ComponentProps<"h1">) {
+  const title = <Heading level="hero" size={size} as={as} className={cn(size === "xl" && HERO_XL, className)} {...props} />;
+  return size === "xl" ? <div className={HERO_XL_BOX}>{title}</div> : title;
+}
+
+/** Platzhalter des großen Titels (`HeroTitle size="xl"`): derselbe Kasten, damit die Seite nicht springt. */
+export function HeroTitleSkel({ className }: { className?: string }) {
+  return <div className={HERO_XL_BOX}><Skel className={cn("h-[72px] w-[min(520px,80%)]", className)} /></div>;
+}
+
+/**
+ * Metazeile unter dem Szenentitel: Text (`Meta`) und kleine Knöpfe in einer Reihe, bei Platzmangel umbrechend.
+ * `outline`: Text halbfett mit Kontur (ein Gerätepixel) und Schlagschatten, die Trenner heller; für helle Szenen (Start).
+ */
+export function HeroMeta({ outline, className, ...props }: { outline?: boolean } & ComponentProps<"div">) {
+  return (
+    <div
+      className={cn("lk-hero-meta flex min-h-ctl-s min-w-0 flex-wrap items-center gap-x-3 gap-y-pg-s [&_.lk-meta]:h-auto [&_.lk-meta]:min-h-ctl-s [&_.lk-meta]:flex-[0_1_auto] [&_.lk-meta]:flex-wrap [&_.lk-meta]:gap-y-0.5", className)}
+      data-outline={flag(outline)}
+      {...props}
+    />
+  );
+}
+
+/**
+ * Abdunklung der Szene in weichen Verläufen; füllt den Szenenkopf (Elternelement `relative`), Text steht unten.
+ * `side`: zusätzlich von links dicht, damit Titel und Leiste lesbar bleiben, rechts bleibt die Szene hell (Start).
+ */
+export function HeroShade({ side, className }: { side?: boolean; className?: string }) {
+  return <div className={cn("lk-shade pointer-events-none absolute inset-0 z-1", className)} data-side={flag(side)} aria-hidden />;
+}
+
+export type WorkspaceTabsProps<V extends string> = Omit<TabsProps<V>, "variant" | "sticky">;
+
+/** Navigation für das Seitenraster: senkrechte Platten links, unter 960 px kompakte Segmente über dem Inhalt. Beschriftungen brechen um. */
+export function WorkspaceTabs<V extends string>({ className, ...props }: WorkspaceTabsProps<V>) {
+  const stacked = useMediaQuery("(max-width: 960px)");
+  return (
+    <Tabs
+      {...props}
+      variant={stacked ? "segment" : "vertical"}
+      className={cn(
+        stacked
+          ? "h-auto w-full flex-wrap overflow-visible [&>.lk-tab]:min-h-[calc(var(--lk-h-m)_-_var(--u2)_*_2)]"
+          : "[&>.lk-tab]:h-auto [&>.lk-tab]:min-h-11 [&>.lk-tab]:py-1.5 [&[data-size=s]>.lk-tab]:min-h-9 [&_.lk-tc]:text-left [&_.lk-tc]:wrap-anywhere [&_.lk-tc]:whitespace-normal",
+        className,
+      )}
+    />
   );
 }

@@ -37,7 +37,7 @@ function LaunchAskDialog() {
       footer={
         <DialogActions
           cancel={{ label: t("common.cancel"), autoFocus: true }}
-          confirm={{ label: t("deepLinks.launch.confirm"), icon: "play", width: 130, onClick: confirm }}
+          confirm={{ label: t("deepLinks.launch.confirm"), icon: "play", className: "w-[130px]", onClick: confirm }}
         />
       }
     >

@@ -18,6 +18,7 @@ import { usePixelUnit } from "@/pixel/unit";
 import { isGameActive, useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
 import { useI18n } from "@/i18n";
+import { SkipLink } from "@/ui";
 import { Sidebar } from "./Sidebar";
 import { AppContextMenu } from "./AppContextMenu";
 import { TitleBar } from "./TitleBar";
@@ -86,9 +87,7 @@ export function Layout() {
     <ViewContext.Provider value={view}>
       <AppContextMenu>
         <div className={cn("app", ready && "ready")} data-offline={online ? undefined : ""}>
-          <button type="button" className="skip vx-stone vx-text" onClick={() => view.current?.focus()}>
-            {t("ui.skipToContent")}
-          </button>
+          <SkipLink onClick={() => view.current?.focus()}>{t("ui.skipToContent")}</SkipLink>
           <TitleBar online={online} />
           <Sidebar />
           <main ref={view} className={cn("view", noscroll && "noscroll")} tabIndex={-1}>

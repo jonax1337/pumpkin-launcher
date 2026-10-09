@@ -1,13 +1,12 @@
 import type { KeyboardEvent } from "react";
 import { Dialog as D } from "radix-ui";
-import { Actions, Button, Count, IconButton } from "@/ui";
+import { Actions, Button, Count, Heading, IconButton, Scrim, cssVars } from "@/ui";
 import { copyScreenshot, useTrashScreenshots } from "@/hooks/useScreenshots";
 import { useI18n } from "@/i18n";
 import { api } from "@/lib/api";
 import { formatDateTime, formatSize } from "@/lib/format";
 import { openLocalPath, revealLocalPath } from "@/lib/links";
 import type { Screenshot } from "@/lib/types";
-import { cssVars } from "@/ui/util";
 import { useZoom } from "./useZoom";
 
 /** Toasts erscheinen oben in der Mitte: unten säßen sie auf den Knöpfen der großen Ansicht. */
@@ -65,7 +64,7 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
   return (
     <D.Root open onOpenChange={(open) => !open && onClose()}>
       <D.Portal>
-        <D.Overlay className="vx-scrim" />
+        <Scrim />
         <D.Content
           className="shot-lb"
           data-ctx="overlay"
@@ -78,7 +77,7 @@ export function Lightbox({ instanceId, shots, current, onShow, onClose, onClosed
         >
           <header className="shot-lb-bar">
             <div className="shot-lb-title">
-              <D.Title asChild><h2>{title}</h2></D.Title>
+              <D.Title asChild><Heading level="dialog" as="h2" plain className="tracking-[.01em]">{title}</Heading></D.Title>
               <p>{`${current.fileName} · ${formatSize(current.size)}`}</p>
             </div>
             <D.Close asChild>

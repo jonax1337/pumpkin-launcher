@@ -30,8 +30,10 @@ function useMounted() {
  * `main`: der Spielen-Knopf der Seite (Start, Instanzkopf); Strg+Enter klickt ihn.
  * `neutral`: ohne Instanzfarbe (Akzent der Umgebung), für Listenzeilen.
  */
-export function PlayButton({ instance, size = "l", onLaunched, tabIndex, main, neutral }: {
+export function PlayButton({ instance, size = "l", onLaunched, tabIndex, main, neutral, className }: {
   instance: Instance; size?: PlaySize; onLaunched?: () => void; tabIndex?: number; main?: boolean; neutral?: boolean;
+  /** Platzierung des Knopfes in der Umgebung (Tailwind, z. B. Spalte und Zeile im Raster). */
+  className?: string;
 }) {
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
@@ -51,6 +53,6 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex, main, n
     void play(instance, () => mounted.current && onLaunched?.());
   }
 
-  const button = <PlayPlate state={state} size={size} acc={neutral ? undefined : acc} main={main} tabIndex={tabIndex} onClick={click} />;
+  const button = <PlayPlate state={state} size={size} acc={neutral ? undefined : acc} main={main} tabIndex={tabIndex} className={className} onClick={click} />;
   return size === "i" ? <Tip label={state.label}>{button}</Tip> : button;
 }

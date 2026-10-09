@@ -7,7 +7,7 @@ import { dayLabel, dayStart, formatDateTime } from "@/lib/format";
 import { revealLocalPath } from "@/lib/links";
 import { currentLanguage, useI18n } from "@/i18n";
 import type { Instance, Screenshot } from "@/lib/types";
-import { Button, CardGrid, Count, Empty, Glyph, Icon, SectionHeader, Spacer, Toolbar } from "@/ui";
+import { Button, CardGrid, Count, Empty, Glyph, PhotoTile, SectionHeader, Spacer, Toolbar } from "@/ui";
 import { Lightbox } from "./screenshots/Lightbox";
 
 /** Uhrzeit der Aufnahme unter der Kachel („21:14“). */
@@ -100,37 +100,26 @@ function Gallery({ instanceId, shots }: { instanceId: string; shots: Screenshot[
         }
         altActive={picked != null}
       >
-        <SectionHeader as="h2" title={<>{t("components.export.entry.screenshots")}<Count value={shots.length} muted /></>} />
+        <SectionHeader title={<>{t("components.export.entry.screenshots")}<Count value={shots.length} muted /></>} />
         <Spacer />
         <Button size="s" icon="select" onClick={() => setPicked(new Set())}>{t("detail.screenshots.select")}</Button>
       </Toolbar>
       <div className="shots-days">
         {byDay(shots).map(([day, group]) => (
           <section key={day} className="shots-day">
-            <SectionHeader as="h2" title={<>{dayLabel(day)} <Count value={group.length} size={20} muted /></>} size="sub" />
-            <CardGrid className="shots-grid">
+            <SectionHeader title={<>{dayLabel(day)} <Count value={group.length} size={20} muted /></>} level="sub" as="h2" />
+            <CardGrid className="[--card-min:280px]">
               {group.map((shot) => (
-                <button
+                <PhotoTile
                   key={shot.fileName}
-                  type="button"
-                  className="shot fx"
+                  src={api.screenshotSrc(shot)}
+                  label={t("detail.screenshots.shotAria", { date: formatDateTime(shot.takenAt) })}
+                  caption={formatTime(shot.takenAt)}
                   data-shot={shot.fileName}
-                  data-selected={picked?.has(shot.fileName) ? "" : undefined}
-                  aria-label={t("detail.screenshots.shotAria", { date: formatDateTime(shot.takenAt) })}
-                  aria-pressed={picked ? picked.has(shot.fileName) : undefined}
+                  selecting={!!picked}
+                  selected={picked?.has(shot.fileName)}
                   onClick={() => (picked ? toggle(shot.fileName) : setShown(shot.fileName))}
-                >
-                  {/* Hunderte Bilder in voller Auflösung: erst laden, wenn sie in den Sichtbereich kommen. */}
-                  <span className="shot-pic vx-slot">
-                    <img src={api.screenshotSrc(shot)} alt="" loading="lazy" decoding="async" />
-                  </span>
-                  <span className="shot-cap" aria-hidden>{formatTime(shot.takenAt)}</span>
-                  {picked && (
-                    <span className="shot-mark" aria-hidden>
-                      {picked.has(shot.fileName) && <Icon name="check" size="s" />}
-                    </span>
-                  )}
-                </button>
+                />
               ))}
             </CardGrid>
           </section>

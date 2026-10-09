@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Choice, ConfirmDialog, Empty, ErrorBox, Glyph, Hint, IconButton } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Button, Choice, ConfirmDialog, Empty, Glyph, Hint, IconButton } from "@/ui";
 import { loaderLine } from "@/components/common";
 import { useConfirmTarget } from "@/hooks/useConfirmTarget";
 import { useDeleteTemplate, useExportTemplate, useImportTemplate, useTemplates } from "@/hooks/useTemplates";
@@ -45,9 +46,9 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
     <>
       <ChoiceList>
         {templates.data.map((tpl) => (
-          <div key={tpl.id} className="ni-tpl">
+          <div key={tpl.id} className="flex items-center gap-1">
             <Choice
-              className="ni-tpl-pick"
+              className="min-w-0 flex-1"
               media={<Glyph name="chest" pal="sand" />}
               title={tpl.name}
               sub={`${loaderLine(tpl)} · ${t(tpl.modCount === 1 ? "components.template.entryCount.one" : "components.template.entryCount.other", { n: tpl.modCount })} · ${t("components.template.savedAt", { date: formatDate(tpl.createdAt) })}`}
@@ -61,7 +62,7 @@ function TemplatePane({ selected, onSelect }: { selected: string | null; onSelec
           </div>
         ))}
       </ChoiceList>
-      <div className="ni-tpl-foot">
+      <div className="mt-3 flex flex-col items-start gap-3">
         <Hint>{t("components.template.saveHint")}</Hint>
         <ImportTemplateButton />
       </div>

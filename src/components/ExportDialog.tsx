@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useI18n, type TKey } from "@/i18n";
-import { Checkbox, Dialog, DialogActions, Field, Hint, Skel, TextArea, TextField } from "@/ui";
+import { Checkbox, Dialog, DialogActions, Field, Hint, Skel, TextArea, Input } from "@/ui";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useExportEntries, useExportSummary } from "@/hooks/useInstances";
 import { api } from "@/lib/api";
@@ -76,20 +76,20 @@ export function ExportDialog({ instance, onExport, onClose }: {
           cancel={t("common.cancel")}
           confirm={{
             label: t("components.instance.export"),
-            width: 150,
+            className: "w-[150px]",
             disabled: !api.capabilities.exportInstance || !entries.data || !name.trim() || !version.trim(),
             onClick: () => void submit().catch(toastError),
           }}
         />
       }
     >
-      <div className="exp">
-        <div className="exp-row">
-          <Field label={t("components.export.packName")} className="exp-name">
-            <TextField value={name} onChange={(e) => setName(e.target.value)} maxLength={MAX_NAME_LENGTH} />
+      <div className="flex flex-col gap-4">
+        <div className="flex gap-3">
+          <Field label={t("components.export.packName")} className="min-w-0 flex-1">
+            <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={MAX_NAME_LENGTH} />
           </Field>
-          <Field label={t("components.export.packVersion")} className="exp-ver">
-            <TextField value={version} onChange={(e) => setVersion(e.target.value)} maxLength={MAX_VERSION_LENGTH} />
+          <Field label={t("components.export.packVersion")} className="w-36 flex-none">
+            <Input value={version} onChange={(e) => setVersion(e.target.value)} maxLength={MAX_VERSION_LENGTH} />
           </Field>
         </div>
         <Field label={t("components.export.packDescription")} optional>
@@ -111,10 +111,10 @@ function ExportEntries({ entries, chosen, onToggle }: {
 }) {
   const { t } = useI18n();
   if (entries.error) return <Hint tone="bad">{entries.error.message}</Hint>;
-  if (!entries.data) return <Skel h={120} />;
+  if (!entries.data) return <Skel className="h-[120px]" />;
   if (!entries.data.length) return <Hint>{t("components.export.folderEmpty")}</Hint>;
   return (
-    <div className="exp-list">
+    <div className="flex flex-col gap-2">
       {entries.data.map((name) => (
         <Checkbox key={name} checked={chosen.has(name)} onChange={(on) => onToggle(name, on)}>
           {ENTRY_LABELS[name] ? `${t(ENTRY_LABELS[name])} (${name})` : name}
@@ -132,7 +132,7 @@ function ExportSummaryNote({ instanceId, include, enabled }: { instanceId: strin
   if (!summary.data) return <Hint live>{t("components.export.summaryLoading")}</Hint>;
   const { linked, embedded, skippedDisabled } = summary.data;
   return (
-    <div className="exp-list">
+    <div className="flex flex-col gap-2">
       {linked + embedded > 0 && <Hint live>{t("components.export.summary", { linked, embedded })}</Hint>}
       {skippedDisabled > 0 && (
         <Hint tone="warn" live>

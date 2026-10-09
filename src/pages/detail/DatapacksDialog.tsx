@@ -1,5 +1,6 @@
 import { toast } from "sonner";
-import { Actions, Chip, Dialog, DialogActions, Empty, Hint, IconButton, List, ListRow, RowTitle } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { Actions, Chip, Dialog, DialogActions, DropZone, Hint, IconButton, List, ListRow, RowTitle } from "@/ui";
 import { QueryList } from "@/components/QueryList";
 import { useFileDrop } from "@/hooks/useFileDrop";
 import { useAddDatapacks, useDatapacks, useRemoveDatapack } from "@/hooks/useWorlds";
@@ -18,7 +19,7 @@ function PackState({ enabled }: { enabled: boolean | null }) {
   const { t } = useI18n();
   if (enabled == null) return <Chip size="s">{t("detail.worlds.packNotLoaded")}</Chip>;
   return (
-    <Chip size="s" dot tone={enabled ? "run" : "neutral"}>
+    <Chip size="s" tone={enabled ? "run" : "neutral"}>
       {enabled ? t("detail.worlds.packActive") : t("detail.worlds.packOff")}
     </Chip>
   );
@@ -65,17 +66,17 @@ export function DatapacksDialog({ instance, world, busy, onSearch, onClose }: {
         <GuardedButton size="s" icon="search" blocked={busy} onClick={onSearch}>{t("detail.worlds.searchModrinth")}</GuardedButton>
       </Actions>
       {dragging ? (
-        <div className="drop over" aria-hidden>
+        <DropZone over className="h-[190px]" aria-hidden>
           <DropHint>{t("detail.worlds.packDropHint")}</DropHint>
-        </div>
+        </DropZone>
       ) : (
         <QueryList
           query={packs}
           error={t("detail.worlds.packsLoadError")}
-          empty={<Empty size="pane" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</Empty>}
+          empty={<EmptyState size="pane" title={t("detail.worlds.packsEmptyTitle")}>{t("detail.worlds.packsEmptyHint")}</EmptyState>}
         >
           {(list) => (
-            <List variant="versions" aria-label={t(TYPE_LABEL_KEYS.datapack)}>
+            <List flat aria-label={t(TYPE_LABEL_KEYS.datapack)}>
               {list.map((pack) => (
                 <ListRow key={pack.id}>
                   <RowTitle title={pack.name} sub={pack.description} />

@@ -1,0 +1,7 @@
+/* Bildergalerie (ImageGallery): Bildunterschrift und Vorschau im Slot (.lk-slot); die gewählte Vorschau trägt Akzentrahmen und -kante unten.
+   Nur Aussehen; Maße setzt ImageGallery.tsx per Tailwind. */
+
+.lk-gallery-cap { color: var(--fg-2); }
+.lk-gallery-thumb { cursor: pointer; }
+/* Gewählt: gleiche Spezifität wie die Hover-Kante des Slots, steht aber danach */
+.lk-gallery-thumb.lk-slot[aria-pressed="true"] { border-color: var(--acc); box-shadow: inset 0 calc(var(--u2) * -1) 0 var(--acc), var(--slot-sh); }

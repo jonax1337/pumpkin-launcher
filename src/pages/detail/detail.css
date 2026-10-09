@@ -8,16 +8,10 @@
 .dh-full { position: absolute; z-index: 2; left: var(--gut); right: var(--gut); bottom: var(--pg-gap-m); display: flex; align-items: flex-end; gap: var(--pg-gap-m); transition: opacity .18s var(--ease), transform .22s var(--ease); }
 .dh-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--pg-gap-s); }
 .dh-back { display: flex; }
-.dh-ver { align-self: center; font-weight: 700; color: var(--fg); text-shadow: var(--scene-shadow); }
-.dh-compact .vx-meta { flex: none; }
 .dh-act { display: flex; flex-direction: column; align-items: flex-end; gap: var(--pg-gap-s); flex: none; }
-.dh-act .pstat { max-width: 360px; justify-content: flex-end; }
 .dh-compact { position: absolute; z-index: 3; left: 0; right: 0; bottom: 0; height: var(--dc); display: flex; align-items: center; gap: 12px; padding: 0 var(--gut); background: rgba(7,10,17,.72); box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); opacity: 0; visibility: hidden; transform: translateY(6px); transition: opacity .18s var(--ease), transform .22s var(--ease), visibility 0s linear .22s; }
-.dh-compact h2 { font: 800 24px/1 var(--f-display); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 .dhead.compact .dh-full { opacity: 0; transform: translateY(-10px); visibility: hidden; transition: opacity .15s var(--ease), transform .2s var(--ease), visibility 0s linear .2s; }
 .dhead.compact .dh-compact { opacity: 1; visibility: visible; transform: none; transition: opacity .18s var(--ease), transform .22s var(--ease), visibility 0s; }
-/* Tab-Leiste: Kit-Tabs (sticky); Seitenränder wie der Seitenkopf, die Grundlinie läuft nur zwischen ihnen (wie die Linie des Seitenkopfs) */
-.vx-tabs.dtabs[data-variant] { padding: 0 var(--gut); background-origin: content-box; background-clip: content-box; }
 .dbody { display: flow-root; padding: var(--pg-gap-m) var(--gut) var(--pg-bottom); min-height: calc(calc(var(--vh1, 1vh) * 100) - var(--bar) - var(--dc) - var(--dt)); }
 /* Schmal oder stark gezoomt: Aktionen unter den Titel, Kopf wächst mit; Titel behält die volle Breite */
 @media (max-width: 720px) {
@@ -25,26 +19,16 @@
   .dh-full { flex-direction: column; align-items: stretch; gap: var(--pg-gap-m); bottom: var(--pg-gap-m); }
   .dh-info { flex: none; }
   .dh-act { align-items: flex-start; }
-  .dh-act .pstat { width: auto; justify-content: flex-start; }
 }
 
 /* ---------- Inhalt ---------- */
 .dc-root { position: relative; display: flex; flex-direction: column; gap: var(--pg-gap-m); min-width: 0; }
-/* Tabellenrahmen (Inhalt, Welten, Server): eingelassene Fläche, Kopf als dunkle Leiste */
-.dc-table .vx-lhead { background: var(--bg-2); }
-/* Auswahl für Sortierung/Profil: das Wort „Sortieren“ entfällt in schmalen Fenstern */
-@media (max-width: 1280px) { .dc-sort .vx-sel-lab { display: none; } }
 .dc-ghosted { visibility: hidden; }
 .dc-upall { display: grid; align-items: center; justify-items: end; }
 .dc-upall > * { grid-area: 1 / 1; }
 .dc-undo { display: flex; align-items: center; gap: 8px; }
 .dc-nosrc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-3); font-size: calc(13px * var(--tz)); }
 .dc-warn-text, .dc-sub { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Bildkachel einer Zeile ohne Projektbild: Symbol der Art im Slot */
-.kind-tile { flex: none; display: inline-grid; place-items: center; width: 40px; height: 40px; color: var(--fg-2); }
-.kind-tile[data-box="52"] { width: 52px; height: 52px; }
-.vx-row:is(:hover, :focus-within) .kind-tile { color: var(--fg); }
-.vx-row[data-off] .kind-tile { opacity: .45; }
 /* Platten über der Liste (Pack-Reihenfolge, Shader) */
 .dc-panel { min-width: 0; }
 .dc-panel-sub { margin: 0; color: var(--fg-3); font-size: calc(13px * var(--tz)); }
@@ -70,8 +54,6 @@
 .wl-body { margin-top: var(--pg-gap-m); }
 .sh-share-body { display: flex; flex-direction: column; gap: 12px; margin-top: var(--pg-gap-m); }
 .sh-port { display: flex; align-items: center; gap: 8px; }
-.sh-guests { margin-top: 12px; }
-.sh-avatar { display: grid; place-items: center; }
 .sd-body { display: flex; flex-direction: column; gap: 16px; }
 .sd-tight { display: flex; flex-direction: column; gap: 4px; }
 .sd-notes { display: flex; flex-direction: column; gap: 8px; }
@@ -79,14 +61,9 @@
 .bk-hint { margin: 12px 0 8px; }
 .dp-actions { margin-bottom: 12px; }
 .dp-hint { margin-top: 12px; }
-/* Ablagefläche über dem Tab: füllt den Container, der Hinweis bleibt beim Scrollen im Blick */
-.drop.dz-over { position: absolute; inset: 0; z-index: 10; height: auto; justify-content: flex-start; }
-.dz-hint { position: sticky; top: 30vh; display: flex; flex-direction: column; align-items: center; gap: 8px; padding-block: 40px; }
 
 /* ---------- Einstellungen: Abschnitte als Platten, Gefahrenzone mit rotem Rand ---------- */
 .st-form { display: flex; flex-direction: column; gap: 24px; }
-.st-form > section.st-danger { border-color: var(--bad); }
-.st-form > section.st-danger .vx-fsec-h { color: var(--bad); }
 .st-locked { margin-bottom: 16px; }
 .st-muted { color: var(--fg-3); }
 .st-hint { margin-top: 6px; }
@@ -110,3 +87,8 @@
 
 /* Versionsdialog: Änderungsprotokoll über die ganze Zeilenbreite */
 .ver-changelog { grid-column: 1 / -1; }
+
+/* Kontrastmodus: die Szene im Kopf ist Dekor hinter Text: weg, der Grund bleibt Canvas */
+@media (forced-colors: active) {
+  .dhead .scene { display: none; }
+}

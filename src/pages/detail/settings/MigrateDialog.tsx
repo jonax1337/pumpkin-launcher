@@ -6,8 +6,8 @@ import { useMigration, useMigrationCheck } from "@/hooks/useMigration";
 import { ALL_LOADERS, LOADER_LABELS, type Instance, type MigrationCheck, type MigrationTarget, type ModChange, type ModLoader } from "@/lib/types";
 import { useBusyReason } from "../guards";
 
-const CONFIRM_WIDTH = 130;
-const CHECK_SKELETON_HEIGHT = 96;
+const CONFIRM_BUTTON = "w-[130px]";
+const CHECK_SKELETON = "h-24";
 
 /** Gewählte Loader-Version „neueste stabile“: das Ziel trägt dann keine, die nächste Installation nimmt die neueste. */
 const LATEST = "latest";
@@ -76,7 +76,7 @@ export function MigrateDialog({ instance, onClose }: { instance: Instance; onClo
             cancel={t("common.cancel")}
             confirm={{
               label: t("detail.migrate.apply"),
-              width: CONFIRM_WIDTH,
+              className: CONFIRM_BUTTON,
               disabled: cannotStart || !!check.data?.blocked,
               onClick: () => run(migration.inPlace),
             }}
@@ -102,7 +102,7 @@ function TargetFields({ form }: { form: MigrationForm }) {
       <Field label={t("components.newInstance.mcVersion")}>
         <Actions gap={12} wrap>
           {versions.isPending ? (
-            <Skel w={220} h={40} />
+            <Skel className="h-10 w-55" />
           ) : (
             <Select
               value={form.version}
@@ -158,7 +158,7 @@ function CheckResult({ instance, target, check }: {
     return (
       <div className="mg-check" aria-busy>
         <Hint>{t("detail.migrate.checking")}</Hint>
-        <Skel h={CHECK_SKELETON_HEIGHT} />
+        <Skel className={CHECK_SKELETON} />
       </div>
     );
   }

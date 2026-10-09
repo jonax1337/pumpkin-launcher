@@ -4,8 +4,7 @@ import { toastError } from "@/lib/toast";
 import { squareIcon } from "@/lib/image";
 import { GLYPH_NAMES, GLYPH_PALETTES, PALETTE_NAMES } from "@/pixel/icons";
 import type { IconChoice } from "@/lib/types";
-import { Button, Glyph, Hint, PickTile, Segmented } from "@/ui";
-import { cssVars } from "@/ui/util";
+import { ArtFrame, Button, cssVars, Glyph, Hint, PickTile, Segmented } from "@/ui";
 
 type Mode = "auto" | "glyph" | "image";
 type GlyphChoice = Extract<IconChoice, { type: "glyph" }>;
@@ -27,7 +26,7 @@ function GlyphChooser({ icon, onChange }: { icon: GlyphChoice; onChange: (icon: 
             pressed={palette === icon.palette}
             onClick={() => onChange({ ...icon, palette })}
           >
-            <span className="vx-swatch" style={cssVars({ "--sw": GLYPH_PALETTES[palette].a })} />
+            <span className="block size-4 bg-(--sw) shadow-[inset_0_0_0_var(--px)_rgba(3,5,10,0.9)]" style={cssVars({ "--sw": GLYPH_PALETTES[palette].a })} />
           </PickTile>
         ))}
       </div>
@@ -90,9 +89,7 @@ export function IconPicker({ value, onChange, preview }: { value: IconChoice | n
 
   return (
     <div className="ip">
-      <span className="vx-iconbox" aria-hidden>
-        <span className="vx-art">{preview}</span>
-      </span>
+      <ArtFrame className="size-[72px] [--icon-k:2]">{preview}</ArtFrame>
       <div className="ip-side">
         <Segmented
           label={t("components.icon.modeLabel")}

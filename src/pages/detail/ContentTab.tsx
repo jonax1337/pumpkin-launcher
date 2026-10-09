@@ -1,5 +1,6 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Actions, Button, Empty, Glyph, Hint, SearchField, SectionHeader, Segmented, Select, Spacer, Toolbar } from "@/ui";
+import { Actions, Button, Glyph, Hint, SearchField, SectionHeader, Segmented, Select, Spacer, Toolbar } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { useProjects } from "@/hooks/useContent";
 import { useStableFn } from "@/hooks/useStableFn";
@@ -141,8 +142,8 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
   const focusHead = () =>
     focusSoon(
       () =>
-        rootRef.current?.querySelector<HTMLElement>(".vx-lhead input[type=checkbox]") ??
-        rootRef.current?.querySelector<HTMLElement>(".vx-tb-main input[type=search]"),
+        rootRef.current?.querySelector<HTMLElement>("[data-kit-item=head] input[type=checkbox]") ??
+        rootRef.current?.querySelector<HTMLElement>("input[type=search]"),
     );
 
   const remove = useStableFn((ids: string[]) => {
@@ -257,7 +258,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
           <KindFilter value={kind} onChange={setKind} counts={counts} />
           <Select
             size="s"
-            className="dc-sort"
+            labelClassName="le-1280:hidden"
             label={t("detail.content.sortLabel")}
             value={sort}
             onChange={(next) => setSort(next as ContentSort)}
@@ -283,7 +284,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
         {kind === "shader" && <ShaderPanel packs={packs} shaders={instance.mods.filter((m) => m.kind === "shader")} hasIris={!!iris?.enabled} loader={instance.loader} />}
 
         {visible.length === 0 ? (
-          <Empty
+          <EmptyState
             title={t("components.search.nothingFound")}
             actions={
               <>
@@ -293,7 +294,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
             }
           >
             {t("detail.content.noMatch", { filter: search.trim() || (kind !== "all" ? t(KIND_LABEL_KEYS[kind]) : "") })}
-          </Empty>
+          </EmptyState>
         ) : (
           <ContentList entries={visible} />
         )}
@@ -338,7 +339,7 @@ function EmptyContent({ instance, local, onAdd }: { instance: Instance; local: R
   return (
     <div className="dc-root">
       <LocalFilesDropzone {...local.dropzone} />
-      <Empty
+      <EmptyState
         ill={<Glyph name="cube" pal="steel" box={64} />}
         title={t("detail.content.emptyTitle")}
         actions={
@@ -349,7 +350,7 @@ function EmptyContent({ instance, local, onAdd }: { instance: Instance; local: R
         }
       >
         {instance.loader === "vanilla" ? t("detail.content.emptyVanilla") : t("detail.content.emptyHint")}
-      </Empty>
+      </EmptyState>
     </div>
   );
 }

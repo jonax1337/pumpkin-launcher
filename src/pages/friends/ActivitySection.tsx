@@ -22,7 +22,7 @@ export function ActivitySection() {
       <Disclosure summary={<>{t("friends.activity.title")}<Count value={entries.length} muted /></>}>
         <Hint icon="info" className="friends-block-note">{t("friends.activity.note")}</Hint>
         <div className="friends-activity-list" role="region" tabIndex={0} aria-label={t("friends.activity.title")}>
-          <List variant="accounts" aria-label={t("friends.activity.title")}>
+          <List spaced aria-label={t("friends.activity.title")}>
             {entries.map((entry) => (
               <ActivityRow key={`${entry.at}|${entry.instanceId}|${entry.op}|${entry.targetName}|${entry.ok}`} entry={entry} instanceName={instanceNames.get(entry.instanceId)} />
             ))}
@@ -37,7 +37,7 @@ function ActivityRow({ entry, instanceName }: { entry: ModActivityEntry; instanc
   const { t } = useI18n();
   const when = formatDateTime(Date.parse(entry.at));
   return (
-    <ListRow>
+    <ListRow plate="row">
       <IconTile icon={entry.scope === "share" ? "share" : "friends"} />
       <RowTitle title={opText(activityText(entry))} sub={t("friends.activity.sub", { time: when, instance: instanceName ?? entry.instanceId })} />
       <Chip tone={entry.ok ? "run" : "warn"} icon={entry.ok ? "check" : "stop"}>{t(entry.ok ? "friends.activity.ok" : "friends.activity.failed")}</Chip>

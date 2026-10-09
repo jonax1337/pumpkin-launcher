@@ -1,30 +1,6 @@
 /* ---------- Skins ---------- */
 /* 3D-Figur: Canvas, per CSS um ganze Icon-Einheiten je Texturpixel vergrößert und fein genug aufgelöst (SkinFigure) */
 .skin-fig { flex: none; }
-.skin-card { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-/* Aktive Karte: Rahmen und Fase in der Akzentfarbe */
-.vx-panel.skin-card[data-active] {
-  --pn-bd: var(--sel-ring);
-  --pn-bv: inset var(--u2) var(--u2) 0 var(--sel-ring), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--sel-ring);
-}
-/* „Aktiv“-Marke über der Bühne, bündig im Slot */
-.skin-card > .skin-card-flag { position: absolute; top: calc(12px + var(--u4)); left: calc(12px + var(--u4)); z-index: 2; }
-.skin-card-h { display: flex; align-items: center; gap: 8px; width: 100%; }
-.skin-card-name { flex: 1; min-width: 0; color: var(--fg); font: 800 calc(var(--hd-card) * var(--tz))/1.3 var(--f-display); letter-spacing: .02em; text-transform: uppercase; text-shadow: var(--tsh); }
-
-/* Bühne (Slot): drehbare Figur auf einem gestuften Podest; Ziehen und Pfeiltasten (SkinViewer), der Knopf zum Umdrehen sitzt oben rechts */
-.skin-turn { position: relative; isolation: isolate; display: grid; place-items: end center; align-self: stretch; padding: var(--u4) var(--u4) var(--u4); overflow: hidden; }
-/* Podest: drei harte Bänder, oben um eine Stufe eingezogen */
-.skin-turn::before {
-  content: ""; position: absolute; left: 50%; bottom: var(--u4); z-index: 0; translate: -50% 0;
-  width: min(calc(var(--u4) * 21), 86%); height: calc(var(--u4) * 3); pointer-events: none;
-  background: linear-gradient(var(--ctl-hi) 0 var(--u4), var(--ctl) var(--u4) calc(var(--u4) * 2), var(--line) calc(var(--u4) * 2) 100%);
-  clip-path: polygon(var(--u4) 0, calc(100% - var(--u4)) 0, calc(100% - var(--u4)) var(--u4), 100% var(--u4), 100% 100%, 0 100%, 0 var(--u4), var(--u4) var(--u4));
-}
-.skin-turn-view { position: relative; z-index: 1; display: block; cursor: grab; touch-action: none; isolation: isolate; }
-.skin-turn-view:active { cursor: grabbing; }
-.skin-turn .skin-turn-flip { position: absolute; top: var(--u2); right: var(--u2); z-index: 2; }
-
 /* Umhang-Vorschau (CapePreview): Außenseite 10×16 Texturpixel, je 6 CSS-Pixel groß, pixelscharf; ohne Textur das Stufenmuster */
 .cape-preview { display: block; height: 96px; aspect-ratio: 10 / 16; image-rendering: pixelated; }
 .cape-preview[data-fallback] { background:

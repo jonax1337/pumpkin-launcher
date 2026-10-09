@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogActions, Field, Segmented } from "@/ui";
+import { Dialog, DialogActions, DropZone, Field, Segmented } from "@/ui";
 import { useI18n } from "@/i18n";
 import { TYPE_ONE_KEYS } from "@/lib/catalog";
 import { fileName } from "@/lib/format";
@@ -28,11 +28,9 @@ export function LocalFilesDropzone({ dragging, ask, onAdd }: DropzoneState) {
   return (
     <>
       {dragging && (
-        <div className="drop over dz-over" aria-hidden>
-          <div className="dz-hint">
-            <DropHint>{t("detail.files.dropHintContent")}</DropHint>
-          </div>
-        </div>
+        <DropZone over overlay aria-hidden>
+          <DropHint>{t("detail.files.dropHintContent")}</DropHint>
+        </DropZone>
       )}
       {/* Überspringen lässt die unklaren Zips draußen; was eine klare Art hat, kommt trotzdem hinzu. */}
       {ask && <KindDialog paths={ask.unsure} onSkip={() => onAdd(ask.sure)} onConfirm={(chosen) => onAdd([...ask.sure, ...chosen])} />}

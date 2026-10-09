@@ -1,4 +1,4 @@
-import type { IconName } from "@/ui/types";
+import type { IconName } from "@/ui";
 
 /** Gruppen in fester Reihenfolge: ein Eintrag wandert beim Tippen nie in eine andere Gruppe. */
 export const GROUP_ORDER = ["instances", "navigation", "actions", "search"] as const;

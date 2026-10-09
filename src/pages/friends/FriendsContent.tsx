@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from "react-router";
 import { useFriendRequests, useFriendsList, useFriendsState, useHostSessions, useInvites } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import type { FriendsState } from "@/lib/types";
-import { ContextMenu, ErrorBox, Page, PageHeader, Skel, Workspace, WorkspaceContent, WorkspaceRail, type MenuEntry } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { ContextMenu, Page, PageHeader, Skel, Workspace, WorkspaceContent, WorkspaceRail, type MenuEntry } from "@/ui";
 import { ActivitySection } from "./ActivitySection";
 import { AddFriendButtons, AddFriendDialog, type AddFriendTab } from "./AddFriendDialog";
 import { FriendsSection } from "./FriendsSection";
@@ -61,11 +62,11 @@ export function FriendsContent({ state }: { state: FriendsState }) {
           </WorkspaceRail>
         ) : undefined
       }>
-        <WorkspaceContent className="friends-content">
+        <WorkspaceContent className="@container/friends-list">
           {error ? (
             <ErrorBox title={t("friends.loadFailed")} error={error} onRetry={() => void Promise.all([friends.refetch(), requests.refetch()])} />
           ) : !friends.data || !requests.data ? (
-            <Skel h={120} />
+            <Skel className="h-[120px]" />
           ) : (
             <>
               <FriendsSection friends={friends.data} invites={invites.data ?? []} session={sessions.data?.[0]} actions={actions} />

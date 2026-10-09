@@ -14,10 +14,10 @@
 @keyframes sheetin { from { transform: translateX(calc(100% + 16px)); } }
 @keyframes sheetout { from { transform: none; } to { transform: translateX(calc(100% + 16px)); } }
 
-/* Unbestimmter Fortschritt: Suchfenster wandert (vx-prog und .prog im Spielen-Knopf) */
+/* Unbestimmter Fortschritt: Suchfenster wandert (lk-prog und .prog im Spielen-Knopf) */
 @keyframes ind { from { -webkit-mask-position: -120px 0; mask-position: -120px 0; } to { -webkit-mask-position: 240px 0; mask-position: 240px 0; } }
 
-/* Platzhalter beim Laden (vx-skel) pulsiert in Stufen */
+/* Platzhalter beim Laden (lk-skel) pulsiert in Stufen */
 @keyframes skp { to { background: var(--line); } }
 
 /* Einblenden-Staffel: Zeilen und Karten (40 ms je Position, --i) */

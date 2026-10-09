@@ -3,6 +3,8 @@
 @import "@fontsource/big-shoulders-display/800";
 @import "@fontsource-variable/hanken-grotesk";
 @import "@fontsource/jersey-10";
+/* Kit (ui): Tailwind-Theme-Brücke (oberste Ebene, kein layer()) */
+@import "./ui/theme.css";
 /* Pixelkino liegt in der Komponenten-Schicht: Tailwind-Utilities dürfen Layout darüber setzen.
    Reihenfolge: Basis und Gerüst, dann die Seiten und Dialoge in ihrer Kaskadenfolge, danach das Kit. */
 @import "./styles/base.css" layer(components);
@@ -11,22 +13,17 @@
 @import "./pages/instances/library.css" layer(components);
 @import "./pages/detail/detail.css" layer(components);
 @import "./pages/discover-project.css" layer(components);
-@import "./pages/settings/settings-layout.css" layer(components);
 @import "./pages/skins/skin-card.css" layer(components);
 @import "./pages/detail/screenshots/screenshots.css" layer(components);
 @import "./components/dialogs.css" layer(components);
 @import "./components/onboarding.css" layer(components);
 @import "./components/accounts/accounts.css" layer(components);
 @import "./components/friends/friends.css" layer(components);
-/* Pixel-Kit (src/ui): danach, gleiche Schicht */
+/* Kit (src/ui): danach, gleiche Schicht. Nur Aussehen; Layout kommt als Tailwind-Utilities */
 @import "./ui/ui.css" layer(components);
 /* Spielen (Knopf, Statuszeile, Protokoll) als Domänen-Baustein hinter dem Kit */
 @import "./components/play.css" layer(components);
 @import "./branding/branding.css" layer(components);
-/* Befehlspalette (app/palette): Dialoginhalt, gesammelt wie die übrigen Stile */
-@import "./app/palette/palette.css" layer(components);
-/* Kit-Vorschau (/_kit, nur Entwicklung): Gerüst der Specimen-Seite */
-@import "./ui/kit/kit.css" layer(components);
 
 /* Tailwind-Preflight (html, code, pre) nimmt die Schriften aus Pixelkino. Farb-Utilities gibt es nicht: Komponenten nutzen semantische Klassen. */
 @theme inline {

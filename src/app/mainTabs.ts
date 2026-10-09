@@ -1,5 +1,5 @@
 import type { TKey } from "@/i18n";
-import type { IconName } from "@/ui/types";
+import type { IconName } from "@/ui";
 import { withMod } from "./shortcuts";
 
 type MainTab = { to: string; key: TKey; icon: IconName; match: (pathname: string) => boolean; shortcut: string };

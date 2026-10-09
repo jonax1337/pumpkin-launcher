@@ -157,7 +157,7 @@ Exact contracts: [Friends specification](friends/SPEC.md), [Pumpkin Bridge integ
 
 Pages call the typed backend through query hooks, not ad hoc network or filesystem APIs. Mutations invalidate affected query keys; event subscriptions update running-game/task state. Browser mocks are demonstrations, not evidence that desktop operations succeeded.
 
-The Pixelkino kit (Inventar style: slots, stone plates, creative tabs, tooltip-style menus, 8×8 icon set) lives in `src/ui/`; styles are collected centrally (`src/index.css`, `src/ui/ui.css`) rather than imported separately by each component. Global tokens and the app shell are in `src/styles/` (`base.css`, `shell.css`), page styles sit next to their pages. Scene rendering is in `src/pixel/`; branding chooses seasonal assets and accents. See [Pixelkino](design/PIXELKINO.md) for appearance and interaction rules.
+The Pixelkino kit (Inventar style: slots, stone plates, creative tabs, tooltip-style menus, 8×8 icon set) lives in `src/ui/` (look in CSS: `look.css`, `look/*.css`; layout as Tailwind utilities in the components; see `src/ui/README.md`); styles are collected centrally (`src/index.css`, `src/ui/ui.css`) rather than imported separately by each component. Global tokens and the app shell are in `src/styles/` (`base.css`, `shell.css`), page styles sit next to their pages. Scene rendering is in `src/pixel/`; branding chooses seasonal assets and accents. See [Pixelkino](design/PIXELKINO.md) for appearance and interaction rules.
 
 German dictionary keys are the source shape; English must define the same keys. User content such as instance names is not translated. Backend error-key extraction requires literal dictionary strings.
 

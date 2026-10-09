@@ -10,7 +10,9 @@ import { focusSoon } from "@/pages/detail/content/focus";
 import { newInstanceParams } from "@/lib/routes";
 import { LOADER_LABELS, type Instance } from "@/lib/types";
 import { useLookStore } from "@/store/look";
-import { Button, ButtonLink, ContextMenu, Empty, ErrorBox, Glyph, List, Page, PageHeader, Workspace, WorkspaceContent, type MenuEntry } from "@/ui";
+import { EmptyState } from "@/components/EmptyState";
+import { ErrorBox } from "@/components/ErrorBox";
+import { Button, ButtonLink, ContextMenu, Empty, Glyph, List, Page, PageHeader, Workspace, WorkspaceContent, type MenuEntry } from "@/ui";
 import { GroupedView } from "./instances/GroupedView";
 import { InstanceListHeader, InstanceView, LibraryRoving } from "./instances/InstanceView";
 import { LibraryToolbar, NewInstanceButton } from "./instances/LibraryToolbar";
@@ -33,8 +35,8 @@ function LoadingList() {
   return (
     <div aria-busy aria-label={t("components.common.loadingAria")}>
       <InstanceListHeader />
-      <List variant="instances" divided>
-        <SkelList n={6} className="lib-skel" />
+      <List divided>
+        <SkelList n={6} className="h-14 @max-[640px]/library:h-22" />
       </List>
     </div>
   );
@@ -65,13 +67,13 @@ function NoResults({ filters, onReset }: { filters: LibraryFilters; onReset: () 
   const { query, loader, version } = filters;
   const active = [query.trim(), loader === "all" ? "" : LOADER_LABELS[loader], version === "all" ? "" : version];
   return (
-    <Empty
+    <EmptyState
       size="page"
       title={t("pages.instances.noResultsTitle")}
       actions={<Button onClick={onReset}>{t("pages.instances.resetSearch")}</Button>}
     >
       {t("pages.instances.noResultsQuery", { filter: active.filter(Boolean).join(" · ") })}
-    </Empty>
+    </EmptyState>
   );
 }
 
@@ -157,7 +159,7 @@ export function InstancesPage() {
   return (
     <LibrarySelectionProvider value={selection}>
       <ContextMenu items={menuItems}>
-      <Page className="lib" data-picking={selection.picking || undefined} onKeyDown={onKeyDown}>
+      <Page className="group/lib @container/library [--lib-pick-w:28px]" data-picking={selection.picking || undefined} onKeyDown={onKeyDown}>
         <PageHeader title={t("ui.nav.library")}>
           <NewInstanceButton />
         </PageHeader>

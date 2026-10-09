@@ -4,12 +4,18 @@ import { useAnswerFriendRequest, useCancelFriendRequest } from "@/hooks/useFrien
 import { useI18n } from "@/i18n";
 import { FRIENDS_LIMITS } from "@/lib/friends-types";
 import type { FriendRequest } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { Avatar, Button, Count, Hint, IconButton, List, ListRow, Menu, RowTitle, SectionHeader, Tip } from "@/ui";
 import { codeMayBeExpired, REQUESTS_ANCHOR, requestLine, requestName } from "./friendsModel";
 import { IconTile } from "./IconTile";
 import type { Person } from "./useFriendDialogs";
 
 const SECOND_MS = 1000;
+
+/** Karte in der schmalen Leiste: Platte mit gleichem Innenabstand rundum; Kopf und Name oben, Knöpfe brechen darunter um, das Menü sitzt in der Ecke. */
+const RAIL_CARD = "flex-wrap items-start gap-x-3 gap-y-2 p-3";
+/** Der Titel nimmt die ganze Zeile bis auf Platz für den Menüknopf. */
+const RAIL_TITLE = "flex-[1_1_calc(100%-44px)]";
 
 type RequestActions = {
   retryNow: () => void;
@@ -22,8 +28,8 @@ export function RequestsSection({ requests, ...actions }: { requests: FriendRequ
   const { t } = useI18n();
   return (
     <section id={REQUESTS_ANCHOR}>
-      <SectionHeader title={<>{t("friends.requests.title")}<Count value={requests.length} muted /></>} size="sub" as="h2" />
-      <List variant="accounts" aria-label={t("friends.requests.title")}>
+      <SectionHeader title={<>{t("friends.requests.title")}<Count value={requests.length} muted /></>} level="sub" as="h2" />
+      <List spaced aria-label={t("friends.requests.title")}>
         {requests.map((request) => (
           <RequestRow key={request.id} request={request} {...actions} />
         ))}
@@ -67,14 +73,12 @@ function RequesterSub({ request }: { request: FriendRequest }) {
 }
 
 /** Name samt Fingerabdruck: der Name ist selbst angegeben, der Fingerabdruck gehört zum Schlüssel dahinter. */
-function Requester({ request, aside }: { request: FriendRequest; aside?: string }) {
+function Requester({ request, aside, menu }: { request: FriendRequest; aside?: string; menu?: boolean }) {
   const name = requestName(request);
   return (
     <>
-      <span className="friends-av">
-        <SelfAsserted><Avatar name={name} /></SelfAsserted>
-      </span>
-      <RowTitle title={name} aside={aside} sub={<RequesterSub request={request} />} />
+      <SelfAsserted><Avatar name={name} /></SelfAsserted>
+      <RowTitle wrap title={name} aside={aside} sub={<RequesterSub request={request} />} className={cn(RAIL_TITLE, menu && "pr-7")} />
     </>
   );
 }
@@ -84,8 +88,8 @@ function IncomingRow({ request, askBlock }: { request: FriendRequest; askBlock: 
   const answer = useAnswerFriendRequest();
   const name = requestName(request);
   return (
-    <ListRow>
-      <Requester request={request} />
+    <ListRow plate="row" className={RAIL_CARD}>
+      <Requester request={request} menu={!!request.peerId} />
       <Button size="s" variant="primary" disabled={answer.isPending} onClick={() => answer.mutate({ requestId: request.id, accept: true })}>
         {t("friends.requests.accept")}
       </Button>
@@ -94,7 +98,7 @@ function IncomingRow({ request, askBlock }: { request: FriendRequest; askBlock: 
       </Button>
       {request.peerId && (
         <Menu
-          trigger={<IconButton icon="more" size="s" label={t("components.instance.moreActionsFor", { name })} tip={t("components.instance.moreActions")} />}
+          trigger={<IconButton icon="more" size="s" className="absolute top-1.5 right-1.5" label={t("components.instance.moreActionsFor", { name })} tip={t("components.instance.moreActions")} />}
           items={[{ id: "block", text: t("friends.menu.block"), icon: "stop", bad: true, onSelect: () => askBlock({ id: request.peerId!, name }) }]}
         />
       )}
@@ -106,8 +110,8 @@ function IncomingRow({ request, askBlock }: { request: FriendRequest; askBlock: 
 function NameTarget({ name, title, aside, sub }: { name: string; title: string; aside?: string; sub?: string }) {
   return (
     <>
-      <span className="friends-av"><Avatar name={name} /></span>
-      <RowTitle title={title} aside={aside} sub={sub} />
+      <Avatar name={name} />
+      <RowTitle wrap className={RAIL_TITLE} title={title} aside={aside} sub={sub} />
     </>
   );
 }
@@ -119,13 +123,15 @@ function DeliveringRow({ request, retryNow, cooling }: { request: FriendRequest;
   const line = requestLine(request);
   const expired = codeMayBeExpired(request, FRIENDS_LIMITS.codeTtlSecs, Date.now() / SECOND_MS);
   return (
-    <ListRow>
+    <ListRow plate="row" className={RAIL_CARD}>
       {request.via === "name" ? (
         <NameTarget name={line.params.name} title={line.params.name} sub={t(line.key, line.params)} />
       ) : (
         <>
           <IconTile icon="link" />
           <RowTitle
+            wrap
+            className={RAIL_TITLE}
             title={request.codeTail ? t("friends.requests.codeTitle", { tail: request.codeTail }) : t("friends.requests.codeTitleNoTail")}
             sub={t(line.key, line.params)}
             meta={expired ? <Hint tone="warn">{t("friends.requests.maybeExpired")}</Hint> : undefined}
@@ -143,7 +149,7 @@ function AwaitingRow({ request }: { request: FriendRequest }) {
   const cancel = useCancelFriendRequest();
   const line = requestLine(request);
   return (
-    <ListRow>
+    <ListRow plate="row" className={RAIL_CARD}>
       {request.via === "name" ? (
         <NameTarget name={line.params.name} title={t("friends.requests.toName", line.params)} aside={t(line.key, line.params)} />
       ) : (

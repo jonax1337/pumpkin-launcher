@@ -1,0 +1,51 @@
+/* Toasts (Sonner, Toaster.tsx). Nur Aussehen: Advancement-Platte (Steinplatte), Symbol im Slot (Farbe je Art), Text, Aktion
+   als Geistknopf s, Schließen als Symbolknopf s. Raster, Maße und Schriftgrößen stehen als Tailwind-Klassen in Toaster.tsx (Sonner reicht die
+   Klassen je Teil durch, `classNames`). Fehler und Warnung tragen Warnsymbol und Statusfarbe im Symbol-Slot (nie nur Farbe).
+   Die Platte liegt in ::before, damit die Kerbe nicht Sonners Hitfläche (Lücke zwischen gestapelten Toasts) abschneidet.
+   Sonners eigene Stile sind ungeschichtet und schlagen jede Schicht; !important überstimmt sie, wo Sonner ::before selbst nutzt. */
+
+.lk-toaster { font-family: var(--f-body); }
+
+/* Overlay-Kontext wie in tokens.css (Sonner reicht keine data-* an die Toast-Fläche) */
+.lk-toast { --hv-row: var(--panel-2); --pr-row: var(--panel); --t-bg: var(--panel-3); --t-ic: var(--sunk); --t-ic-bd: var(--slot-bd);
+  position: relative; isolation: isolate; color: var(--fg); }
+.lk-toast[data-type="error"] { --t-ic: color-mix(in srgb, var(--bad-fill) 30%, var(--sunk)); --t-ic-bd: var(--bad-fill) var(--bad) var(--bad) var(--bad-fill); }
+.lk-toast[data-type="warning"] { --t-ic: color-mix(in srgb, var(--warn) 14%, var(--sunk)); --t-ic-bd: var(--warn); }
+.lk-toast::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--t-bg); clip-path: var(--n1);
+  box-shadow: inset 0 0 0 var(--px) var(--edge), inset var(--u3) var(--u3) 0 var(--line-hi), inset calc(var(--u3) * -1) calc(var(--u3) * -1) 0 var(--bg-2); }
+/* Sonners unsichtbare Swipe-/Exit-Hitfläche nutzt ::before; unsere sichtbare Platte darf dabei nicht wachsen */
+.lk-toast::before { inset: 0 !important; height: auto !important; transform: none !important; }
+/* Sonner blendet Stapel-Inhalte nur bei styled=true aus; das gilt auch für unsere unstyled-Toasts */
+.lk-toast[data-expanded="false"][data-front="false"] > * { opacity: 0; }
+.lk-toast:focus-visible { box-shadow: none !important; outline: none; }
+.lk-toast:focus-visible::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; }
+/* Aufgeklappt (Maus über dem Stapel) belegt Sonner dasselbe ::after als Lückenfüller über dem Toast (left/bottom/width/height, ungeschichtet);
+   !important hält den Ring des fokussierten Toasts an seinem Platz (der Füller entfällt an diesem einen Toast, solange er den Fokus hat). */
+.lk-toast:focus-visible::after { inset: calc(var(--u2) * -1) !important; width: auto !important; height: auto !important; }
+
+/* Symbol im eigenen Slot */
+.lk-toast-i { color: var(--acc); background: var(--t-ic); border: var(--px) solid; border-color: var(--t-ic-bd); box-shadow: var(--slot-sh); clip-path: var(--n1); }
+.lk-toast[data-type="error"] .lk-toast-i { color: var(--bad); }
+.lk-toast[data-type="warning"] .lk-toast-i { color: var(--warn); }
+.lk-toast[data-type="success"] .lk-toast-i { color: var(--run); }
+
+.lk-toast-t { font-weight: 700; text-shadow: var(--tsh); }
+.lk-toast-d { color: var(--fg-2); }
+
+/* Knöpfe: Geist (flach, beim Überfahren ein Slot) wie `lk-btn[data-variant="ghost"]`; Sonner kennt keine data-variant, daher hier nachgebaut.
+   Die Aktion (data-action) trägt den Akzent, Abbrechen und Schließen sind neutral. */
+.lk-tbtn { --b-tone: var(--fg); --b-tint: var(--fg); --b-tx: var(--fg-2); color: var(--b-tx); font-weight: 700; letter-spacing: .01em; user-select: none; cursor: pointer;
+  background: transparent; border: var(--px) solid transparent; clip-path: var(--n1); transition: background-color var(--st); }
+.lk-tbtn[data-action] { --b-tone: var(--acc-hi); --b-tint: var(--acc); --b-tx: var(--b-tone); }
+.lk-tbtn:is(:hover, [data-force="hover"]):not(:disabled) { --b-tx: var(--fg); background: var(--sunk); border-color: var(--fg-2); box-shadow: var(--slot-sh); }
+.lk-tbtn:is(:active, [data-force="press"]):not(:disabled) { --b-tx: var(--fg); background: var(--edge); border-color: var(--fg-2); box-shadow: var(--slot-sh); }
+.lk-tbtn[data-action]:is(:hover, [data-force="hover"]):not(:disabled) { --b-tx: var(--b-tone); background: color-mix(in srgb, var(--b-tint) 12%, var(--sunk)); }
+.lk-tbtn[data-action]:is(:active, [data-force="press"]):not(:disabled) { --b-tx: var(--b-tone); background: color-mix(in srgb, var(--b-tint) 8%, var(--edge)); }
+.lk-tbtn:is(:focus-visible, [data-force="focus"]) { border-color: var(--focus); box-shadow: var(--ring-i); }
+
+/* Windows-Kontrastmodus: Fokus als Umriss in Systemfarbe, Platte mit Rahmen statt Schatten */
+@media (forced-colors: active) {
+  .lk-toast:focus-visible::after { background: Highlight; }
+  .lk-toast::before { border: 1px solid CanvasText; }
+  .lk-tbtn:is(:focus-visible, [data-force="focus"]) { outline: 2px solid Highlight; outline-offset: 2px; }
+}

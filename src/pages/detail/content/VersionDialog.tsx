@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Button, Chip, Dialog, ErrorBox, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { Button, Chip, Dialog, Hint, List, ListRow, RowTitle, Skel } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
 import { fitFilter, fitsLabel } from "@/components/catalog/fit";
 import { versionLoaders, versionTypeSuffix } from "@/components/catalog/labels";
 import { catalogApi } from "@/lib/catalogApi";
@@ -58,11 +59,11 @@ export function VersionDialog({ instance, mod, title, locked, onPick, onClose }:
       title={t("detail.content.versionTitle", { name: title })}
       sub={t("detail.content.versionSub", { fits: fitsLabel(instance, mod.kind) })}
     >
-      {versions.isPending && <Skel h={120} />}
+      {versions.isPending && <Skel className="h-30" />}
       {versions.isError && <ErrorBox title={t("detail.content.versionLoadError")} error={versions.error} onRetry={() => void versions.refetch()} />}
       {versions.data && !versions.data.length && <p>{t("detail.content.versionNone")}</p>}
       {versions.data && versions.data.length > 0 && (
-        <List variant="versions" aria-label={t("detail.content.versionTitle", { name: title })}>
+        <List flat aria-label={t("detail.content.versionTitle", { name: title })}>
           {versions.data.slice(0, SHOWN_VERSIONS).map((version) => (
             <VersionItem
               key={version.id}

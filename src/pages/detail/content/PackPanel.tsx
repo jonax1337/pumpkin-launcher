@@ -37,8 +37,8 @@ export function ResourcePackPanel({ packs, say }: { packs: PackPanelState; say: 
   }
 
   return (
-    <Panel pad="m" className="dc-panel">
-      <SectionHeader as="h3" size="card" title={t("detail.packs.title")} />
+    <Panel className="dc-panel p-4">
+      <SectionHeader level="card" title={t("detail.packs.title")} />
       <p className="dc-panel-sub">{t("detail.packs.sub")} {t("detail.packs.moveHint")}</p>
       {controls.blocked && <Hint tone="warn" className="dc-panel-hint">{controls.blocked}</Hint>}
       {activeOrder.length === 0 ? (
@@ -58,7 +58,7 @@ export function ResourcePackPanel({ packs, say }: { packs: PackPanelState; say: 
               <span className="dc-order-n" aria-hidden>{index + 1}</span>
               <ProjectIcon url={iconOf(mod)} seed={mod.id} />
               <b className="dc-order-name">{titleOf(mod)}</b>
-              {controls.isIncompatible(mod) && <Chip size="s" tone="warn" dot>{t("detail.packs.incompatible")}</Chip>}
+              {controls.isIncompatible(mod) && <Chip size="s" tone="warn">{t("detail.packs.incompatible")}</Chip>}
               <IconButton
                 size="s"
                 icon="chev-up"
@@ -98,8 +98,8 @@ export function ShaderPanel({ packs, shaders, hasIris, loader }: { packs: PackPa
   const known = shaders.filter((m) => m.enabled).map((m) => ({ value: m.fileName, label: titleOf(m) }));
   const unknown = shaderFile && !known.some((o) => o.value === shaderFile) ? [{ value: shaderFile, label: t("detail.packs.unknownShader", { name: shaderFile }) }] : [];
   return (
-    <Panel pad="m" className="dc-panel">
-      <SectionHeader as="h3" size="card" title={t("detail.packs.shaderTitle")} />
+    <Panel className="dc-panel p-4">
+      <SectionHeader level="card" title={t("detail.packs.shaderTitle")} />
       <p className="dc-panel-sub">{t("detail.packs.shaderSub")}</p>
       {!hasIris && (
         <Hint tone="warn" className="dc-panel-hint">

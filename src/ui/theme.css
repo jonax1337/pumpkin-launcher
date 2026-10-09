@@ -1,0 +1,87 @@
+/* Tailwind-Theme-Brücke (src/ui): von den Pixelkino-Tokens zu Tailwind-Utilities.
+   Das Layout der Bausteine steht als Utility-Klassen in den Komponenten; die Maße kommen aus den Tokens
+   (tokens.css), damit Layout und Look dieselben Abstände, Höhen und Schriftgrößen sprechen. `inline`: die Utilities verweisen
+   direkt auf die Variablen (Zoom `--tz`, Pixelstufe `--px` und Fensterränder bleiben zur Laufzeit wirksam).
+   Muss auf oberster Ebene stehen (kein `layer()` beim Import), sonst erkennt Tailwind @theme nicht.
+
+   Utilities (Beispiele):  gap-pg-m · px-gut · pt-pg-top · p-pg-pad · h-ctl-m · min-h-ctl-s · gap-tb · text-ctl-m · text-hd-page · le-960:grid-cols-1 */
+@theme inline {
+  /* Abstände des Seitenschemas (tokens.css: --pg-*, --gut, --tb-gap) */
+  --spacing-gut: var(--gut);
+  --spacing-pg-s: var(--pg-gap-s);
+  --spacing-pg-m: var(--pg-gap-m);
+  --spacing-pg-l: var(--pg-gap-l);
+  --spacing-pg-top: var(--pg-top);
+  --spacing-pg-bottom: var(--pg-bottom);
+  --spacing-pg-pad: var(--pg-pad);
+  --spacing-tb: var(--tb-gap);
+
+  /* Formularraster: Label-Spalte und Spaltenabstand (base.css: --form-lab, --form-gap), Schalter-Abstand */
+  --spacing-form-lab: var(--form-lab);
+  --spacing-form-gap: var(--form-gap);
+  --spacing-sw-gap: var(--sw-gap);
+
+  /* Steuerelementhöhen 32 / 40 / 56 (nie von --px abhängig) */
+  --spacing-ctl-s: var(--lk-h-s);
+  --spacing-ctl-m: var(--lk-h-m);
+  --spacing-ctl-l: var(--lk-h-l);
+
+  /* Pixeleinheiten: 1 und 2 Einheiten der gewählten Pixelstufe */
+  --spacing-u1: var(--px);
+  --spacing-u2: var(--u2);
+
+  /* Schriftgrößen der Steuerelemente (wachsen mit der Textgröße-Einstellung) */
+  --text-ctl-s: calc(13px * var(--tz));
+  --text-ctl-m: calc(14px * var(--tz));
+  --text-ctl-l: calc(16px * var(--tz));
+  /* Pixelschrift der Chips */
+  --text-chip-m: calc(20px * var(--tz));
+  --text-chip-s: calc(18px * var(--tz));
+
+  /* Überschriftenstufen (Display, Versalien) */
+  --text-hd-hero-xl: var(--hd-hero-xl);
+  --text-hd-hero-xl--line-height: 0.95;
+  --text-hd-hero: var(--hd-hero);
+  --text-hd-hero--line-height: 1;
+  --text-hd-page: var(--hd-page);
+  --text-hd-page--line-height: 1;
+  --text-hd-dialog: var(--hd-dialog);
+  --text-hd-dialog--line-height: 1;
+  --text-hd-section: var(--hd-section);
+  --text-hd-section--line-height: 1.1;
+  --text-hd-sub: var(--hd-sub);
+  --text-hd-sub--line-height: 1.1;
+  --text-hd-card: var(--hd-card);
+  --text-hd-card--line-height: 1.1;
+  --text-hd-bar: var(--hd-bar);
+  --text-hd-bar--line-height: 1;
+  --text-hd-title: var(--hd-title);
+  --text-hd-title--line-height: 0.95;
+  /* Stufen mit der Textgröße-Einstellung (Heading zoom) */
+  --text-hd-hero-z: calc(var(--hd-hero) * var(--tz));
+  --text-hd-hero-z--line-height: 1;
+  --text-hd-page-z: calc(var(--hd-page) * var(--tz));
+  --text-hd-page-z--line-height: 1;
+  --text-hd-dialog-z: calc(var(--hd-dialog) * var(--tz));
+  --text-hd-dialog-z--line-height: 1;
+  --text-hd-section-z: calc(var(--hd-section) * var(--tz));
+  --text-hd-section-z--line-height: 1.1;
+  --text-hd-sub-z: calc(var(--hd-sub) * var(--tz));
+  --text-hd-sub-z--line-height: 1.1;
+  --text-hd-card-z: calc(var(--hd-card) * var(--tz));
+  --text-hd-card-z--line-height: 1.1;
+}
+
+/* Fensterbreiten-Varianten mit EINSCHLIESSLICHER Grenze: `le-720:hidden` gilt bis einschließlich 720 px Fensterbreite
+   (`max-width: 720px`). Tailwinds `max-[720px]:` meint in v4 „unter 720“ (`width < 720px`) und träfe das 720er Fenster nicht.
+   Die Stufen sind die der Stylesheets und von lib/breakpoints.ts; weitere Stufen hier ergänzen, nie `max-[Npx]:` verwenden.
+   Reihenfolge: ABSTEIGEND deklarieren. Tailwind sortiert Varianten nach Deklaration; bei gleichzeitig zutreffenden Stufen
+   (Fenster 900 trifft `le-1040` und `le-900`) muss die schmalere später im CSS stehen, sonst gewinnt die breitere. */
+@custom-variant le-1280 (@media (max-width: 1280px));
+@custom-variant le-1180 (@media (max-width: 1180px));
+@custom-variant le-1096 (@media (max-width: 1096px));
+@custom-variant le-1040 (@media (max-width: 1040px));
+@custom-variant le-960 (@media (max-width: 960px));
+@custom-variant le-900 (@media (max-width: 900px));
+@custom-variant le-820 (@media (max-width: 820px));
+@custom-variant le-720 (@media (max-width: 720px));

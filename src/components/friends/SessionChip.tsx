@@ -30,7 +30,7 @@ export function SessionChip({ activity: { session, join } }: { activity: Sharing
         size="m"
         label={t(session ? "friendsHost.pop.hostTitle" : "friendsHost.pop.joinTitle")}
         trigger={
-          <ChipButton className="fr-session-chip" icon={session ? "share" : "friends"} data-tone="run">
+          <ChipButton className="w-[248px]" icon={session ? "share" : "friends"} tone="run">
             {session ? <HostingText session={session} /> : join && <JoiningText join={join} />}
           </ChipButton>
         }

@@ -137,8 +137,9 @@ export function DiscoverPage() {
           id: "back", text: t("common.back"), icon: "arrow-left",
           onSelect: () => setParams(discoverParams({ tab: type, source })),
         }, "-", ...tabMenu]}>
-        <Page className="disc-proj">
+        <Page>
           <ContentDetail
+            layout="page"
             key={`${projectSource}-${projectId}`}
             source={projectSource}
             projectId={projectId}

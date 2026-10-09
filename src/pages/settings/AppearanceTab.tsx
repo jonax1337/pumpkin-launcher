@@ -41,7 +41,7 @@ function SeasonStatus() {
   const periodKey = SEASON_KEYS[season.id].period;
   const automaticTime = periodKey ? t(periodKey) : t("pages.settings.pumpkinBetweenSeasons");
   return (
-    <div className="season-status">
+    <div className="flex items-center gap-3">
       <Buddy size={72} />
       <div>
         <b>{season.name}</b>

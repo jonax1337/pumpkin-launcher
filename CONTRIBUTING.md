@@ -79,7 +79,7 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 
 ## Code conventions
 
-- Frontend: TypeScript and React; use the existing components and the pixel design system in `src/ui/` and `src/pixel/`. Tailwind is used for layout helpers.
+- Frontend: TypeScript and React; use the existing components and the pixel design system in `src/ui/` and `src/pixel/`. The kit keeps its look in CSS and its layout in Tailwind utilities (see `src/ui/README.md`).
 - Backend: keep Tauri commands thin and put logic in services and state. Use the existing `thiserror` and `tracing` patterns.
 - Backend commands: register them in `src-tauri/src/lib.rs`, the `Backend` type in `src/lib/backend.ts`, the Tauri adapter in `src/lib/backend-tauri.ts` and the browser mock in `src/lib/mock-*.ts`.
 - User-facing text: keep German and English dictionaries in sync under `src/i18n/`. Backend errors use `coded!` keys from the error dictionaries. Use everyday language.

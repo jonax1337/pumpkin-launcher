@@ -1,0 +1,191 @@
+/* Kit-Aussehen (src/ui): NUR das Aussehen. Farben, Rahmen, Fasen, Schatten, Schriftart, Kerben und Zustände.
+   Hier stehen keine Maße und kein Layout (kein display, flex, grid, gap, padding, margin, width, height, Schriftgröße):
+   die setzen die Komponenten und Aufrufer als Tailwind-Utilities. Ausnahme: `position: relative; isolation: isolate` bei
+   Platten, weil die Fläche auf ::before liegt (Kerben clippen sonst den Inhalt); ein Utility wie `sticky` überstimmt es.
+
+   Grundlage sind die Tokens und Flächenrezepte aus tokens.css, surface.css (.lk-slot / .lk-stone / .lk-pit / .lk-text).
+   Eingebunden in src/index.css hinter ui/ui.css in der Schicht components; Tailwind-Utilities (Schicht utilities) schlagen diese Regeln.
+   Klassen: lk-btn · lk-chip · lk-count · lk-meta · lk-h · lk-panel · lk-rule · lk-input. Zustand und Variante stehen als data-*.
+   data-force="hover|press|focus" erzwingt den Zustand (Vorschau). Weitere Bausteine liegen je in look/*.css (hier eingebunden). */
+@import "./look/tabs.css";
+@import "./look/toggle.css";
+@import "./look/field.css";
+@import "./look/feedback.css";
+@import "./look/list.css";
+@import "./look/dialog.css";
+@import "./look/card.css";
+@import "./look/slider.css";
+@import "./look/list-extras.css";
+@import "./look/overlay.css";
+@import "./look/toast.css";
+@import "./look/bar.css";
+@import "./look/hero.css";
+@import "./look/keys.css";
+@import "./look/listbox.css";
+@import "./look/gallery.css";
+@import "./look/table.css";
+@import "./look/photo.css";
+@import "./look/link.css";
+@import "./look/scrollbar.css";
+
+/* ---------- Knopf ---------- */
+.lk-btn {
+  --b-tone: var(--fg); --b-tint: var(--fg); --b-tx: var(--fg); --b-nudge: 0px;
+  --face-h: color-mix(in oklab, var(--panel-3) 68%, var(--line-2)); --face-p: var(--panel-2); --rim: var(--fg-2);
+  color: var(--b-tx); font-weight: 700; letter-spacing: .01em; text-decoration: none; user-select: none; cursor: pointer;
+  transition: background-color var(--st);
+}
+/* Fase und Textversatz hängen an der Größe: 32 = 1 Einheit Fase, Versalmitte der Schrift auf die Symbolmitte setzen */
+.lk-btn[data-size="s"] { --b-nudge: 1px; --bv: var(--px); }
+.lk-btn[data-size="l"] { --b-nudge: 1px; }
+.lk-lab { translate: 0 var(--b-nudge); }
+.lk-bc { position: relative; }
+
+.lk-btn[data-tone="acc"] { --b-tone: var(--acc-hi); --b-tint: var(--acc); }
+.lk-btn[data-tone="warn"] { --b-tone: var(--warn); --b-tint: var(--warn); }
+.lk-btn[data-tone="bad"] { --b-tone: var(--bad); --b-tint: var(--bad); }
+
+/* Sekundär: Steinplatte (Farben aus surface.css), der Ton färbt nur die Schrift */
+.lk-btn[data-variant="secondary"][data-tone] { --b-tx: var(--b-tone); }
+/* Primär / Gefahr: gleiche Bauart in der Akzentfarbe der Instanz bzw. Rot */
+.lk-btn[data-variant="primary"] {
+  --face: var(--acc); --face-h: color-mix(in oklab, var(--acc) 80%, #fff); --face-p: var(--acc-mid);
+  --hi: var(--acc-hi); --lo: var(--acc-lo); --rim: var(--focus); --b-tx: var(--ink);
+  --tsh: 0 min(var(--px), 3px) 0 color-mix(in oklab, var(--acc-hi) 55%, transparent);
+}
+.lk-btn[data-variant="danger"] {
+  --face: var(--bad-fill); --face-h: color-mix(in oklab, var(--bad-fill) 82%, #fff); --face-p: color-mix(in oklab, var(--bad-fill) 80%, #000);
+  --hi: color-mix(in oklab, var(--bad-fill) 62%, #fff); --lo: color-mix(in oklab, var(--bad-fill) 55%, #000); --rim: var(--focus); --b-tx: #fff;
+}
+
+/* Zustände der Steinplatte: Hover = hellere Fläche + Rand, Druck = umgekehrte Fase (surface.css) + Inhalt 1 Einheit tiefer */
+.lk-btn.lk-stone:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { background: var(--face-h); border-color: var(--rim); }
+.lk-btn.lk-stone:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) { background: var(--face-p); border-color: var(--rim); }
+.lk-btn:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) > .lk-bc { translate: 0 var(--px); }
+/* Aus: flach, ohne Fase und Schatten */
+.lk-btn.lk-stone:is(:disabled, [aria-disabled="true"]) { --b-tx: var(--fg-3); background: var(--panel); border-color: var(--line); box-shadow: none; text-shadow: none; cursor: default; }
+.lk-btn.lk-stone:is(:disabled, [aria-disabled="true"]):not([data-fill]) .lk-ico { opacity: .6; }
+/* Laufender Vorgang (`busy`): Fase dauerhaft umgekehrt, kein Hover und Druck */
+.lk-btn[data-busy] { cursor: progress; }
+.lk-btn.lk-stone[data-busy] { box-shadow: inset var(--bv) var(--bv) 0 var(--lo), inset calc(var(--bv) * -1) calc(var(--bv) * -1) 0 var(--hi); }
+.lk-btn.lk-stone[data-busy]:is(:hover, :active, [data-force="hover"], [data-force="press"]):not(:disabled, [aria-disabled="true"]) { background: var(--face); border-color: var(--edge); }
+.lk-btn[data-busy]:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) > .lk-bc { translate: none; }
+/* Statusknopf (`tinted`, Sekundär mit Ton): die helle Fase trägt zu 40 % die Tonfarbe */
+.lk-btn[data-variant="secondary"][data-tint][data-tone] { --hi: color-mix(in oklab, var(--b-tint) 40%, var(--line-hi)); }
+
+/* Geist: flach, beim Überfahren ein Slot */
+.lk-btn[data-variant="ghost"] { --b-tx: var(--fg-2); background: transparent; border: var(--px) solid transparent; clip-path: var(--n1); }
+.lk-btn[data-variant="ghost"]:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { --b-tx: var(--fg); background: var(--sunk); border-color: var(--fg-2); box-shadow: var(--slot-sh); }
+.lk-btn[data-variant="ghost"]:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) { --b-tx: var(--fg); background: var(--edge); border-color: var(--fg-2); box-shadow: var(--slot-sh); }
+.lk-btn[data-variant="ghost"][data-tone] { --b-tx: var(--b-tone); }
+.lk-btn[data-variant="ghost"][data-tone]:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { background: color-mix(in srgb, var(--b-tint) 12%, var(--sunk)); }
+.lk-btn[data-variant="ghost"][data-tone]:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) { background: color-mix(in srgb, var(--b-tint) 8%, var(--edge)); }
+.lk-btn[data-variant="ghost"]:is(:disabled, [aria-disabled="true"]) { --b-tx: var(--fg-3); cursor: default; }
+
+/* Über Szenen: dunkle Grundplatte dauerhaft, dichter beim Hover, harter Schatten */
+.lk-btn[data-variant="ghost"][data-scene] { background: var(--scene-plate); text-shadow: var(--scene-shadow); }
+.lk-btn[data-variant="ghost"][data-scene]:not([data-tone]) { --b-tx: var(--fg); }
+.lk-btn[data-variant="ghost"][data-scene]:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { background: var(--scene-hover); box-shadow: none; }
+.lk-btn[data-variant="ghost"][data-scene][data-tone]:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { background: color-mix(in srgb, var(--b-tint) 12%, var(--scene-hover)); }
+.lk-btn[data-variant="ghost"][data-scene]:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) { background: rgba(7, 10, 17, .85); box-shadow: none; }
+.lk-btn[data-variant="ghost"][data-scene]:is(:disabled, [aria-disabled="true"]) { --b-tx: var(--fg-2); }
+.lk-btn[data-variant="ghost"][data-scene] .lk-ico svg { filter: drop-shadow(var(--scene-shadow)); }
+.lk-btn[data-variant="secondary"][data-scene] { --face: rgba(21, 29, 44, .92); --face-h: var(--scene-hover); }
+/* Deutliche Zustände: Hover heller Rand und Fläche, Druck eingedrückt (die Szenenfläche allein ändert sich kaum) */
+.lk-btn[data-variant="secondary"][data-scene="strong"] { --face-h: var(--panel-3); --face-p: var(--sunk); --rim: var(--fg); }
+/* Geist mit `solid="bad"` (Fenster schließen): Hover und Druck als volle rote Fläche */
+.lk-btn[data-variant="ghost"][data-solid="bad"]:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"]) { --b-tx: #fff; background: var(--bad-fill); border-color: var(--bad); box-shadow: none; }
+.lk-btn[data-variant="ghost"][data-solid="bad"]:is(:active, [data-force="press"]):not(:disabled, [aria-disabled="true"]) { --b-tx: #fff; background: color-mix(in oklab, var(--bad-fill) 80%, #000); border-color: var(--bad); box-shadow: none; }
+
+/* Fokus: Rand in Fokusfarbe + doppelter Ring (nie nur Farbe); steht hinter „aus“, damit auch aria-disabled ihn zeigt */
+.lk-btn:is(:focus-visible, [data-force="focus"]) { border-color: var(--focus); box-shadow: var(--ring-i); }
+
+/* ---------- Chip, Zähler, Metazeile ---------- */
+.lk-chip { --tone: var(--fg-2); --c-bd: var(--edge) var(--line-2) var(--line-2) var(--edge); color: var(--tone); font-family: var(--f-px); font-weight: 400; text-shadow: var(--tsh); border-color: var(--c-bd); font-variant-numeric: normal; }
+.lk-chip[data-tone="acc"] { --tone: var(--acc-hi); }
+.lk-chip[data-tone="warn"] { --tone: var(--warn); }
+.lk-chip[data-tone="bad"] { --tone: var(--bad); }
+.lk-chip[data-tone="run"] { --tone: var(--run); }
+/* Nicht bedienbar: kein Hover-Rand */
+.lk-chip:not([data-press]):hover { border-color: var(--c-bd); }
+.lk-chip[data-press] { cursor: pointer; }
+.lk-chip[data-press]:not([data-tone]):hover { color: var(--fg); }
+.lk-chip[data-press][data-tone="acc"] { background: color-mix(in oklab, var(--acc) 14%, var(--sunk)); }
+.lk-chip:not([data-tone]) .lk-count { color: var(--fg); }
+/* Über Szenen: volle Textfarbe, fett, harter Schatten */
+.lk-chip[data-scene] { color: var(--fg); font-weight: 700; text-shadow: var(--scene-shadow); }
+/* Pip: Quadrat in der Tonfarbe */
+.lk-pip { background: var(--tone); }
+
+.lk-count { color: inherit; font-family: var(--f-px); font-weight: 400; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.lk-count[data-muted] { color: var(--fg-3); }
+.lk-count[data-strong] { color: var(--fg); text-shadow: var(--tsh); font-variant-numeric: normal; }
+
+.lk-meta { color: var(--fg-2); font-weight: 500; }
+.lk-meta .lk-count { color: var(--fg); }
+.lk-meta .lk-ico { color: var(--fg-3); }
+/* Trenner zwischen den Einträgen (Größe und Abstand setzt die Komponente) */
+.lk-meta-i:not(:first-child)::before { background: var(--fg-3); }
+.lk-meta[data-scene] { text-shadow: var(--scene-shadow); }
+.lk-meta[data-scene] .lk-meta-i:not(:first-child)::before { box-shadow: var(--scene-shadow); }
+.lk-meta[data-scene] .lk-ico svg { filter: drop-shadow(var(--scene-shadow)); }
+
+/* ---------- Überschrift (Display, Versalien); die Größe der Stufe setzt die Komponente (text-hd-*) ---------- */
+.lk-h { color: var(--fg); font-family: var(--f-display); font-weight: 800; text-transform: uppercase; letter-spacing: .01em; text-shadow: var(--tsh); font-variant-numeric: normal; }
+.lk-h:is([data-level="page"], [data-level="hero"]) { letter-spacing: .005em; }
+.lk-h[data-level="hero"] { text-shadow: 0 var(--u2) 0 #000; }
+/* Der große Start-Titel: etwas weiter gesetzt, Schlagschatten wie die Szenenstufe */
+.lk-h[data-level="hero"][data-size="xl"] { letter-spacing: .01em; }
+/* plain: wie laufender Text (kein Buchstabenabstand, kein Schatten, Ziffernbreite der Umgebung); Größe und Farbe bleiben */
+.lk-h[data-plain] { letter-spacing: normal; text-shadow: none; font-variant-numeric: inherit; }
+/* Seitenüberschrift bekommt nach dem Seitenwechsel den Fokus: kein Ring, sie ist nicht bedienbar */
+.lk-h[tabindex="-1"]:focus { outline: none; }
+
+/* ---------- Bezeichnung-Wert-Liste (DescriptionList); Spalten und Größe setzt die Komponente ---------- */
+.lk-dl dt { color: var(--fg-3); }
+.lk-dl dd { color: var(--fg); }
+
+/* ---------- Platte: Fläche auf ::before, damit die Kerben den Inhalt nicht clippen ---------- */
+.lk-panel {
+  --pn-bg: var(--panel); --pn-bd: var(--edge); --pn-clip: var(--n1);
+  --pn-bv: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2);
+  position: relative; isolation: isolate;
+}
+.lk-panel::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--pn-bg); border: var(--px) solid; border-color: var(--pn-bd); box-shadow: var(--pn-bv); clip-path: var(--pn-clip); pointer-events: none; }
+.lk-panel[data-level="raised"] { --pn-bg: var(--panel-2); --pn-bv: inset var(--u2) var(--u2) 0 var(--line-hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); --hv-row: var(--panel-3); --pr-row: var(--panel-2); }
+.lk-panel[data-level="sunk"] { --pn-bg: var(--sunk); --pn-bd: var(--slot-bd); --pn-bv: var(--slot-sh); }
+/* Gilt gerade: Rahmen und Fase in der Auswahlfarbe */
+.lk-panel[data-active] { --pn-bd: var(--sel-ring); --pn-bv: inset var(--u2) var(--u2) 0 var(--sel-ring), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--sel-ring); }
+.lk-panel[data-notch="2"] { --pn-clip: var(--n2); }
+/* Navigation ohne Platte direkt auf dem Grund */
+.lk-panel[data-bare]::before { display: none; }
+.lk-rail:has(> .lk-tabs)::before { display: none; }
+
+/* Trennlinie unter einem Kopf */
+.lk-rule[data-rule] { border-bottom: var(--px) solid var(--line); }
+
+/* ---------- Eingabe: Slot (.lk-slot) mit Symbol und Feld ---------- */
+.lk-input { color: var(--fg-3); cursor: text; }
+.lk-input:is(:hover, [data-force="hover"]):not(:has(:disabled, :focus-visible)) { background: var(--bg-2); }
+.lk-input:focus-within > .lk-ico { color: var(--fg-2); }
+.lk-input :is(input, textarea) { background: transparent; border: 0; outline: none; color: var(--fg); }
+.lk-input :is(input, textarea)::placeholder { color: var(--fg-3); opacity: 1; }
+.lk-input input[type="search"]::-webkit-search-cancel-button { display: none; }
+.lk-input.lk-slot:has(:disabled) { background: var(--panel); border-color: var(--line); box-shadow: none; cursor: default; }
+.lk-input :is(input, textarea):disabled { color: var(--fg-3); }
+/* Ungültig: roter Rand und roter Balken links; Fokus zeigt weiter den Ring */
+.lk-input.lk-slot:has([aria-invalid="true"]) { border-color: var(--bad); box-shadow: inset var(--u2) 0 0 var(--bad), var(--slot-sh); }
+.lk-input.lk-slot:has([aria-invalid="true"]):focus-within { box-shadow: var(--ring-i); }
+
+/* Windows-Kontrastmodus: Schatten entfallen; Fokus als Umriss in Systemfarbe, Pip in Textfarbe */
+@media (forced-colors: active) {
+  .lk-btn:is(:focus-visible, [data-force="focus"]) { outline: 2px solid Highlight; outline-offset: 2px; }
+  /* Geist (Fensterknöpfe, Symbolknöpfe): Fläche und Schatten entfallen, der Hover-Slot zeigt sich als Umriss */
+  .lk-btn[data-variant="ghost"]:is(:hover, [data-force="hover"]):not(:disabled, [aria-disabled="true"], :focus-visible) { outline: 1px solid ButtonText; outline-offset: -2px; }
+  .lk-pip { background: ButtonText; }
+  .lk-chip[data-press][data-tone="acc"] { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+
+/* Der Seitengrund (base.css, body) setzt tabellarische Ziffern. Bausteine, die ihre Schrift ursprünglich mit der `font`-Kurzform setzten (sie setzt
+   die Ziffernvariante zurück), zeichnen Ziffern wie bisher normal. */
+:is(.lk-bar-badge, .lk-sw-st, .lk-kbd, .lk-keys-h, .lk-card-title, .lk-mhead-n, .lk-rt[data-size="display"] .lk-rt-n) { font-variant-numeric: normal; }

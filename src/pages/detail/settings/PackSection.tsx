@@ -11,7 +11,7 @@ import { GuardedButton, useBusyReason } from "../guards";
 import { PackUpdateDialog } from "./PackUpdateDialog";
 
 /** Breite des Platzhalters, solange Name und Version des Packs laden. */
-const NAME_SKELETON_WIDTH = 220;
+const NAME_SKELETON = "h-10 w-55";
 
 /**
  * Modpack der Instanz: Name, Version und Quelle, verfügbare Updates und das letzte Ergebnis. Ohne Modpack nichts.
@@ -55,7 +55,7 @@ export function PackSection({ instance, requested = false, onShown }: { instance
 /** „Fabulously Optimized · 8.0.3“ mit dem Anbieter; aus einer Datei mit diesem Hinweis. */
 function PackIdentity({ status }: { status: PackStatus }) {
   const { t } = useI18n();
-  if (status.loading) return <Skel h={40} w={NAME_SKELETON_WIDTH} />;
+  if (status.loading) return <Skel className={NAME_SKELETON} />;
   return (
     <Actions wrap className="st-inline">
       <span>{[status.name, status.version].filter(Boolean).join(" · ") || t("detail.pack.unknownVersion")}</span>

@@ -7,8 +7,8 @@ import { useContentModel } from "./ContentModel";
 /** Liste: Zellen in der Spalte; Kachel: Zellen im Kartenrand, wo der Platz knapper ist. */
 export type CellLayout = "list" | "tile";
 
-const UPDATE_BUTTON_WIDTH = 96;
-const TILE_PROGRESS_WIDTH = 112;
+const UPDATE_BUTTON = "w-24";
+const TILE_PROGRESS = "w-28 flex-none";
 
 /**
  * Update je Inhalt: Fortschritt beim Aktualisieren, sonst Knopf mit fester Breite (Version mit Auslassung, voller Text im Tooltip).
@@ -23,8 +23,7 @@ export function UpdateCell({ mod, layout, hideNoSource }: { mod: Mod; layout: Ce
       <JobProgress
         label={t("detail.content.updating")}
         p={model.updateShare}
-        width={tile ? TILE_PROGRESS_WIDTH : undefined}
-        className={tile ? undefined : "w-full"}
+        className={tile ? TILE_PROGRESS : "w-full"}
       />
     );
   }
@@ -36,7 +35,7 @@ export function UpdateCell({ mod, layout, hideNoSource }: { mod: Mod; layout: Ce
       <Button
         size="s"
         icon="update"
-        width={UPDATE_BUTTON_WIDTH}
+        className={UPDATE_BUTTON}
         disabled={model.locked}
         aria-label={t("detail.content.updateTo", { name: title, version: update.versionNumber })}
         onClick={() => model.runUpdates([mod.id])}
@@ -53,7 +52,7 @@ function NoUpdateStatus({ mod, hideNoSource }: { mod: Mod; hideNoSource?: boolea
   if (mod.pinned) {
     return (
       <Tip label={t("detail.content.pinnedTip", { version: mod.version })}>
-        <span><Chip size="s" dot>{t("detail.content.pinned")}</Chip></span>
+        <span><Chip size="s">{t("detail.content.pinned")}</Chip></span>
       </Tip>
     );
   }
@@ -111,8 +110,8 @@ export function EnabledCell({ mod, layout }: { mod: Mod; layout: CellLayout }) {
   );
 }
 
-/** Menüknopf „…“ der Zeile; `describedBy` verweist auf den Text für Screenreader. */
-export function MoreMenu({ mod, describedBy }: { mod: Mod; describedBy?: string }) {
+/** Menüknopf „…“ der Zeile; `describedBy` verweist auf den Text für Screenreader, `className` setzt den Knopf in die Zeile. */
+export function MoreMenu({ mod, describedBy, className }: { mod: Mod; describedBy?: string; className?: string }) {
   const { t } = useI18n();
   const model = useContentModel();
   return (
@@ -123,6 +122,7 @@ export function MoreMenu({ mod, describedBy }: { mod: Mod; describedBy?: string 
           size="s"
           icon="more"
           tip={false}
+          className={className}
           data-more={mod.id}
           label={t("detail.content.moreAbout", { name: model.titleOf(mod) })}
           aria-describedby={describedBy}

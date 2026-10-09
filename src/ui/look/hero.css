@@ -1,0 +1,23 @@
+/* Szenenkopf (HeroMeta, HeroShade in Layout.tsx). Nur Aussehen; Maße und Umbruch stehen als Tailwind-Klassen in der Komponente. */
+.lk-hero-meta .lk-meta { color: var(--fg); }
+/* `outline` (Start): halbfett, Kontur ein Gerätepixel und Schlagschatten; die Trenner heller (sonst verschwinden sie im Himmel) */
+.lk-hero-meta[data-outline] .lk-meta { font-weight: 600; text-shadow: var(--dp, 1px) 0 0 #000, calc(var(--dp, 1px) * -1) 0 0 #000, 0 calc(var(--dp, 1px) * -1) 0 #000, 0 var(--px) 0 #000; }
+.lk-hero-meta[data-outline] .lk-meta-i + .lk-meta-i::before { background: var(--fg-2); }
+
+/* Abdunklung als weiche Verläufe (keine Bänder): nur, wo Text steht, kräftig hinter Titel und Infos (unten links), dezent hinter den
+   Aktionen (unten rechts); die obere Szene bleibt hell. `data-side` (Start): links und unten dicht, rechts bleibt die Szene hell. */
+.lk-shade {
+  background:
+    radial-gradient(70% 90% at 0 100%, rgba(7, 10, 17, .78) 0, rgba(7, 10, 17, .5) 45%, rgba(7, 10, 17, 0) 100%),
+    radial-gradient(34% 70% at 100% 100%, rgba(7, 10, 17, .5) 0, rgba(7, 10, 17, 0) 100%),
+    linear-gradient(0deg, rgba(7, 10, 17, .92) 0, rgba(7, 10, 17, .62) 22%, rgba(7, 10, 17, 0) 58%);
+}
+@media (max-width: 720px) {
+  .lk-shade { background: linear-gradient(0deg, rgba(7, 10, 17, .92) 0, rgba(7, 10, 17, .7) 55%, rgba(7, 10, 17, .15) 100%); }
+}
+.lk-shade[data-side] {
+  background:
+    linear-gradient(90deg, rgba(7, 10, 17, .94) 0, rgba(7, 10, 17, .88) 28%, rgba(7, 10, 17, .6) 48%, rgba(7, 10, 17, 0) 68%),
+    linear-gradient(0deg, rgba(7, 10, 17, .98) 0, rgba(7, 10, 17, .94) 170px, rgba(7, 10, 17, 0) 320px),
+    radial-gradient(120% 90% at 70% 40%, transparent 55%, rgba(7, 10, 17, .55) 100%);
+}

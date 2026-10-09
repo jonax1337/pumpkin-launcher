@@ -1,0 +1,148 @@
+/* Karten. Nur Aussehen; Maße, Abstände, Raster und Schriftgrößen setzt Card.tsx per Tailwind.
+   Szenenkarte (`lk-card`, data-variant="mini|thumb"): Steinplatte mit Bildrahmen (Slot) und Namensschild, Platte/Fläche auf ::before
+   (dafür position/isolation). „gewählt“ (Choice, PickCard, PickTile, ThumbCard) = globale Auswahl-Tokens (--sel-bg, --sel-ring, --sel-edge),
+   „aktuell“ (Szenenkarte, data-cur) = Instanzakzent (--acc). Hover hellt den Rand auf (keine Bewegung), Druck senkt die Fläche.
+   data-force="hover|press|focus" erzwingt den Zustand (Vorschau /_kit). Ringe (::after) sind Flächen mit Kerbenform (--ring, --ring2):
+   ihre Lage (inset, z-index) gehört zur Form und steht deshalb hier. */
+
+/* ---------- Szene als Bild: ganzzahlig skaliert, unten verankert (scene.ts setzt left/top); Lage (absolute, inset) setzt die Komponente ---------- */
+.lk-art { clip-path: var(--n1); background: var(--scene-bg, #111827); }
+.lk-art canvas { image-rendering: pixelated; }
+
+/* Slot-Rand um Bilder (Instanzbild, kleine Szene): liegt über dem Bild, das Bild behält sein volles Maß; ohne Innenschatten (der verdeckte die Ecke des Bilds) */
+.lk-sthumb, .lk-card-icon { position: relative; clip-path: var(--n1); }
+:is(.lk-sthumb, .lk-card-icon)::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; border: var(--px) solid; border-color: var(--slot-bd); clip-path: var(--n1); }
+/* in Listenzeilen wie das Zeilenbild (look/list.css): Hover hellt auf, „aus“ dämpft */
+.lk-sthumb { transition: filter var(--st); }
+.lk-row:is(:hover, [data-force="hover"]) .lk-sthumb { filter: brightness(1.08); }
+.lk-row[data-off] .lk-sthumb { opacity: .35; filter: grayscale(.8); }
+
+/* ---------- Kartenleiste (CardStrip) ---------- */
+/* Ohne Scrollleiste; Verlauf nur an Rändern, hinter denen noch Karten liegen (Wirt trägt data-l / data-r) */
+.lk-strip { --fl: 0px; --fr: 0px; scrollbar-width: none; mask-image: linear-gradient(90deg, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%); }
+.lk-strip::-webkit-scrollbar { display: none; }
+[data-l] > .lk-strip { --fl: 64px; }
+[data-r] > .lk-strip { --fr: 64px; }
+
+/* ---------- Szenenkarte ---------- */
+.lk-card { --acc-dim: color-mix(in srgb, var(--acc) 16%, var(--panel)); position: relative; isolation: isolate; text-align: left; }
+.lk-card-media { position: relative; }
+/* Dunkle Biome sind als Thumb kaum zu erkennen: aufgehellt */
+.lk-card[data-variant="thumb"]:is([data-bio="cave"], [data-bio="end"]) .lk-art { filter: brightness(1.5) saturate(1.1); }
+
+/* Platte der Karte (mini): Rand 1 Einheit, Fase 2 Einheiten (Licht oben/links) */
+.lk-card[data-variant="mini"]::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--panel-2); border: var(--px) solid var(--edge); box-shadow: inset var(--u2) var(--u2) 0 var(--line-hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); clip-path: var(--n1); pointer-events: none; }
+
+/* Bildrahmen: Slot über der Szene */
+.lk-card-frame { pointer-events: none; border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); clip-path: var(--n1); }
+
+/* Namensschild (Stein, Fase 1 Einheit): Icon und Text teilen eine ruhige Infozeile; die Trefferfläche liegt unabhängig darüber. */
+.lk-card .lk-card-cap { --bv: var(--px); pointer-events: none; }
+.lk-card-title { color: var(--fg); font-family: var(--f-body); font-weight: 700; text-shadow: var(--tsh); }
+.lk-card-sub { color: var(--fg-2); }
+/* Thumb: Name unter dem Bild */
+.lk-card-t { color: var(--fg-2); font-weight: 600; }
+
+.lk-card-st { pointer-events: none; }
+
+/* Trefferfläche über der ganzen Karte (Lage: Card.tsx); ihr eigener Fokusring weicht dem der Karte (liegt über Rahmen und Schrift) */
+.lk-card > .hit { cursor: pointer; }
+.lk-card > .hit.fx:focus-visible::after { display: none; }
+
+/* Spielen oben rechts, nur bei Hover/Fokus oder offenem Menü. */
+.lk-card-tr { opacity: 0; visibility: hidden; transition: opacity .12s steps(2, end), visibility 0s linear .12s; }
+.lk-card:is(:hover, :focus-within, [data-force]) .lk-card-tr,
+.lk-card:has(.lk-card-tr [data-state="open"]) .lk-card-tr { opacity: 1; visibility: visible; transition: opacity .12s steps(2, end), visibility 0s; }
+/* Ohne Zeiger bleiben die Symbolknöpfe sichtbar. */
+@media (hover: none) {
+  .lk-card .lk-card-tr { opacity: 1; visibility: visible; }
+}
+/* Hover: Rand heller. Druck senkt die Fläche. */
+.lk-card[data-variant="mini"]:not([data-cur]):is(:hover, [data-force="hover"])::before { border-color: var(--fg-2); }
+.lk-card[data-variant="mini"]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--panel); }
+.lk-card[data-variant="thumb"]:is(:hover, [data-force="hover"], [data-pressed]) .lk-card-t { color: var(--fg); }
+.lk-card[data-variant="thumb"]:is(:hover, [data-force="hover"]) .lk-card-frame { border-color: var(--fg-2); }
+
+/* „aktuell“ (mini): Platte in Akzentfarbe, Namensschild getönt (die Unterzeile behält die ganze Breite) */
+.lk-card[data-cur]::before { background: var(--acc-mid); border-color: var(--acc); box-shadow: inset var(--u2) var(--u2) 0 var(--acc-hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--acc-lo); }
+.lk-card[data-cur] .lk-card-cap { --face: var(--acc-dim); }
+
+/* Ring an der Karte (über allem): gewählt = Akzent, Fokus = Creme, Fokus auf Gewähltem = Doppelring (außen Creme, innen Akzent) */
+.lk-card::after { content: ""; position: absolute; z-index: 4; inset: calc(var(--u2) * -1); pointer-events: none; clip-path: var(--ring); }
+.lk-card[data-pressed]::after { background: var(--acc); }
+.lk-card:is(:has(> .hit:focus-visible), [data-force="focus"])::after { background: var(--focus); }
+.lk-card[data-pressed]:is(:has(> .hit:focus-visible), [data-force="focus"])::after { border: var(--u2) solid transparent; background: linear-gradient(var(--acc) 0 0) padding-box, var(--focus); clip-path: var(--ring2); }
+
+/* Tooltip der Karte (lk-tip): voller Titel (nur wenn abgeschnitten) über dem Bedienhinweis; Abstände setzt Card.tsx */
+.lk-tip .lk-tt { font-weight: 700; color: var(--fg-strong); }
+.lk-tip .lk-tt-s { color: var(--fg-2); }
+.lk-tip :is(.lk-tt, .lk-tt-s) + .lk-tt-h { color: var(--tip-label); }
+
+/* ---------- Auswahlkachel (PickTile): Slot; gewählt = globale Auswahl ---------- */
+.lk-pick { position: relative; isolation: isolate; color: var(--fg); cursor: pointer; }
+.lk-pick::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); background: var(--sunk); border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); transition: background-color var(--st); }
+.lk-pick:is(:hover, [data-force="hover"])::before { border-color: var(--fg-2); }
+.lk-pick:is(:active, [data-force="press"])::before { background: var(--edge); }
+.lk-pick[aria-pressed="true"]::before, .lk-pick[aria-pressed="true"]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
+.lk-pick:is(.fx:focus-visible, [data-force="focus"])::after { content: ""; position: absolute; inset: calc(var(--px) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+
+/* ---------- Neu-Kachel: leerer Slot ---------- */
+.lk-add { position: relative; isolation: isolate; color: var(--fg-2); cursor: pointer; }
+.lk-add::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sunk); border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); clip-path: var(--n1); transition: background-color var(--st); }
+.lk-add-in { font-weight: 600; text-shadow: var(--tsh); }
+.lk-add:is(:hover, [data-force="hover"]) { color: var(--fg); }
+.lk-add:is(:hover, [data-force="hover"])::before { border-color: var(--fg-2); }
+.lk-add:is(:active, [data-force="press"])::before { background: var(--edge); }
+.lk-add:is(:active, [data-force="press"]) > .lk-add-in { translate: 0 var(--px); }
+
+/* ---------- Auswahlkarte (Choice) ----------
+   m: Zeile in scrollenden Listen; l: Steinplatte. Gewählt = globale Auswahl + ▶ links (Platz im Innenabstand, setzt die Komponente). */
+.lk-choice { position: relative; isolation: isolate; text-align: left; color: var(--fg); cursor: pointer; }
+.lk-choice::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); border: var(--px) solid transparent; transition: background-color var(--st); }
+.lk-choice-t b { font-weight: 700; text-shadow: var(--tsh); }
+.lk-choice-t span { color: var(--fg-3); }
+.lk-choice-r { color: var(--fg-2); }
+.lk-choice-r .lk-count { color: var(--fg-2); }
+.lk-choice:is(:hover, [data-force="hover"]):not(:disabled)::before { background: var(--hv-row); }
+.lk-choice:is(:active, [data-force="press"]):not(:disabled)::before { background: var(--sunk); border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
+.lk-choice:is(:active, [data-force="press"]):not(:disabled) > * { translate: 0 var(--px); }
+.lk-choice[data-selected]::before, .lk-choice[data-selected]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
+.lk-choice:is([data-selected], :hover:not(:disabled)), .lk-pickcard[data-selected] { --fg-3: var(--fg-2); }
+/* ▶ hängt am Bildfeld (::after gehört dem Fokusring); Form über die Ränder (inset) statt Maße: 3 × 5 Einheiten, mittig */
+.lk-choice[data-selected] > .lk-choice-m::before { content: ""; position: absolute; left: var(--u2); right: calc(100% - var(--u2) - var(--u3)); top: calc(50% - var(--px) * 2.5); bottom: calc(50% - var(--px) * 2.5); background: var(--sel-ring); clip-path: var(--arrow); pointer-events: none; }
+.lk-choice:disabled { color: var(--fg-3); cursor: default; }
+.lk-choice:disabled .lk-choice-m { opacity: .5; }
+/* Fokus: in scrollenden Listen eng (1 Einheit), sonst wie .fx; auf Gewähltem Doppelring (außen Creme, innen Auswahlfarbe) */
+.lk-choice[data-size="m"]:is(.fx:focus-visible, [data-force="focus"])::after { content: ""; position: absolute; inset: calc(var(--px) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+.lk-choice.fx[data-selected][data-size]:is(:focus-visible, [data-force="focus"])::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); border: var(--u2) solid transparent; background: linear-gradient(var(--sel-ring) 0 0) padding-box, var(--focus); clip-path: var(--ring2); pointer-events: none; z-index: 5; }
+.lk-choice[data-size="l"][data-force="focus"]:not([data-selected])::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+/* l: Steinplatte (steht allein, z. B. Onboarding) */
+.lk-choice[data-size="l"]::before { background: var(--panel-2); border-color: var(--edge); box-shadow: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); }
+.lk-choice[data-size="l"] .lk-choice-t span { color: var(--fg-2); }
+.lk-choice[data-size="l"]:is(:hover, [data-force="hover"]):not(:disabled)::before { background: color-mix(in oklab, var(--panel-2) 80%, var(--line-2)); }
+.lk-choice[data-size="l"]:is(:active, [data-force="press"]):not(:disabled)::before { background: var(--sunk); border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
+.lk-choice[data-size="l"][data-selected]::before, .lk-choice[data-size="l"][data-selected]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
+.lk-choice[data-size="l"][data-selected] > .lk-choice-m::before { left: var(--u4); right: calc(100% - var(--u4) - var(--u3)); }
+
+/* ---------- Auswahlkarte (PickCard): Bild im Slot, darunter Name und Zusatz; gewählt wie Choice l ---------- */
+.lk-pickcard { position: relative; isolation: isolate; text-align: left; color: var(--fg); cursor: pointer; }
+.lk-pickcard::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); background: var(--panel-2); border: var(--px) solid var(--edge); box-shadow: inset var(--u2) var(--u2) 0 var(--line-hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); transition: background-color var(--st); }
+.lk-pickcard-pic { color: var(--fg-3); }
+.lk-pickcard-t { font-weight: 700; text-shadow: var(--tsh); }
+.lk-pickcard-s { color: var(--fg-3); }
+.lk-pickcard:is(:hover, [data-force="hover"]):not(:disabled)::before { background: var(--panel-3); }
+.lk-pickcard:is(:active, [data-force="press"]):not(:disabled)::before { background: var(--sunk); border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
+.lk-pickcard:is(:active, [data-force="press"]):not(:disabled) > * { translate: 0 var(--px); }
+.lk-pickcard[data-selected]::before, .lk-pickcard[data-selected]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
+.lk-pickcard:disabled { color: var(--fg-3); cursor: default; }
+.lk-pickcard:disabled .lk-pickcard-pic { opacity: .5; }
+.lk-pickcard:is(.fx:focus-visible, [data-force="focus"])::after { content: ""; position: absolute; inset: calc(var(--px) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
+.lk-pickcard[data-selected]:is(.fx:focus-visible, [data-force="focus"])::after { inset: calc(var(--u2) * -1); border: var(--u2) solid transparent; background: linear-gradient(var(--sel-ring) 0 0) padding-box, var(--focus); clip-path: var(--ring2); }
+
+/* ---------- Windows-Kontrastmodus: Ringe und Rahmen in Systemfarbe ---------- */
+@media (forced-colors: active) {
+  :is(.lk-pick, .lk-choice, .lk-pickcard):focus-visible::after,
+  .lk-card:has(> .hit:focus-visible)::after { background: Highlight; }
+  .lk-card-frame, .lk-art { border: 1px solid CanvasText; }
+  :is(.lk-pick, .lk-add, .lk-choice, .lk-pickcard)::before { border-color: ButtonText; box-shadow: none; }
+}

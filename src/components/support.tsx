@@ -1,7 +1,7 @@
-import { Fragment, type ComponentProps, type ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { create } from "zustand";
 import { useI18n } from "@/i18n";
-import { Actions, Button, ConfirmDialog, Heading, Hint } from "@/ui";
+import { Actions, Button, ConfirmDialog, DescriptionList, Heading, Hint } from "@/ui";
 import { kindLabel } from "@/components/accounts/useAccounts";
 import { useInstances } from "@/hooks/useInstances";
 import { useStorageOverview } from "@/hooks/useStorage";
@@ -72,18 +72,11 @@ export function SupportSection({ version }: { version: string }) {
   ];
   return (
     <div>
-      <Heading level="sub" className="about-sub">{t("settings.about.diagTitle")}</Heading>
-      <dl className="vx-slot about-diag">
-        {rows.map(([label, value]) => (
-          <Fragment key={label}>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </Fragment>
-        ))}
-      </dl>
-      <Actions wrap className="about-diag-note">
+      <Heading level="sub" className="mb-3">{t("settings.about.diagTitle")}</Heading>
+      <DescriptionList framed items={rows.map(([label, value]) => ({ label, value }))} />
+      <Actions wrap className="mt-3">
         <DebugInfoButton icon="copy" />
-        <Hint>{t("components.support.reportAside")}</Hint>
+        <Hint className="basis-full">{t("components.support.reportAside")}</Hint>
       </Actions>
     </div>
   );

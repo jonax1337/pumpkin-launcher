@@ -7,7 +7,7 @@ import { useI18n } from "@/i18n";
 import { type FriendsState, type RelayInfo } from "@/lib/types";
 import { Checkbox, Dialog, DialogActions, Field, Hint } from "@/ui";
 
-const CONFIRM_WIDTH_PX = 180;
+const CONFIRM_WIDTH = "w-[180px]";
 
 /** Alle Relay-Server als „Host (Betreiber)“, wie der Dialog sie aufzählt. */
 function RelaysText({ relays }: { relays: RelayInfo[] }) {
@@ -72,7 +72,7 @@ function OptInDialog({ state, onClose }: { state: FriendsState; onClose: () => v
           cancel={t("common.cancel")}
           confirm={{
             label: enable.isPending ? t("friendsSettings.optIn.pending") : t("friendsSettings.optIn.confirm"),
-            width: CONFIRM_WIDTH_PX,
+            className: CONFIRM_WIDTH,
             form: formId,
             disabled: !ready,
           }}

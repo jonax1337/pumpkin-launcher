@@ -37,7 +37,7 @@ function ManualDownloadsDialog() {
       footer={<DialogActions cancel={pending.length ? t("components.manual.later") : t("common.done")} />}
     >
       <Hint icon="info">{t("components.manual.hint")}</Hint>
-      <List variant="versions" aria-label={t("components.manual.listLabel")} className="manual-list">
+      <List flat aria-label={t("components.manual.listLabel")} className="mt-3">
         {items.map((i) => (
           <ListRow key={i.fileId}>
             <RowTitle title={i.name} sub={i.fileName} />
@@ -45,7 +45,7 @@ function ManualDownloadsDialog() {
               <Chip icon="check">{t("components.manual.builtIn")}</Chip>
             ) : (
               <>
-                <Chip size="s" dot>{t("components.manual.waiting")}</Chip>
+                <Chip size="s">{t("components.manual.waiting")}</Chip>
                 <Button size="s" icon="external" onClick={() => openPage(i.url)}>{t("common.open")}</Button>
               </>
             )}

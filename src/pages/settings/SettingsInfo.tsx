@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useI18n } from "@/i18n";
-import { Button, Dialog, DialogActions } from "@/ui";
+import { Button, Dialog, DialogActions, Form } from "@/ui";
 import { PanelActions } from "./PanelActions";
 
 /** „Hinweise“-Knopf im Kopf der Platte; er öffnet die langen Erklärungen eines Reiters in einem Dialog. */
@@ -24,9 +24,9 @@ export function InfoDialog({ open, onOpenChange, title, children }: { open: bool
   const { t } = useI18n();
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title} footer={<DialogActions cancel={t("common.close")} />}>
-      <div role="region" aria-label={title} tabIndex={0} data-autofocus className="settings-info">
+      <Form role="region" aria-label={title} tabIndex={0} data-autofocus>
         {children}
-      </div>
+      </Form>
     </Dialog>
   );
 }

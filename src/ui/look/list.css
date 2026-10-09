@@ -1,0 +1,79 @@
+/* Listen. Nur Aussehen; Spalten, Abstände und Höhen setzt die List über ihre Eigenschaften (`cols`, `gap`, `pad`, `rowHeight` …, intern die
+   Variablen --l-cols, --l-gap, --l-pad, --l-h, --l-hh), Maße und Zellen stehen in List.tsx. Tabellenzeilen: flach (Hover = Fläche --hv-row, kein Unterstrich), Kopf in Pixelschrift.
+   Plattenzeilen (`data-plate`): erhabene Steinplatte mit Fase. Gewählt = globale Auswahl-Tokens (--sel-bg, --sel-ring; nie die Instanzfarbe).
+   Zeilenfläche über Variablen: --r-bg (Ruhe), --r-bd (Rahmen, 1 Einheit), --r-bv (Fase), --r-hv (Hover). data-force="hover|press" erzwingt den Zustand. */
+
+.lk-lhead { color: var(--fg-3); font-family: var(--f-px); font-weight: 400; text-transform: uppercase; font-variant-numeric: normal; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+/* Kopf als abgesetzte Leiste (`bar`: allein über mehreren Listen, mit Kante oben) bzw. in einer eingelassenen Liste (`framed`) */
+.lk-lhead[data-bar] { background: var(--bg-2); box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line), inset 0 var(--px) 0 var(--edge); }
+.lk-list[data-framed] .lk-lhead { background: var(--bg-2); }
+
+/* Fläche auf ::before (Kerben clippen sonst den Inhalt): dafür position/isolation an der Zeile */
+.lk-row { --r-bg: transparent; --r-bd: transparent; --r-bv: none; --r-hv: var(--hv-row); position: relative; isolation: isolate; }
+.lk-row::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--r-bg); border: var(--px) solid var(--r-bd); box-shadow: var(--r-bv); clip-path: var(--n1); transition: background-color var(--st); pointer-events: none; }
+.lk-row[data-rise] { animation: lk-rise .32s var(--ease) both; animation-delay: calc(var(--i, 0) * 40ms); }
+@keyframes lk-rise { from { opacity: 0; transform: translateY(8px); } }
+/* Auf Hover- und Auswahlfläche erreicht --fg-3 keine 4,5:1: gedämpfter Text rückt dort eine Stufe auf */
+.lk-row:is(:hover, :focus-within, [data-force="hover"], [data-selected]) { --fg-3: var(--fg-2); }
+.lk-row:is(:hover, :focus-within, [data-force="hover"])::before { background: var(--r-hv); }
+.lk-row[data-hit]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--pr-row); }
+.lk-row[data-selected]::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
+.lk-row[data-plate] { --r-bg: var(--panel-2); --r-bd: var(--edge); --r-hv: color-mix(in oklab, var(--panel-2) 80%, var(--line-2));
+  --r-bv: inset var(--u2) var(--u2) 0 var(--line), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); }
+/* Kein Hover (`still`, flach, Hinweiszeile): die Hoverfläche bleibt die Ruhefläche */
+.lk-row:is([data-still], [data-tone]) { --r-hv: var(--r-bg); }
+/* Hinweiszeile: 8 % Tonfarbe auf der Platte, optional Balken links; gedämpfter Text rückt auf der Tönung eine Stufe auf */
+.lk-row[data-tone="run"] { --tc: var(--run); }
+.lk-row[data-tone="warn"] { --tc: var(--warn); }
+.lk-row[data-tone="bad"] { --tc: var(--bad); }
+.lk-row[data-tone] { --r-bg: color-mix(in srgb, var(--tc) 8%, var(--panel)); }
+.lk-row[data-tone][data-bar] { --r-bv: inset var(--u2) 0 0 0 var(--tc); }
+.lk-row[data-tone] .lk-rt-s { color: var(--fg-2); }
+/* Flache Zeile: Linie unten, nicht unter der letzten */
+.lk-row[data-flat] { box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
+.lk-row[data-flat]:last-child { box-shadow: none; }
+/* Auswahl als Kerbe links (Bibliothek) statt Rahmen */
+.lk-row[data-selected="bar"]::before { background: var(--sel-bg); border-color: transparent; box-shadow: inset var(--u2) 0 0 var(--sel-ring); }
+/* Plattenzeile (`plate="row"`): der Platz links trägt den Pfeil der aktiven Zeile */
+.lk-row[data-plate="row"][data-selected]::after { content: ""; position: absolute; left: var(--u3); top: 50%; width: var(--u3); height: calc(var(--px) * 5); margin-top: calc(var(--px) * -2.5); background: var(--sel-ring); clip-path: var(--arrow); pointer-events: none; }
+/* Karte (feature): gedrückt wie ein eingelassenes Feld */
+.lk-row[data-feature]:is(:has(> .hit:active), [data-force="press"])::before { background: var(--panel-2); box-shadow: var(--slot-sh); }
+
+/* Trefferfläche über der ganzen Zeile (Lage: List.tsx); Zellen lassen Klicks durch, nur ihre Bedienelemente fangen sie ab */
+.lk-row[data-hit] { cursor: pointer; }
+.lk-row > .hit:focus-visible::after { inset: calc(var(--px) * -1); }
+.lk-row[data-hit] > :not(.hit) { pointer-events: none; }
+.lk-row[data-hit] > :not(.hit) :is(a[href], button, input, select, textarea, label, [tabindex]:not([tabindex="-1"])),
+.lk-row[data-hit] > :is(a[href], button, input, select, textarea, label, [tabindex]:not([tabindex="-1"])):not(.hit) { pointer-events: auto; }
+
+/* Bild: Hover hellt auf; aus = gedämpft (Name bleibt lesbar) */
+.lk-row :is(.lk-gl, .lk-sthumb) { transition: filter var(--st); }
+.lk-row:is(:hover, [data-force="hover"]) :is(.lk-gl, .lk-sthumb) { filter: brightness(1.08); }
+.lk-row[data-off] :is(.lk-gl, .lk-sthumb) { opacity: .35; filter: grayscale(.8); }
+.lk-row[data-off] .lk-rt-n { color: var(--fg-2); }
+
+/* Trenner zwischen Zeilen */
+.lk-list[data-divided] .lk-row + .lk-row { box-shadow: inset 0 var(--px) 0 color-mix(in srgb, var(--line) 50%, transparent); }
+.lk-list[data-divided="strong"] .lk-row + .lk-row { box-shadow: inset 0 var(--px) 0 var(--line); }
+
+/* Name */
+.lk-rt-n { color: var(--fg); font-weight: 700; text-shadow: var(--tsh); }
+.lk-rt-a, .lk-rt-s, .lk-rt-m { color: var(--fg-3); }
+.lk-rt:is([data-size="l"], [data-size="feature"]) .lk-rt-s { color: var(--fg-2); }
+.lk-rt-m .lk-count { color: var(--fg-2); }
+
+/* Zelle */
+.lk-cell { color: var(--fg-2); }
+.lk-cell .lk-count:not(.lk-chip *) { color: var(--fg); }
+.lk-lhead .lk-cell { color: inherit; }
+
+/* Beitragsliste (`feed`): Linie unter jeder Zeile (auch der letzten, als Rand außerhalb der Fläche), Hover --panel-2, gewählt = Tönung der Zone
+   (--acc 10 %) mit Kerbe links in --acc; Druck bleibt --pr-row */
+.lk-list[data-feed] .lk-row { --r-hv: var(--panel-2); border-bottom: var(--px) solid var(--line); }
+.lk-list[data-feed] .lk-row[data-selected]::before { background: color-mix(in srgb, var(--acc) 10%, var(--panel)); border-color: transparent; box-shadow: inset var(--u2) 0 0 var(--acc); }
+/* Anzeigeschrift (`RowTitle size="display"`): Name in Display 800 ohne Schatten, Unterzeile und Kopfzeile --fg-2 */
+.lk-rt[data-size="display"] .lk-rt-n { font-family: var(--f-display); font-weight: 800; letter-spacing: .01em; text-shadow: none; }
+.lk-rt[data-size="display"] .lk-rt-s, .lk-rt-e { color: var(--fg-2); }
+@media (forced-colors: active) {
+  .lk-list[data-feed] .lk-row[data-selected] { outline: 2px solid Highlight; outline-offset: -2px; }
+}

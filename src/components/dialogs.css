@@ -1,61 +1,10 @@
 /* ---------- Dialog-Inhalte ---------- */
-/* „Neue Instanz“: senkrechte Tabs (Kit) links in eigener Spalte (220–260, „Anderer Launcher“ passt auch im schmalen Dialog), Formular rechts; füllt den Dialogkörper bis an den Rand (hebt dessen Innenabstand auf) */
-.nwrap { display: grid; grid-template-columns: clamp(220px, 28%, 260px) minmax(0, 1fr); margin: -16px; height: calc(100% + 32px); }
-.nwrap > :first-child { align-self: stretch; padding: 12px 0 12px 12px; }
-/* Innenabstand >= Fokusring (2 Einheiten), sonst schneidet der Bildlauf ihn am Suchfeld ab */
-.npane { overflow-y: auto; min-height: 0; padding: 18px; scrollbar-gutter: stable; }
-.drop { position: relative; isolation: isolate; height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--fg-2); }
-.drop::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--sunk); clip-path: var(--n1); box-shadow: inset 0 0 0 var(--px) var(--sunk); }
-.drop::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: repeating-linear-gradient(90deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) top / 100% var(--px) no-repeat, repeating-linear-gradient(90deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) bottom / 100% var(--px) no-repeat, repeating-linear-gradient(0deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) left / var(--px) 100% no-repeat, repeating-linear-gradient(0deg, var(--line-2) 0 var(--u2), transparent var(--u2) calc(var(--px) * 4)) right / var(--px) 100% no-repeat; }
-.drop.over { color: var(--fg); }
-.drop.over::before { background: color-mix(in srgb, var(--copper) 10%, var(--sunk)); }
-.drop b { color: var(--fg); font-weight: 600; }
-
-/* ---------- Neue Instanz: Reiter ---------- */
-.ni-choices { display: flex; flex-direction: column; gap: var(--u2); }
-.ni-find { display: flex; gap: 8px; margin-bottom: 16px; }
-.ni-find-field { min-width: 0; flex: 1; }
-.ni-partial { margin-bottom: 8px; }
-.ni-more { margin-top: 8px; }
-.ni-discover { margin-top: 10px; }
-.ni-note { color: var(--fg-2); }
-.ni-file { display: flex; align-items: center; gap: 10px; height: 56px; margin-top: 12px; padding: 0 8px 0 12px; }
-.ni-file[data-empty] { visibility: hidden; }
-.ni-file-t { min-width: 0; flex: 1; }
-.ni-file-name { margin-top: 16px; }
-.ni-tpl { display: flex; align-items: center; gap: 4px; }
-.ni-tpl-pick { min-width: 0; flex: 1; }
-.ni-tpl-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 12px; }
-
-/* ---------- Export ---------- */
-.exp { display: flex; flex-direction: column; gap: 16px; }
-.exp-row { display: flex; gap: 12px; }
-.exp-name { min-width: 0; flex: 1; }
-.exp-ver { width: 144px; flex: none; }
-.exp-list { display: flex; flex-direction: column; gap: 8px; }
+/* Neue Instanz, Export und Import aus anderen Launchern liegen als Tailwind in ihren Komponenten; hier nur, was andere Dateien noch über Klassen ansprechen. */
 
 /* ---------- Icon-Wahl ---------- */
 .ip { display: flex; align-items: flex-start; gap: 16px; }
 .ip-side { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 12px; }
 .ip-tiles { display: flex; flex-wrap: wrap; gap: 8px; }
-
-/* ---------- Import aus anderen Launchern ---------- */
-.li-bar { margin-bottom: 12px; }
-.li-bar-t { color: var(--fg-2); }
-.li-details, .li-unsupported { display: flex; flex-direction: column; margin-bottom: 8px; }
-.li-details { gap: 8px; }
-.li-unsupported { gap: 4px; }
-.li-detail { color: var(--fg-2); }
-.li-detail[data-tone="warn"] { color: var(--warn); }
-.li-detail > b { margin-right: 8px; }
-.li-folder { margin-top: 10px; }
-
-/* ---------- Von Hand laden ---------- */
-.manual-list { margin-top: 12px; }
-
-/* ---------- Instanz löschen: Hinweis auf Weltsicherungen (Platte wie StatusPanel, aber aus Spans im <p>) ---------- */
-.del-note { margin-top: 16px; }
-.del-note .vx-status-t > span { margin-top: 6px; }
 
 /* Deep-Link-Dialog: Zusatzzeile unter dem Text */
 .dl-note { margin-top: 8px; }

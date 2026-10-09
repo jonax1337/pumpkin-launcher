@@ -42,7 +42,7 @@ export function ProfileBar({ instance, busy }: { instance: Instance; busy: strin
     <>
       <Select
         size="s"
-        className="dc-sort"
+        labelClassName="le-1280:hidden"
         label={t("modProfiles.label")}
         placeholder={t("modProfiles.none")}
         value={active?.id ?? ""}

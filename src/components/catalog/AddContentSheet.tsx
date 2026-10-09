@@ -79,7 +79,7 @@ export function AddContentSheet({ instance, world, open, onOpenChange, initialQu
       }
     >
       {projectId && (
-        <ContentDetail projectId={projectId} type={kind} source={source} instance={instance} world={world} hit={hit} backLabel={typeLabel(kind)} onBack={() => setProjectId(null)} />
+        <ContentDetail projectId={projectId} type={kind} source={source} instance={instance} world={world} hit={hit} layout="panel" backLabel={typeLabel(kind)} onBack={() => setProjectId(null)} />
       )}
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
       {tabbed ? (

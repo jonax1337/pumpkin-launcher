@@ -1,69 +1,8 @@
 /* ---------- Katalog: Trefferlisten (Entdecken, Seitenpanel, Dialog „Neue Instanz“) ---------- */
 .morebar { display: flex; justify-content: center; padding: 16px 0 8px; height: 72px; }
-.morebar .vx-hint { align-self: center; }
 /* Überschrift der Liste, Hinweisplatte darunter, gewählter Kategorie-Filter */
 .cat-head { margin-bottom: 12px; }
 .cat-note { margin-bottom: 8px; }
 .cat-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 10px; }
 .cat-also { display: flex; flex-wrap: wrap; align-items: center; column-gap: 4px; }
-.cat-hint { margin-top: 10px; }
 .cat-hint-above { margin-bottom: 8px; }
-
-/* ---------- Entdecken: Projektseite ---------- */
-/* Kopf: Bildrahmen 104, Titel mit Chipzeile, Aktion rechts */
-.proj-hd { display: grid; grid-template-columns: 104px minmax(0, 1fr) auto; gap: 20px; align-items: center; margin-top: 12px; padding-bottom: 18px; border-bottom: var(--px) solid var(--line); }
-.proj-hd-main { display: grid; gap: 10px; min-width: 0; }
-.proj-hd-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; color: var(--fg-2); }
-.proj-hd-act { display: flex; justify-content: flex-end; align-items: center; min-width: 0; }
-@media (max-width: 960px) {
-  .proj-hd { grid-template-columns: 104px minmax(0, 1fr); }
-  .proj-hd-act { grid-column: 2; justify-content: flex-start; }
-}
-/* Kopf im Seitenpanel einer Instanz */
-.proj-h { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 18px; align-items: center; margin-top: 10px; min-height: 64px; }
-.proj-h-main { min-width: 0; }
-.proj-h h1 { font: 800 44px/.95 var(--f-display); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.proj-h .by { color: var(--fg-2); font-size: calc(13.5px * var(--tz)); margin-top: 4px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-.proj-h .by .num { font-size: 18px; color: var(--fg); }
-.proj-skel-t { display: flex; flex-direction: column; gap: 10px; }
-.projact { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 250px; height: 56px; }
-.proj-err { margin-top: 12px; }
-.proj-b { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 32px; margin-top: 22px; align-items: start; }
-.proj .lead { color: var(--fg); font-size: calc(15.5px * var(--tz)); line-height: 1.55; max-width: 68ch; margin-top: 2px; }
-.proj .desc { margin-top: 14px; }
-.proj-side { display: flex; flex-direction: column; gap: 18px; }
-
-/* Galerie: ein großes Bild im eingelassenen Rahmen, darunter Vorschauen als Slots; die gewählte trägt die Akzentkante */
-.gal { display: flex; flex-direction: column; gap: 8px; margin-top: 18px; min-width: 0; }
-.gal-main { display: block; width: 100%; max-height: 360px; object-fit: contain; }
-.gal-cap { color: var(--fg-2); font-size: calc(13px * var(--tz)); }
-.gal-thumbs { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; }
-.gal-thumb { flex: none; width: 96px; height: 54px; padding: 0; cursor: pointer; }
-.gal-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.gal .gal-thumb.vx-slot[aria-pressed="true"] { border-color: var(--acc); box-shadow: inset 0 calc(var(--u2) * -1) 0 var(--acc), var(--slot-sh); }
-
-/* Versionstabelle: Kopfzeile in Pixelschrift, Zeilen mit Linie, Hover als Fläche */
-.vtab-head { margin-bottom: 10px; }
-.vtab-sec { margin-top: 28px; min-width: 0; }
-.vtab { width: 100%; border-collapse: collapse; font-size: calc(13px * var(--tz)); color: var(--fg-2); }
-.vtab th { padding: 0 12px 8px 0; text-align: left; font: 400 calc(16px * var(--tz))/1 var(--f-px); letter-spacing: .06em; text-transform: uppercase; color: var(--fg-3); white-space: nowrap; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line-2); }
-.vtab td { padding: 8px 12px 8px 0; vertical-align: middle; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
-.vtab tbody tr:not(.vtab-log):hover td { background: var(--panel-2); }
-.vtab tbody tr:has(+ .vtab-log) td { box-shadow: none; }
-.vtab-name { display: block; color: var(--fg); font-weight: 700; }
-.vtab-sub { display: block; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-3); font-size: calc(13px * var(--tz)); }
-.vtab-act { padding-right: 0; text-align: right; white-space: nowrap; }
-.vtab-act > * { vertical-align: middle; }
-.vtab-log td { padding: 0 0 14px; }
-@container (max-width: 600px) { .vtab .vtab-opt { display: none; } }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: calc(13px * var(--tz)); }
-.kv dt { color: var(--fg-3); }
-.kv dd { margin: 0; color: var(--fg); text-align: right; }
-.kv-line { display: block; }
-.kv dd .kv-faint { color: var(--fg-3); }
-/* Bestätigung „Neue Instanz aus Modpack“ (Dialog) */
-.pcf .kv { margin: 4px 0 16px; }
-.pcf .kv dd { min-height: 19px; min-width: 0; }
-.pcf-skel { margin: 4px 0 0 auto; }
-.pcf-err { margin-top: 12px; }
-.pcf-hint { margin-top: 8px; }

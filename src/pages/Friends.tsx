@@ -2,7 +2,8 @@ import { useNavigate } from "react-router";
 import { useFriendsState } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import { useAllAccounts } from "@/components/accounts/useAccounts";
-import { ContextMenu, ErrorBox, Page, PageHeader, Skel, type MenuEntry } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { ContextMenu, Page, PageHeader, Skel, type MenuEntry } from "@/ui";
 import { FriendsContent } from "./friends/FriendsContent";
 import { FriendsGate } from "./friends/FriendsGate";
 import { friendsGate } from "./friends/friendsModel";
@@ -35,13 +36,13 @@ export function FriendsPage() {
       {accountError ? (
         <ErrorBox title={t("components.account.msLoadFailed")} error={accountError} onRetry={() => void query.refetch()} />
       ) : accountPending ? (
-        <Skel h={120} />
+        <Skel className="h-[120px]" />
       ) : gate ? (
         <FriendsGate gate={gate} />
       ) : state.error ? (
         <ErrorBox title={t("friends.loadFailed")} error={state.error} onRetry={() => void state.refetch()} />
       ) : (
-        <Skel h={120} />
+        <Skel className="h-[120px]" />
       )}
     </Page>
     </ContextMenu>

@@ -1,7 +1,8 @@
 import { useState, type RefObject } from "react";
 import { useParams, useSearchParams } from "react-router";
 import { useI18n } from "@/i18n";
-import { BackLink, ContextMenu, ErrorBox, HeroShade, Icon, Page, Skel, TabPanel, Tabs, type MenuEntry, type TabItem } from "@/ui";
+import { ErrorBox } from "@/components/ErrorBox";
+import { BackLink, ContextMenu, HeroShade, Icon, Page, Skel, TabPanel, Tabs, TabsSkel, type MenuEntry, type TabItem } from "@/ui";
 import { LogConsole } from "@/components/log/LogConsole";
 import { AddContentSheet } from "@/components/catalog/AddContentSheet";
 import { useInstanceMenu } from "@/components/instance";
@@ -57,13 +58,13 @@ function DetailSkeleton({ id }: { id: string }) {
         <div className="dh-full">
           <div className="dh-info">
             <div className="dh-back"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
-            <Skel h={52} w="min(460px, 60%)" />
-            <Skel h={28} w={280} />
+            <Skel className="h-[52px] w-[min(460px,60%)]" />
+            <Skel className="h-7 w-[280px]" />
           </div>
         </div>
       </header>
-      <div className="vx-tabs dtabs" data-variant="underline" />
-      <div className="dbody"><Skel h={32} w="100%" /></div>
+      <TabsSkel />
+      <div className="dbody"><Skel className="h-8 w-full" /></div>
     </section>
   );
 }
@@ -153,11 +154,11 @@ function Loaded({ instance, tab, setTab, head, compact }: {
         onLaunched={toLog}
       />
 
-      {/* Leiste klebt unter dem kompakten Kopf; .dtabs gibt nur den Seitenrand (Seitengerüst). */}
+      {/* Leiste klebt unter dem kompakten Kopf; Seitenrand wie der Seitenkopf (Seitengerüst). */}
       <Tabs
         idBase="dt"
         sticky="var(--dc)"
-        className="dtabs"
+        gutter
         label={t("pages.detail.tabsLabel")}
         items={tabs}
         value={tab}

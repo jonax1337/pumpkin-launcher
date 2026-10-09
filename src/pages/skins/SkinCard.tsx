@@ -3,7 +3,7 @@ import { SkinViewer } from "@/components/SkinViewer";
 import { NameDialog } from "@/components/NameDialog";
 import { useAddPlayerSkin, useSkinSignature, useSkinTexture, useUpdateSkin, useUploadSkin } from "@/hooks/useSkins";
 import type { LibrarySkin, SkinVariant } from "@/lib/types";
-import { Button, Chip, IconButton, Menu, Panel, Segmented, Tip, Trunc, type MenuEntry } from "@/ui";
+import { Button, Chip, Heading, IconButton, Menu, Panel, Segmented, Tip, type MenuEntry } from "@/ui";
 
 const SKIN_VARIANTS: SkinVariant[] = ["classic", "slim"];
 
@@ -31,11 +31,11 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
     { id: "delete", text: t("common.delete"), icon: "trash", bad: true, onSelect: onDelete },
   ];
   return (
-    <Panel as="article" level="raised" pad="s" className="skin-card" data-active={isWorn ? "" : undefined} aria-label={skin.name}>
-      {isWorn && <Chip className="skin-card-flag" tone="acc" icon="check" size="s">{t("pages.skins.inUseBadge")}</Chip>}
+    <Panel as="article" level="raised" className="flex flex-col items-center gap-2.5 p-3" active={isWorn} aria-label={skin.name}>
+      {isWorn && <Chip className="absolute top-[calc(12px+var(--u4))] left-[calc(12px+var(--u4))] z-2" tone="acc" icon="check" size="s">{t("pages.skins.inUseBadge")}</Chip>}
       <SkinViewer src={texture} variant={skin.variant} capeSrc={capeUrl} label={t("pages.skins.previewLabel", { name: skin.name })} />
-      <div className="skin-card-h">
-        <Trunc as="b" text={skin.name} className="skin-card-name" />
+      <div className="flex w-full items-center gap-2">
+        <Heading level="card" zoom trunc className="flex-1 leading-[1.3] tracking-[.02em]">{skin.name}</Heading>
         <Menu
           items={menu}
           trigger={
@@ -59,7 +59,7 @@ export function SkinCard({ skin, accountId, capeUrl, worn, onRename, onDelete }:
       <Tip label={accountId ? null : t("pages.skins.useNeedsAccount")} describe>
         <Button
           icon={isWorn ? "check" : undefined}
-          width="full"
+          className="w-full"
           disabled={upload.isPending || isWorn}
           aria-disabled={accountId ? undefined : true}
           onClick={() => accountId && upload.mutate({ accountId, skin })}
