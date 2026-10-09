@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { type UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { Buddy } from "@/branding/Brand";
 import { useAllAccounts } from "@/components/accounts/useAccounts";
 import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { QueryList } from "@/components/QueryList";
@@ -15,7 +16,7 @@ import { formatDate } from "@/lib/format";
 import { type DirectoryStatus, type FriendsSettings, type FriendsState, type IngameActions, type Me, type NetworkStatus } from "@/lib/types";
 import { useFriendsUi } from "@/store/friendsUi";
 import { ErrorBox } from "@/components/ErrorBox";
-import { Actions, Button, ConfirmDialog, Count, FormRow, FormSection, Heading, Hint, Icon, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Surface, Switch, type IconName } from "@/ui";
+import { Actions, Button, ConfirmDialog, Count, FormRow, FormSection, Heading, Hint, List, ListRow, RowTitle, Segmented, Skel, StatusPanel, Surface, Switch, type IconName } from "@/ui";
 import { SettingsInfo } from "./SettingsInfo";
 
 const SECOND_MS = 1000;
@@ -43,7 +44,7 @@ function EnableGate({ onEnable }: { onEnable: () => void }) {
   const { t } = useI18n();
   return (
     <Surface kind="pit" className="grid justify-items-center gap-2.5 px-5 py-8 text-center">
-      <Icon name="pumpkin" size="xl" className="text-(--copper)" />
+      <Buddy size={96} mood="idle" />
       <Heading level="sub">{t("friends.gate.disabled.title")}</Heading>
       <p className="max-w-[52ch] text-(--fg-2)">{t("friendsSettings.enableAside")}</p>
       <Button variant="primary" size="l" icon="friends" onClick={onEnable}>{t("friends.gate.disabled.action")}</Button>
