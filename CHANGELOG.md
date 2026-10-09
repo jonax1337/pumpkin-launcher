@@ -1,10 +1,10 @@
 # Changelog
 
-Last updated: 2026-10-08.
+Last updated: 2026-10-09.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
-## Unreleased
+## 0.5.0 — 2026-10-09
 
 ### Interface kit
 
