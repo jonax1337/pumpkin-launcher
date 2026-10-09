@@ -536,6 +536,7 @@ export const components = {
   "components.search.hits": "Treffer",
   "components.search.searching": "Sucht …",
   "components.search.nothingFound": "Nichts gefunden",
+  "components.search.nothingFoundFor": "Nichts gefunden für „{query}“",
   "components.search.resetFilters": "Filter zurücksetzen",
   "components.search.nothingFits": "Für {fits} gibt es hier nichts Passendes. Schalte den Filter aus, um alles zu sehen.",
   "components.search.noneMatch": "Keine {kind} passen zu deiner Suche und den Filtern.",

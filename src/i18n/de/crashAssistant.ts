@@ -5,6 +5,7 @@ export const crashAssistant = {
   "crashAssistant.heading": "Was ist passiert?",
   "crashAssistant.loadFailed": "Die Analyse des Absturzes ist fehlgeschlagen.",
   "crashAssistant.evidence": "Auszug aus dem Bericht",
+  "crashAssistant.more": "Weitere Befunde ({n})",
   "crashAssistant.severity.error": "Ursache gefunden",
   "crashAssistant.severity.warning": "Wahrscheinlich",
   "crashAssistant.severity.info": "Hinweis",

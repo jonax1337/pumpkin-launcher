@@ -4,16 +4,18 @@
 .lib-toolbar .vx-tb-main > :last-child { margin-left: auto; }
 /* Spaltenkopf: abgesetzte Leiste über allen Gruppen */
 .lib .vx-lhead { background: var(--bg-2); box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line), inset 0 var(--px) 0 var(--edge); }
-/* Auswahlfeld auf der Bild-Ecke einer Listenzeile: sichtbar bei Hover/Fokus, gewählt oder im Auswahlmodus. Es liegt immer über dem Bild, nie in einer eigenen Spalte: der Auswahlmodus ändert kein Maß. */
+/* Auswahlfeld in eigenem Streifen links vom Bild (Streifenbreite = Zeilen-Innenabstand links): sichtbar bei Hover/Fokus, gewählt oder im Auswahlmodus. Der Streifen ist immer reserviert, der Auswahlmodus ändert kein Maß. */
+.lib { --lib-pick-w: 28px; }
+.lib .vx-list[data-variant="instances"] { --l-pad: 0 8px 0 calc(8px + var(--lib-pick-w)); }
 .lib-pick { position: relative; display: block; width: 44px; height: 44px; }
-.lib-pick .vx-check { position: absolute; left: -4px; top: -4px; padding: 2px; background: var(--sunk); opacity: 0; transition: opacity var(--st); }
+.lib-pick .vx-check { position: absolute; left: calc(var(--lib-pick-w) * -1); top: 50%; translate: 0 -50%; width: var(--lib-pick-w); justify-content: center; opacity: 0; transition: opacity var(--st); }
 .vx-row:is(:hover, :focus-within, [data-selected]) .lib-pick .vx-check, [data-picking] .lib-pick .vx-check { opacity: 1; }
 /* Gruppenkopf: Verschieben-Knöpfe rechts, bei Hover oder Fokus (Touch: immer) */
 .lib-group { position: relative; margin-bottom: 8px; }
 .lib-group-name { font: 800 calc(18px * var(--tz))/1.1 var(--f-display); letter-spacing: .02em; text-transform: uppercase; color: var(--fg); text-shadow: var(--tsh); }
 .lib-group .vx-disc-s { margin-left: 0; height: 40px; padding-left: 8px; }
-/* Gewählte Zeile: Hotbar-Kerbe in der Akzentfarbe links statt Vollrahmen */
-.lib .vx-row[data-selected]::before { border-color: transparent; box-shadow: inset var(--u2) 0 0 var(--acc); }
+/* Gewählte Zeile: Hotbar-Kerbe links, Farbe aus den globalen Auswahl-Tokens (nicht die Instanzfarbe) */
+.lib .vx-row[data-selected]::before { background: var(--sel-bg); border-color: transparent; box-shadow: inset var(--u2) 0 0 var(--sel-ring); }
 .lib-group-move { position: absolute; z-index: 1; top: 0; right: 0; display: flex; gap: 2px; opacity: 0; transition: opacity .12s steps(2, end); }
 .lib-group:is(:hover, :focus-within) > .lib-group-move { opacity: 1; }
 @media (hover: none) { .lib-group-move { opacity: 1; } }
@@ -24,7 +26,7 @@
 /* Wenig Inhaltsbreite (auch bei Zoom): Name über Metadaten/Aktionen statt abgeschnittener Spalten. */
 @container library (max-width: 640px) {
   .lib .vx-lhead { display: none; }
-  .lib .vx-list[data-variant="instances"] .vx-row { grid-template-columns: 44px minmax(0, 1fr) 32px 32px; gap: 6px 8px; padding: 8px; min-height: 88px; }
+  .lib .vx-list[data-variant="instances"] .vx-row { grid-template-columns: 44px minmax(0, 1fr) 32px 32px; gap: 6px 8px; padding: 8px 8px 8px calc(8px + var(--lib-pick-w)); min-height: 88px; }
   .lib .vx-row > [data-hide] { display: none; }
   .lib .vx-row > .lib-pick { grid-column: 1; grid-row: 1 / 3; }
   .lib .vx-row > .vx-rt { grid-column: 2 / 5; grid-row: 1; }
@@ -34,4 +36,10 @@
   .lib .vx-row > .lib-status { grid-column: 2 / 5; grid-row: 3; }
   .lib .vx-row > .lib-status:empty { display: none; }
   .lib-skel { height: 88px; }
+}
+
+/* Schmale Fenster: Auswahlfelder ohne Beschriftung (wie die Sortierung im Detail), damit „Auswählen“ nicht allein umbricht; darunter nimmt die Suche eine eigene Zeile */
+@media (max-width: 1280px) { .lib-toolbar .vx-sel-lab { display: none; } }
+@media (max-width: 900px) {
+  .vx-toolbar.lib-toolbar[data-search] .vx-input[data-lead]:not([data-w]) { width: auto; flex: 1 1 100%; }
 }

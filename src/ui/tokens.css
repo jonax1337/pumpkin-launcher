@@ -16,9 +16,9 @@
   --vx-ico-l: 32px;
   --vx-ico-xl: 48px;
 
-  /* Hover = Fläche, nie Linie (Zeilen/Choice/Kacheln: --hv-row). Druck (--pr-row) eine Stufe dunkler.
+  /* Hover = Fläche, nie Linie (Zeilen/Choice/Kacheln: --hv-row), klar sichtbar auf dem Grund (--panel-3). Druck (--pr-row) eine Stufe dunkler.
      In Overlays und Platten eine Stufe heller (unten). */
-  --hv-row: var(--panel);
+  --hv-row: var(--panel-3);
   --pr-row: var(--sunk);
 
   /* Über Szenen: Grundplatte dauerhaft, Hover dichter, harter Schatten 1 Einheit */
@@ -26,11 +26,11 @@
   --scene-hover: rgba(21,29,44,.9);
   --scene-shadow: 0 var(--px) 0 rgba(3,5,10,.85);
 
-  /* Auswahl: „gewählt“ = Kupferrahmen 1 Einheit + 10 % Kupfertönung.
-     --sel-ring: Doppelring bei Fokus auf Gewähltem (card.css). */
+  /* Auswahl: EIN globaler Satz für Listen, Zeilen, Kacheln, Choice (nie die Instanzfarbe --acc): „gewählt“ = Rahmen 1 Einheit + 16 % Markentönung.
+     --sel-ring: Rahmen- und Balkenfarbe (auch Doppelring bei Fokus auf Gewähltem, card.css); --sel-edge: Rahmen als Schatten; --sel-bg: Fläche. */
   --sel-ring: var(--copper);
   --sel-edge: inset 0 0 0 var(--px) var(--sel-ring);
-  --sel-bg: color-mix(in srgb, var(--copper) 10%, var(--panel));
+  --sel-bg: color-mix(in srgb, var(--sel-ring) 16%, var(--panel));
 
   /* Übergänge nur in ganzen Stufen; Bewegungen um 1 Einheit springen (kein Übergang, sonst halbe Pixel) */
   --st: 90ms steps(2, end);
@@ -41,6 +41,14 @@
   --hd-section: 22px;
   --hd-sub: 20px;
   --hd-card: 18px;
+  /* Pixelschrift (Jersey 10): nur diese drei Stufen */
+  --fs-px-s: 16px;
+  --fs-px-m: 18px;
+  --fs-px-l: 20px;
+  /* Textfarben über --fg/--fg-2/--fg-3 hinaus: Fließtext (Beschreibungen), Titel/Gruppenköpfe im Tooltip- und Menürahmen, betonter Text */
+  --fg-prose: #C9D1DE;
+  --tip-label: #B7AEE0;
+  --fg-strong: #fff;
 
   /* Seitenschema (layout.css): drei senkrechte Abstände, feste Seitenränder oben/unten, eine Innenabstandsgröße für Platten und Leisten.
      Fest in px wie die Komponentenhöhen, nie von --px abhängig. */
@@ -62,9 +70,9 @@
 
 /* Overlay-Kontext: Dialog, Seitenpanel, Menü/Popover, Toast, Platten. Hover und Auswahl eine Stufe heller als der Grund. */
 :is(.plate, .vx-panel, [data-ctx="overlay"]) {
-  --hv-row: var(--panel-2);
+  --hv-row: color-mix(in oklab, var(--panel-3) 55%, var(--line-2));
   --pr-row: var(--panel);
-  --sel-bg: color-mix(in srgb, var(--copper) 10%, var(--panel-2));
+  --sel-bg: color-mix(in srgb, var(--sel-ring) 16%, var(--panel-2));
 }
 
 /* ---------- Inventar: Spielmenü-Stil (Slots, Steinplatten, Reiter, Item-Tooltips) ----------

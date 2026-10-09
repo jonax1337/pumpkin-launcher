@@ -11,7 +11,7 @@
    scroll-margin lässt beim Nachführen den Gruppenkopf darüber im Blick. */
 .vx-pal-opt { position: relative; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 6px 12px 6px 10px; color: var(--fg); cursor: pointer; user-select: none; scroll-margin-block: 32px 4px; }
 .vx-pal-opt .vx-ico { flex: none; color: var(--fg-2); }
-.vx-pal-opt[data-active] { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--focus); }
+.vx-pal-opt[data-active] { --fg-3: var(--fg-2); background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--focus); }
 .vx-pal-opt[data-active] .vx-ico { color: var(--fg); }
 .vx-pal-opt:active:not([aria-disabled="true"]) { background: var(--tip-b); }
 .vx-pal-t { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.25; }

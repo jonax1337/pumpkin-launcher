@@ -18,6 +18,15 @@ function uniqueAnnouncements(pages: Announcement[][]): Announcement[] {
   });
 }
 
+/** Länge des Auszugs in der Vorschau. */
+const EXCERPT_LENGTH = 280;
+
+/** Beitragstext ohne Markup, auf `EXCERPT_LENGTH` Zeichen gekürzt (DOMParser führt nichts aus). */
+function excerpt(html: string): string {
+  const text = (new DOMParser().parseFromString(html, "text/html").body.textContent ?? "").replace(/\s+/g, " ").trim();
+  return text.length > EXCERPT_LENGTH ? `${text.slice(0, EXCERPT_LENGTH).trimEnd()} …` : text;
+}
+
 export function AnnouncementsPage() {
   const { t } = useI18n();
   const feed = useAnnouncements();
@@ -46,15 +55,10 @@ export function AnnouncementsPage() {
     <Page className="announcements-page">
       <PageHeader title={t("ui.nav.announcements")}>
         <Actions wrap>
-          {feed.data && unreadCount > 0 && (
-            <Chip tone="acc" role="status">
-              {t("pages.announcements.unreadCount", { count: unreadCount })}
-            </Chip>
-          )}
           <Button icon="refresh" disabled={feed.isFetching} onClick={() => void feed.refetch()}>
             {t("ui.context.refresh")}
           </Button>
-          <Button variant="ghost" icon="external" onClick={() => openPage(ANNOUNCEMENTS_URL)}>
+          <Button icon="external" onClick={() => openPage(ANNOUNCEMENTS_URL)}>
             {t("pages.announcements.category")}
           </Button>
         </Actions>
@@ -73,7 +77,7 @@ export function AnnouncementsPage() {
         />
       )}
       {feed.data && announcements.length === 0 && !feed.isError && (
-        <Empty ill={false} title={t("pages.announcements.emptyTitle")}>
+        <Empty title={t("pages.announcements.emptyTitle")}>
           {t("pages.announcements.emptyBody")}
         </Empty>
       )}
@@ -81,7 +85,14 @@ export function AnnouncementsPage() {
         <Workspace rail={
           <WorkspaceRail className="announcements-rail" aria-labelledby="announcements-list-title">
             <div className="announcements-rail-header">
-              <Heading level="section" id="announcements-list-title">{t("pages.announcements.listTitle")}</Heading>
+              <div className="announcements-rail-title">
+                <Heading level="section" id="announcements-list-title">{t("pages.announcements.listTitle")}</Heading>
+                {unreadCount > 0 && (
+                  <Chip tone="acc" role="status">
+                    {t("pages.announcements.unreadCount", { count: unreadCount })}
+                  </Chip>
+                )}
+              </div>
               <Button
                 size="s"
                 variant="ghost"
@@ -171,6 +182,7 @@ function AnnouncementPreview({ latest, onSelect }: {
         <p className="announcements-eyebrow">{t("pages.announcements.latest")}</p>
         <Heading level="section" id="announcements-preview-title" className="announcements-latest-title">{latest.title}</Heading>
         <AnnouncementMeta announcement={latest} />
+        <p className="announcements-excerpt">{excerpt(latest.body)}</p>
         <Button variant="primary" onClick={() => onSelect(latest)}>
           {t("pages.announcements.readAnnouncement")}
         </Button>

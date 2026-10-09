@@ -173,7 +173,7 @@ function ResultsList({ search, source, type, layout, emptyText, headerEnd, activ
         </List>
       ) : hits.length === 0 ? (
         <Empty
-          title={t("components.search.nothingFound")}
+          title={query ? t("components.search.nothingFoundFor", { query }) : t("components.search.nothingFound")}
           size={layout.emptySize}
           actions={onReset ? <Button onClick={onReset}>{t("components.search.resetFilters")}</Button> : undefined}
         >

@@ -3,11 +3,11 @@ import { useLocation, useNavigate } from "react-router";
 import { useFriendRequests, useFriendsList, useFriendsState, useHostSessions, useInvites } from "@/hooks/useFriends";
 import { useI18n } from "@/i18n";
 import type { FriendsState } from "@/lib/types";
-import { Button, ContextMenu, ErrorBox, Page, PageHeader, Skel, Workspace, WorkspaceContent, WorkspaceRail, type MenuEntry } from "@/ui";
+import { ContextMenu, ErrorBox, Page, PageHeader, Skel, Workspace, WorkspaceContent, WorkspaceRail, type MenuEntry } from "@/ui";
 import { ActivitySection } from "./ActivitySection";
 import { AddFriendButtons, AddFriendDialog, type AddFriendTab } from "./AddFriendDialog";
 import { FriendsSection } from "./FriendsSection";
-import { defaultAddTab, onlineCount } from "./friendsModel";
+import { defaultAddTab } from "./friendsModel";
 import { NetworkBanner } from "./NetworkBanner";
 import { RequestsSection } from "./RequestsSection";
 import { useFriendDialogs } from "./useFriendDialogs";
@@ -50,21 +50,16 @@ export function FriendsContent({ state }: { state: FriendsState }) {
   return (
     <ContextMenu items={menu}>
     <Page className="friends-page">
-      <PageHeader title={t("ui.nav.friends")} count={friends.data?.length}>
+      <PageHeader title={t("ui.nav.friends")}>
         <AddFriendButtons onAdd={setAdding} />
       </PageHeader>
       <NetworkBanner network={state.network} />
       <Workspace rail={
-        <WorkspaceRail className="friends-rail">
-          <div className="friends-controls">
-            {friends.data && <span className="friends-online">{t("friends.presence.online")}: {onlineCount(friends.data)}</span>}
-            <Button variant="ghost" icon="settings" onClick={() => navigate("/settings?tab=freunde")}>{t("common.settings")}</Button>
-          </div>
-          {!error && friends.data && requests.data && requests.data.length > 0 && (
+        !error && requests.data && requests.data.length > 0 ? (
+          <WorkspaceRail className="friends-rail">
             <RequestsSection requests={requests.data} askBlock={actions.askBlock} {...retry} />
-          )}
-          <ActivitySection />
-        </WorkspaceRail>
+          </WorkspaceRail>
+        ) : undefined
       }>
         <WorkspaceContent className="friends-content">
           {error ? (
@@ -72,7 +67,10 @@ export function FriendsContent({ state }: { state: FriendsState }) {
           ) : !friends.data || !requests.data ? (
             <Skel h={120} />
           ) : (
-            <FriendsSection friends={friends.data} invites={invites.data ?? []} session={sessions.data?.[0]} actions={actions} onAdd={setAdding} />
+            <>
+              <FriendsSection friends={friends.data} invites={invites.data ?? []} session={sessions.data?.[0]} actions={actions} />
+              <ActivitySection />
+            </>
           )}
         </WorkspaceContent>
       </Workspace>

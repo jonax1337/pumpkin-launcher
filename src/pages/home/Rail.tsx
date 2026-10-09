@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
-import { AddCard, IconButton, SceneCard } from "@/ui";
+import { AddCard, IconButton, SceneCard, Skel } from "@/ui";
 import { loaderLine } from "@/components/common";
 import { InstanceIcon } from "@/components/InstanceIcon";
 import { useInstanceMenu } from "@/components/instance";
@@ -15,11 +15,10 @@ import { motionOff } from "@/pixel/scene";
 import { useLook } from "@/store/look";
 
 /**
- * Wallpaper-Karten und Abstand in der Leiste „Deine Instanzen“;
- * wie in ui/card.css und .rail (home.css).
+ * Kartenbreite und Abstand in der Leiste „Deine Instanzen“ (nur zum Blättern);
+ * wie in ui/card.css (--mini) und .rail (home.css). Die Höhe folgt der Karte.
  */
-export const TILE_W = 256;
-export const TILE_H = 144;
+const TILE_W = 256;
 const TILE_GAP = 14;
 const TILE_STEP = TILE_W + TILE_GAP;
 
@@ -44,12 +43,13 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
         look={look}
         art={<InstanceIcon instance={instance} bio={look.bio} />}
         title={instance.name}
-        sub={`${loaderLine(instance)} · ${relativeTime(instance.lastPlayedAt)}`}
+        sub={`${loaderLine(instance)} · ${relativeTime(instance.lastPlayedAt, true)}`}
         current={current}
         status={current ? undefined : <StatusChip instance={instance} small loudOnly />}
         primary={<PlayButton instance={instance} size="i" />}
         menu={items}
         tip={t("pages.home.miniCardTip")}
+        tipSide="bottom"
         hit={{
           onClick: onPick,
           onDoubleClick: open,
@@ -63,6 +63,25 @@ function MiniCard({ instance, current, onPick, hintId }: { instance: Instance; c
         }}
       />
     </li>
+  );
+}
+
+/** Platzhalter einer Karte beim Laden: dieselbe Platte wie die echte Karte (Bild, Namensschild), damit die Seite nicht springt. */
+export function RailSkeleton({ n }: { n: number }) {
+  return (
+    <ul className="rail" aria-hidden>
+      {Array.from({ length: n }, (_, k) => (
+        <li key={k}>
+          <div className="vx-card" data-variant="mini">
+            <Skel className="vx-card-media" />
+            <span className="vx-card-cap vx-stone">
+              <Skel className="vx-card-icon" />
+              <span className="vx-card-copy"><b>&nbsp;</b><span>&nbsp;</span></span>
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

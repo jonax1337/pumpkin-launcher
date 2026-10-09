@@ -536,6 +536,7 @@ export const components: typeof deComponents = {
   "components.search.hits": "results",
   "components.search.searching": "Searching…",
   "components.search.nothingFound": "Nothing found",
+  "components.search.nothingFoundFor": "Nothing found for “{query}”",
   "components.search.resetFilters": "Reset filters",
   "components.search.nothingFits": "Nothing here fits {fits}. Turn the filter off to see everything.",
   "components.search.noneMatch": "No {kind} match your search and filters.",

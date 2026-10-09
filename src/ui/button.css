@@ -17,6 +17,12 @@
 .vx-btn:is([data-size="l"], .vx-btn--l) { --b-h: var(--vx-h-l); --b-pad: 24px; --b-gap: 12px; --b-fs: 16px; --b-ico: var(--vx-ico-l); --b-nudge: 1px; }
 .vx-btn:is([data-variant="ghost"], .vx-btn--ghost) { --b-pad: 10px; }
 .vx-btn:is([data-variant="ghost"], .vx-btn--ghost):is([data-size="s"], .vx-btn--s) { --b-pad: 8px; }
+/* Größe nach Ort (Seitenschema): Aktionen im Seitenkopf = m (40), im Abschnittskopf und in Hinweisplatten = s (32); ein ausdrückliches l bleibt.
+   Dieselben Werte wie die Stufen oben, damit kein Aufrufer die Höhe einzeln wählen muss (Ort schlägt Aufruferwert). */
+.vx-btn:not([data-size="l"]):where(.vx-pageh-a *) { --b-h: var(--vx-h-m); --b-pad: 16px; --b-gap: 8px; --b-fs: 14px; --b-ico: var(--vx-ico-m); --b-nudge: 0px; --bv: var(--bvw); }
+.vx-btn:is([data-variant="ghost"], .vx-btn--ghost):not([data-size="l"]):where(.vx-pageh-a *) { --b-pad: 10px; }
+.vx-btn:not([data-size="l"]):where(:is(.vx-sech-a, .vx-status-a) *) { --b-h: var(--vx-h-s); --b-pad: 12px; --b-gap: 6px; --b-fs: 13px; --b-ico: var(--vx-ico-s); --b-nudge: 1px; --bv: var(--px); }
+.vx-btn:is([data-variant="ghost"], .vx-btn--ghost):not([data-size="l"]):where(:is(.vx-sech-a, .vx-status-a) *) { --b-pad: 8px; }
 .vx-btn:is([data-variant="ghost"], .vx-btn--ghost):is([data-size="l"], .vx-btn--l) { --b-pad: 16px; }
 /* Führendes Icon: die Box hat Luft um die Glyphe, links 2px weniger */
 .vx-btn[data-lead] { --b-pl: calc(var(--b-pad) - 2px); }
@@ -32,7 +38,7 @@
 .vx-btn:not(:has(> .vx-bc)) { padding-top: calc(var(--b-nudge) * 2); }
 /* Geteilter Knopf: Hauptaktion plus schmaler Menü-Teil, durch eine Fuge von 1 Einheit getrennt */
 .vx-split { display: inline-flex; gap: var(--px); }
-.vx-split > .vx-btn.vx-ib { width: var(--vx-h-m); }
+.vx-split > .vx-btn.vx-ib { width: var(--b-h); }
 
 .vx-btn:is([data-tone="acc"], .vx-btn--acc) { --b-tone: var(--acc-hi); --b-tint: var(--acc); }
 .vx-btn:is([data-tone="warn"], .vx-btn--warn) { --b-tone: var(--warn); --b-tint: var(--warn); }

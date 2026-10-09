@@ -109,12 +109,12 @@
 .vx-select[data-state="open"] .vx-sel-chev .vx-ico { transform: rotate(180deg); }
 
 /* Liste: Fläche aus .vx-pop (Item-Tooltip), Einträge 36 px wie im Menü; markiert = --hl + Fokusbalken links, gewählt = fett + Haken */
-.vx-pop.vx-selpop { min-width: max(var(--radix-select-trigger-width), 180px); max-height: min(360px, var(--radix-select-content-available-height)); display: flex; flex-direction: column; }
+.vx-pop.vx-selpop { min-width: max(var(--radix-select-trigger-width), 180px); max-height: min(360px, var(--radix-select-content-available-height)); overflow-y: hidden; display: flex; flex-direction: column; }
 .vx-selitem { position: relative; display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 8px 0 12px; color: var(--fg); font-size: calc(15px * var(--tz)); font-weight: 600; white-space: nowrap; cursor: pointer; outline: none; user-select: none; }
-.vx-selitem[data-highlighted] { background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--focus); }
+.vx-selitem[data-highlighted] { --fg-3: var(--fg-2); background: var(--hl); box-shadow: inset var(--u2) 0 0 var(--focus); }
 .vx-selitem:active:not([data-disabled]) { background: var(--tip-b); }
 .vx-selitem:active:not([data-disabled]) > * { translate: 0 var(--px); }
-.vx-selitem[data-state="checked"] { color: #fff; }
+.vx-selitem[data-state="checked"] { color: var(--fg-strong); }
 .vx-selitem[data-disabled] { color: var(--fg-3); cursor: default; }
 .vx-sel-ck { display: grid; margin-left: auto; color: var(--acc); }
 .vx-selscroll { display: grid; place-items: center; flex: none; height: 22px; color: var(--fg-2); cursor: default; }

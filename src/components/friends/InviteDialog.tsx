@@ -146,7 +146,6 @@ export function InviteDialog({ invite, onJoin, onClose }: { invite: Invite; onJo
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friendsInvite.title")}
-      height="m"
       busy={busy}
       footLeft={<Button variant="ghost" tone="bad" disabled={busy} onClick={() => decline.mutate(invite.id, { onSuccess: onClose })}>{t("friendsInvite.decline")}</Button>}
       footer={

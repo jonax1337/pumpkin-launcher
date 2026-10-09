@@ -2,6 +2,8 @@
    Steinplatten. Hover hellt die Kante, Fokus zeigt den doppelten Ring (--ring-i) am Steuerelement, nicht an der Beschriftung. */
 /* Beschriftung: Versalmitte der Schrift liegt ~1,4 px über der Zeilenmitte; 1 px tiefer sitzt sie auf der Mitte des Kästchens (≤ 0,5 px Abweichung) */
 .vx-tl { min-width: 0; translate: 0 1px; }
+/* Aus: ringsum sichtbare Kante (--ctl, ≥ 3:1) auf hellerer Fläche als der Slot-Grund; an (unten): Akzentkante und kräftige Akzentfläche */
+:is(.vx-cb-box, .vx-rb, .vx-sw-tr).vx-slot { border-color: var(--ctl); background: var(--panel-2); }
 
 /* ---------- Schalter: Bahn 2×Box × Box (48×24), Knauf = Innenfläche der Bahn, springt in 2 Stufen um eine Box ---------- */
 .vx-switch { display: flex; width: fit-content; align-items: center; gap: var(--sw-gap); min-height: 32px; font-size: calc(15px * var(--tz)); font-weight: 500; color: var(--fg); cursor: pointer; }
@@ -11,7 +13,7 @@
 .vx-sw-tr { position: absolute; inset: 0; }
 .vx-sw-kn { position: absolute; left: var(--px); top: var(--px); width: var(--sw-kn); height: var(--sw-kn); clip-path: var(--n1); background: var(--line-2);
   box-shadow: inset var(--px) var(--px) 0 var(--ctl-hi), inset calc(var(--px) * -1) calc(var(--px) * -1) 0 var(--bg-2); transition: left .12s steps(2); }
-.vx-sw input:checked ~ .vx-sw-tr { background: var(--acc-mid); }
+.vx-sw input:checked ~ .vx-sw-tr { background: var(--acc-mid); border-color: var(--acc); }
 .vx-sw input:checked ~ .vx-sw-kn { left: calc(var(--px) + var(--vx-box)); }
 .vx-switch:not([data-disabled]):is(:hover, [data-force="hover"]) .vx-sw-tr { border-color: var(--fg-2); }
 .vx-switch:not([data-disabled]):is(:hover, [data-force="hover"]) .vx-sw-kn { background: var(--ctl); }
@@ -33,9 +35,9 @@
 .vx-cb { position: relative; width: var(--vx-box); height: var(--vx-box); flex: none; display: inline-grid; place-items: center; }
 .vx-cb input { position: absolute; inset: 0; z-index: 2; margin: 0; opacity: 0; cursor: inherit; }
 .vx-cb-box { position: absolute; inset: 0; pointer-events: none; }
-.vx-cb > .vx-ico { position: relative; color: var(--acc); opacity: 0; pointer-events: none; }
-.vx-cb-dash { position: absolute; left: calc(var(--vx-box) / 4); right: calc(var(--vx-box) / 4); top: round(down, calc(50% - var(--px) / 2), 1px); height: var(--px); background: var(--acc); opacity: 0; }
-.vx-cb input:is(:checked, :indeterminate) ~ .vx-cb-box { background: color-mix(in oklab, var(--acc) 14%, var(--sunk)); }
+.vx-cb > .vx-ico { position: relative; color: var(--acc-hi); opacity: 0; pointer-events: none; }
+.vx-cb-dash { position: absolute; left: calc(var(--vx-box) / 4); right: calc(var(--vx-box) / 4); top: round(down, calc(50% - var(--px) / 2), 1px); height: var(--px); background: var(--acc-hi); opacity: 0; }
+.vx-cb input:is(:checked, :indeterminate) ~ .vx-cb-box { background: color-mix(in oklab, var(--acc) 30%, var(--sunk)); border-color: var(--acc); }
 .vx-cb input:checked:not(:indeterminate) ~ .vx-ico { opacity: 1; }
 .vx-cb input:indeterminate ~ .vx-cb-dash { opacity: 1; }
 
@@ -44,8 +46,8 @@
 .vx-radio[data-disabled] { color: var(--fg-3); cursor: default; }
 .vx-radio input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .vx-rb { position: relative; display: grid; place-items: center; width: var(--vx-box); height: var(--vx-box); flex: none; }
-.vx-rb::after { content: ""; width: 10px; height: 10px; background: var(--acc); clip-path: var(--dia); visibility: hidden; }
-.vx-radio input:checked + .vx-rb { background: color-mix(in oklab, var(--acc) 14%, var(--sunk)); }
+.vx-rb::after { content: ""; width: 10px; height: 10px; background: var(--acc-hi); clip-path: var(--dia); visibility: hidden; }
+.vx-radio input:checked + .vx-rb { background: color-mix(in oklab, var(--acc) 30%, var(--sunk)); border-color: var(--acc); }
 .vx-radio input:checked + .vx-rb::after { visibility: visible; }
 
 /* Kästchen und Raute: Hover über die ganze Zeile, Fokus am Kästchen, Aus = flach */

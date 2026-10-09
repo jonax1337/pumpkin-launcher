@@ -14,6 +14,9 @@ import { Buddy } from "@/branding/Brand";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
 
+/** Breite des Weiter-/Start-Knopfs: auf beiden Schritten gleich, damit er nicht springt. */
+const CTA_WIDTH = 232;
+
 type Start = "vanilla" | "faster" | "modpack" | "file" | "import";
 
 // Beschriftungen als Schlüssel; übersetzt wird beim Rendern, damit ein Sprachwechsel sofort greift.
@@ -89,7 +92,7 @@ export function Onboarding() {
       <PixelScene bio="forest" seed={12} mode="hero" className="scene" />
       <div className="shade-onb" />
       {/* Kein Modal: die Fensterleiste bleibt bedienbar, deshalb eine benannte Region */}
-      <section className="onb-card plate" aria-labelledby="onb-t">
+      <section className={cn("onb-card plate", step === 1 && "onb-card-compact")} aria-labelledby="onb-t">
         {step === 1 ? (
           <form onSubmit={next} className="onb-form">
             {steps}
@@ -108,7 +111,7 @@ export function Onboarding() {
             </div>
             <div className="of">
               <span className="help">{t("components.onboarding.stepOf", { step: 1 })}</span>
-              <Button type="submit" variant="primary" width={140} iconEnd="chev-right" disabled={!offlineOk || !nameOk}>
+              <Button type="submit" variant="primary" size="l" width={CTA_WIDTH} iconEnd="chev-right" disabled={!offlineOk || !nameOk}>
                 {t("common.next")}
               </Button>
             </div>
@@ -150,7 +153,7 @@ export function Onboarding() {
                 variant="primary"
                 size="l"
                 icon={starter.busy ? "hourglass" : choice.ctaIcon}
-                width={232}
+                width={CTA_WIDTH}
                 disabled={starter.busy || (createsHere && !starter.ready)}
                 onClick={go}
               >

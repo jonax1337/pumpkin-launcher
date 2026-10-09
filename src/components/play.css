@@ -87,16 +87,16 @@
 .log-tab { display: flex; flex-direction: column; gap: var(--pg-gap-m); min-width: 0; min-height: calc(calc(var(--vh1, 1vh) * 100) - var(--bar) - var(--dc) - var(--dt) - var(--pg-gap-m) - var(--pg-bottom)); }
 .console { position: relative; flex: 1; min-height: 260px; }
 .console .cbody { position: absolute; inset: 0; overflow: auto; padding: 12px 14px; font: calc(13px * var(--tz))/1.65 var(--f-mono); background: #05080D; border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); clip-path: var(--n1); white-space: pre; scrollbar-gutter: stable; }
-.console .ln { display: block; width: max-content; min-width: 100%; color: var(--fg); }
+.console .ln { display: block; width: max-content; min-width: 100%; padding-left: calc(var(--u2) * 3); color: var(--fg); }
 .console .ln .ts, .console .ln .lv { color: var(--fg-3); }
-/* Warnung/Fehler: Zeile in der Farbe der Stufe, links ein Balken (2 Einheiten); Thread/Stufe trägt dieselbe Farbe */
+/* Warnung/Fehler: Zeile in der Farbe der Stufe, links ein Balken (2 Einheiten) im Einzug aller Zeilen; Thread/Stufe trägt dieselbe Farbe */
 .console .ln.w { color: var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); box-shadow: inset var(--u2) 0 0 var(--warn); }
 .console .ln.e { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); box-shadow: inset var(--u2) 0 0 var(--bad); }
 .console .ln:is(.w, .e) .lv { color: inherit; }
 .console .ln mark { background: color-mix(in srgb, var(--copper) 45%, transparent); color: inherit; }
 .console .down { position: absolute; right: 22px; bottom: 14px; opacity: 0; visibility: hidden; transition: opacity .15s var(--ease), visibility 0s linear .15s; }
 .console .down.show { opacity: 1; visibility: visible; transition: opacity .15s var(--ease), visibility 0s; }
-.console .none { position: absolute; inset: 0; display: grid; place-items: center; color: var(--fg-3); pointer-events: none; }
+.console .none { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 /* Ring am Rahmen (der Körper selbst ist gekerbt und schneidet ::after ab) */
 .console:has(> .cbody:focus-visible)::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
 /* Kontrastmodus: steht hier, weil dieselbe Regel in ui/a11y.css vor der Basisregel oben geladen wird und ihr unterliegt */

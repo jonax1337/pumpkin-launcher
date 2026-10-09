@@ -17,11 +17,19 @@ export function CrashAssistant({ instance, onAddContent }: { instance: Instance;
   const { apply, busy } = useCrashActions(instance, onAddContent);
   if (diagnoses.isError) return <Hint tone="warn">{t("crashAssistant.loadFailed")} {diagnoses.error.message}</Hint>;
   if (!diagnoses.data?.length) return null;
+  const [first, ...rest] = diagnoses.data;
+  const card = (diagnosis: CrashDiagnosis) => (
+    <DiagnosisCard key={diagnosis.id} diagnosis={diagnosis} instance={instance} busy={busy} onApply={apply} />
+  );
+  // Weitere Befunde sind eingeklappt, damit die Konsole darunter sichtbar bleibt.
   return (
     <section aria-label={t("crashAssistant.heading")} className="crash-list">
-      {diagnoses.data.map((diagnosis) => (
-        <DiagnosisCard key={diagnosis.id} diagnosis={diagnosis} instance={instance} busy={busy} onApply={apply} />
-      ))}
+      {card(first)}
+      {rest.length > 0 && (
+        <Disclosure summary={t("crashAssistant.more", { n: rest.length })}>
+          <div className="crash-list">{rest.map(card)}</div>
+        </Disclosure>
+      )}
     </section>
   );
 }
@@ -37,39 +45,37 @@ function DiagnosisCard({ diagnosis, instance, busy, onApply }: {
       <StatusPanel
         tone={SEVERITY_TONE[diagnosis.severity]}
         title={<><span className="sr">{t(SEVERITY_LABELS[diagnosis.severity])}: </span>{t(text.title)}</>}
+        actions={actions.length > 0 && (
+          <Actions wrap>
+            {actions.map((action, index) => {
+              const applied = isApplied(action, instance);
+              return (
+                <Button
+                  key={JSON.stringify(action)}
+                  size="s"
+                  variant={index === 0 ? "primary" : "secondary"}
+                  icon={applied ? "check" : ACTION_ICONS[action.type]}
+                  disabled={applied || busy}
+                  onClick={() => onApply(action)}
+                >
+                  {actionLabel(action, instance, actions)}
+                </Button>
+              );
+            })}
+          </Actions>
+        )}
       >
         {t(text.body, textParams(diagnosis))}
       </StatusPanel>
-      {(actions.length > 0 || evidence.length > 0) && (
+      {evidence.length > 0 && (
         <div className="crash-more">
-          {actions.length > 0 && (
-            <Actions wrap>
-              {actions.map((action, index) => {
-                const applied = isApplied(action, instance);
-                return (
-                  <Button
-                    key={JSON.stringify(action)}
-                    size="s"
-                    variant={index === 0 ? "primary" : "secondary"}
-                    icon={applied ? "check" : ACTION_ICONS[action.type]}
-                    disabled={applied || busy}
-                    onClick={() => onApply(action)}
-                  >
-                    {actionLabel(action, instance, actions)}
-                  </Button>
-                );
-              })}
-            </Actions>
-          )}
-          {evidence.length > 0 && (
-            <Disclosure summary={t("crashAssistant.evidence")} className={actions.length > 0 ? "crash-evidence" : undefined}>
-              <ul className="crash-lines">
-                {evidence.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            </Disclosure>
-          )}
+          <Disclosure summary={t("crashAssistant.evidence")}>
+            <ul className="crash-lines">
+              {evidence.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </Disclosure>
         </div>
       )}
     </div>

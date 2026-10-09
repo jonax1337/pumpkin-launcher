@@ -104,7 +104,7 @@ function FriendsServices() {
 export function PrivacyNotice() {
   const { t } = useI18n();
   return (
-    <div>
+    <div className="privacy-notice">
       <Hint icon="info">{t("components.privacy.intro")}</Hint>
       {SERVICES.map((service) => (
         <ServiceRow key={service.name} label={service.name} purpose={t(service.purpose)} hosts={service.hosts} />

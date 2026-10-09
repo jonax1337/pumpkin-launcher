@@ -72,7 +72,7 @@ function NewInstanceForm({ open, onOpenChange, start, onBusy, onDone, onImported
       onOpenChange={onOpenChange}
       title={t("components.newInstance.title")}
       size="l"
-      height="m"
+      height="l"
       footLeft={hint}
       footer={
         <>

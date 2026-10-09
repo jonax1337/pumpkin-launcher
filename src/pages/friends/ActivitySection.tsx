@@ -5,12 +5,12 @@ import { useInstances } from "@/hooks/useInstances";
 import { useI18n } from "@/i18n";
 import { formatDateTime } from "@/lib/format";
 import type { ModActivityEntry } from "@/lib/types";
-import { Chip, Hint, List, ListRow, RowTitle, SectionHeader } from "@/ui";
+import { Chip, Count, Disclosure, Hint, List, ListRow, RowTitle } from "@/ui";
 import { IconTile } from "./IconTile";
 
 /**
  * „Aktivität im Spiel“ (docs/bridge/README.md, "Protocol 2"): was Spiele über das Freunde-Menü ausgelöst haben, neueste zuerst, mit Zeit, Instanz und Ergebnis.
- * Ohne Vorgänge fehlt der Abschnitt ganz; die Liste lebt nur im Speicher des Launchers.
+ * Eingeklappt unter der Freundesliste, die Liste scrollt in fester Höhe. Ohne Vorgänge fehlt der Abschnitt ganz; die Liste lebt nur im Speicher des Launchers.
  */
 export function ActivitySection() {
   const { t } = useI18n();
@@ -18,14 +18,17 @@ export function ActivitySection() {
   const instanceNames = new Map(useInstances().data?.map((instance) => [instance.id, instance.name]));
   if (entries.length === 0) return null;
   return (
-    <section className="friends-block">
-      <SectionHeader title={t("friends.activity.title")} size="sub" as="h2" />
-      <Hint icon="info" className="friends-block-note">{t("friends.activity.note")}</Hint>
-      <List variant="accounts" aria-label={t("friends.activity.title")}>
-        {entries.map((entry) => (
-          <ActivityRow key={`${entry.at}|${entry.instanceId}|${entry.op}|${entry.targetName}|${entry.ok}`} entry={entry} instanceName={instanceNames.get(entry.instanceId)} />
-        ))}
-      </List>
+    <section className="friends-activity">
+      <Disclosure summary={<>{t("friends.activity.title")}<Count value={entries.length} muted /></>}>
+        <Hint icon="info" className="friends-block-note">{t("friends.activity.note")}</Hint>
+        <div className="friends-activity-list" role="region" tabIndex={0} aria-label={t("friends.activity.title")}>
+          <List variant="accounts" aria-label={t("friends.activity.title")}>
+            {entries.map((entry) => (
+              <ActivityRow key={`${entry.at}|${entry.instanceId}|${entry.op}|${entry.targetName}|${entry.ok}`} entry={entry} instanceName={instanceNames.get(entry.instanceId)} />
+            ))}
+          </List>
+        </div>
+      </Disclosure>
     </section>
   );
 }

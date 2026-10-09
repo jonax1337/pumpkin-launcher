@@ -57,12 +57,13 @@ function DetailSkeleton({ id }: { id: string }) {
         <div className="dh-full">
           <div className="dh-info">
             <div className="dh-back"><BackLink to="/instances" onScene>{t("ui.nav.library")}</BackLink></div>
-            <Skel h={48} w="min(460px, 60%)" />
+            <Skel h={52} w="min(460px, 60%)" />
             <Skel h={28} w={280} />
           </div>
         </div>
       </header>
-      <div className="dtabs" />
+      <div className="vx-tabs dtabs" data-variant="underline" />
+      <div className="dbody"><Skel h={32} w="100%" /></div>
     </section>
   );
 }

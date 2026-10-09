@@ -21,7 +21,7 @@ export function UpdateCheckButton() {
   const busy = useUpdateRun((s) => s.phase !== "idle");
   if (busy) return null;
   return (
-    <Button icon="refresh" disabled={isFetching} onClick={() => void refetch()}>
+    <Button size="s" icon="refresh" disabled={isFetching} onClick={() => void refetch()}>
       {isFetching ? t("components.update.searching") : t("components.update.checkNow")}
     </Button>
   );

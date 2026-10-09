@@ -23,7 +23,8 @@
 
 .vx-tab:is(:hover, [data-force="hover"]):not(:disabled, [aria-selected="true"], [aria-checked="true"], [aria-current="page"]) { color: var(--fg); background: var(--panel-2); border-color: var(--fg-2); }
 .vx-tab:is(:active, [data-force="press"]):not(:disabled, [aria-selected="true"], [aria-checked="true"], [aria-current="page"]) > .vx-tc { translate: 0 var(--px); }
-.vx-tab:is([aria-selected="true"], [aria-checked="true"], [aria-current="page"]) { color: var(--fg); background: var(--panel-3); border-color: var(--edge); }
+/* Auf --panel-3 erreicht --fg-3 nur 4,4:1 (Zähler): im gewählten Reiter eine Stufe heller */
+.vx-tab:is([aria-selected="true"], [aria-checked="true"], [aria-current="page"]) { --fg-3: var(--fg-2); color: var(--fg); background: var(--panel-3); border-color: var(--edge); }
 /* Aus: gestrichelter Strich unter der Schrift, flache Fuge statt Licht */
 .vx-tab:disabled { color: var(--fg-3); cursor: default; text-shadow: none; text-decoration: underline dashed; text-decoration-thickness: var(--px); text-underline-offset: 5px; --t-sh: inset var(--u2) var(--u2) 0 var(--panel), inset calc(var(--u2) * -1) 0 0 var(--edge); }
 .vx-tab:disabled .vx-ico { opacity: .6; }

@@ -64,6 +64,8 @@ export const friends: typeof deFriends = {
   "friends.sub.offline": "Offline",
   "friends.action.join": "Join",
   "friends.action.invite": "Invite",
+  "friends.action.inviting": "Inviting…",
+  "friends.action.invited": "{name} invited",
   "friends.menu.fingerprint": "Show fingerprint",
   "friends.menu.block": "Block",
   "friends.notice.renamed": "{previous} is now called {name}.",

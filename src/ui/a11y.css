@@ -19,7 +19,7 @@
 
 /* ---------- Übersicht der Tastenkürzel (components/ShortcutsDialog.tsx) ---------- */
 .vx-keys-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
-.vx-keys-h { margin: 0 0 6px; color: var(--fg-3); font: 400 calc(17px * var(--tz))/1 var(--f-px); letter-spacing: .06em; text-transform: uppercase; }
+.vx-keys-h { margin: 0 0 6px; color: var(--fg-3); font: 400 calc(var(--fs-px-m) * var(--tz))/1 var(--f-px); letter-spacing: .06em; text-transform: uppercase; }
 .vx-keys { margin: 0; }
 .vx-keys > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; padding: 0 2px; box-shadow: inset 0 calc(var(--px) * -1) 0 var(--line); }
 .vx-keys dt { color: var(--fg); font-size: calc(15px * var(--tz)); }

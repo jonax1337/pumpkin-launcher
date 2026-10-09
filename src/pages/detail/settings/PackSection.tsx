@@ -79,6 +79,7 @@ function VersionUpdates({ instance, status }: { instance: Instance; status: Pack
     <>
       <Actions>
         <GuardedButton
+          size="s"
           blocked={busy}
           variant={latest ? "primary" : "secondary"}
           icon={latest ? "update" : "swap"}
@@ -107,7 +108,7 @@ function FileUpdate({ instance }: { instance: Instance }) {
   return (
     <>
       <Actions>
-        <GuardedButton blocked={busy} icon="file" disabled={!pickable || update.isPending} onClick={() => void pick().catch(toastError)}>
+        <GuardedButton size="s" blocked={busy} icon="file" disabled={!pickable || update.isPending} onClick={() => void pick().catch(toastError)}>
           {t("detail.pack.fromNewerFile")}
         </GuardedButton>
       </Actions>

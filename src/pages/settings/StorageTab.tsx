@@ -165,7 +165,7 @@ function ClearCache({ unusedBytes }: { unusedBytes: number }) {
     <FormSection title={t("settings.storage.cleanSection")} level={3}>
       <FormRow label={t("settings.storage.clearLabel")} hint={t("settings.storage.clearHint")}>
         <Actions wrap>
-          <Button variant="danger" icon="trash" disabled={unusedBytes === 0 || clear.isPending} onClick={() => clear.mutate()}>
+          <Button variant="danger" size="s" icon="trash" disabled={unusedBytes === 0 || clear.isPending} onClick={() => clear.mutate()}>
             {t("settings.storage.clearButton")}
           </Button>
           <Hint>{unusedBytes > 0 ? t("settings.storage.unused", { size: formatSize(unusedBytes) }) : t("settings.storage.nothingUnused")}</Hint>

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useI18n } from "@/i18n";
-import { Empty, ErrorBox, List, SectionHeader, SkelRow, StatusPanel } from "@/ui";
+import { Empty, ErrorBox, List, SkelRow, StatusPanel } from "@/ui";
 import type { CatalogHit, CatalogType } from "@/lib/content-types";
 import { starterQuery } from "@/lib/starter";
 import { PAGE_LAYOUT, ResultRow, usePageRowParts } from "./ContentResults";
@@ -16,7 +16,6 @@ export function StarterResults({ type, onOpen }: { type: CatalogType; onOpen: (p
   const rowParts = usePageRowParts(type);
   return (
     <div>
-      <SectionHeader as="h2" size="section" title={t("pages.discover.starterHeading")} className="cat-head" />
       <StatusPanel className="cat-note">{t("pages.discover.starterNote")}</StatusPanel>
       {starter.error ? (
         <ErrorBox title={t("components.catalog.unreachable")} error={starter.error} onRetry={() => void starter.refetch()} />

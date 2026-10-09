@@ -8,7 +8,7 @@
        Toolbar (optional)       Steuerelemente 40 (dicht 32), Abstand 12, Mindesthöhe 40 (Auswahl 56), bricht sauber um
        Workspace                genau eine Fläche: [Rail 280] + WorkspaceContent, Abstand 16, Innenabstand --pg-pad 20 (Platten und Rails)
      Abstände zwischen den Bausteinen gibt allein der Rahmen vor (--pg-gap-s 8 · m 16 · l 24); Kinder tragen keine Außenabstände.
-     Szenenseiten (Start, Instanz): HeroTitle (52, Start xl 72) · HeroMeta · Aktionsreihe · HeroShade (vier Bänder). */
+     Szenenseiten (Start, Instanz): HeroTitle (52, Start xl 72) · HeroMeta · Aktionsreihe · HeroShade (weiche Verläufe). */
 
 /* ---------- Überschriftenstufen (Display, Versalien) ---------- */
 .vx-h { font: 800 var(--hd-section)/1.1 var(--f-display); text-transform: uppercase; letter-spacing: .01em; color: var(--fg); text-shadow: var(--tsh); min-width: 0; }
@@ -90,21 +90,21 @@
 .vx-workspace-tabs[data-variant="segment"] .vx-tab { min-height: calc(var(--vx-h-m) - var(--u2) * 2); }
 @media (max-width: 960px) {
   .vx-workspace[data-rail] { grid-template-columns: minmax(0, 1fr); }
-  .vx-workspace-rail { position: relative; }
+  .vx-workspace-rail { position: relative; top: auto; }
 }
 
 /* ---------- Szenenkopf (Start, Instanz): Metazeile und Abdunklung ---------- */
 /* Metazeile: Text (Meta) + Knöpfe in einer Reihe; reicht die Breite nicht, rutschen die Knöpfe darunter */
 .vx-hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--pg-gap-s) 12px; min-height: 32px; min-width: 0; }
 .vx-hero-meta .vx-meta { flex: 0 1 auto; flex-wrap: wrap; height: auto; min-height: 32px; row-gap: 2px; color: var(--fg); }
-/* Vier Bänder je --sh-c über den unteren 20/40/60/80 % von --sh-h, darunter eine Kante in --bg: unten dunkel, oben bleibt die Szene hell */
+/* Abdunklung als weiche Verläufe (wie bis 0.4.0, keine Bänder): nur, wo Text steht – kräftig hinter Titel und Infos (unten links), dezent hinter den Aktionen (unten rechts); die obere Szene bleibt hell. Start überschreibt sie in home.css */
 .vx-shade {
-  --sh-h: 100%; --sh-c: rgb(0 0 0 / .3);
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
-    linear-gradient(var(--bg), var(--bg)) 0 100% / 100% var(--u2) no-repeat,
-    linear-gradient(var(--sh-c), var(--sh-c)) 0 100% / 100% calc(var(--sh-h) * .2) no-repeat,
-    linear-gradient(var(--sh-c), var(--sh-c)) 0 100% / 100% calc(var(--sh-h) * .4) no-repeat,
-    linear-gradient(var(--sh-c), var(--sh-c)) 0 100% / 100% calc(var(--sh-h) * .6) no-repeat,
-    linear-gradient(var(--sh-c), var(--sh-c)) 0 100% / 100% calc(var(--sh-h) * .8) no-repeat;
+    radial-gradient(70% 90% at 0 100%, rgba(7, 10, 17, .78) 0, rgba(7, 10, 17, .5) 45%, rgba(7, 10, 17, 0) 100%),
+    radial-gradient(34% 70% at 100% 100%, rgba(7, 10, 17, .5) 0, rgba(7, 10, 17, 0) 100%),
+    linear-gradient(0deg, rgba(7, 10, 17, .92) 0, rgba(7, 10, 17, .62) 22%, rgba(7, 10, 17, 0) 58%);
+}
+@media (max-width: 720px) {
+  .vx-shade { background: linear-gradient(0deg, rgba(7, 10, 17, .92) 0, rgba(7, 10, 17, .7) 55%, rgba(7, 10, 17, .15) 100%); }
 }

@@ -134,6 +134,7 @@ function ResetRow() {
     <FormRow label={t("pages.settings.resetLabel")} hint={t("pages.settings.resetHint")}>
       <Actions>
         <Button
+          size="s"
           icon="undo"
           onClick={() => {
             reset();

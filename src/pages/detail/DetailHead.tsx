@@ -28,7 +28,8 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
   const narrow = useNarrow();
   const look = useLook(instance.id);
   const pack = usePackStatus(instance);
-  const version = <>{LOADER_LABELS[instance.loader]} <Count value={instance.minecraftVersion} size={20} /></>;
+  const loaderName = instance.loader === "vanilla" ? null : LOADER_LABELS[instance.loader];
+  const minecraft = <>Minecraft <Count value={instance.minecraftVersion} size={20} /></>;
 
   return (
     <header ref={headRef} className={cn("dhead", compact && "compact")}>
@@ -40,13 +41,13 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
           <HeroTitle className="vx-trunc" title={instance.name}>{instance.name}</HeroTitle>
           {/* Infos als ruhiger Text, Updates als Knopf: was klickbar ist, sieht so aus. Einen Absturz melden Spielen-Knopf, Protokoll und Hinweis. */}
           <HeroMeta>
-            <Chip className="dh-ver">{version}</Chip>
+            <Chip className="dh-ver">{minecraft}</Chip>
             <Meta
               size="l"
               onScene
               items={[
-                !narrow && instance.loaderVersion && (
-                  <>{t("components.common.loader")} <Count value={instance.loaderVersion} size={20} /></>
+                !narrow && loaderName && (
+                  <>{loaderName} {instance.loaderVersion && <Count value={instance.loaderVersion} size={20} />}</>
                 ),
                 !narrow && playtimeLine(instance),
               ]}
@@ -84,7 +85,7 @@ export function DetailHead({ instance, headRef, compact, updateCount, onShowUpda
           onClick={() => navigate("/instances")}
         />
         <h2 title={instance.name}>{instance.name}</h2>
-        {!narrow && <Meta onScene items={[version]} />}
+        {!narrow && <Meta onScene items={[loaderName, minecraft]} />}
         <PlayButton instance={instance} size="m" onLaunched={onLaunched} tabIndex={compact ? 0 : -1} main />
       </div>
     </header>

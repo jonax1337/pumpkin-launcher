@@ -29,6 +29,10 @@ type MicrosoftAccount = Extract<ActiveAccount, { kind: "microsoft" }>;
 
 const isPng = (path: string) => path.toLowerCase().endsWith(".png");
 
+/** Gemessene Höhen der geladenen Inhalte: so springt die Seite beim Laden nicht. */
+const LOOK_SKELETON_HEIGHT_PX = 433;
+const SKIN_CARD_SKELETON_HEIGHT_PX = 407;
+
 export function SkinsPage() {
   const { t } = useI18n();
   const active = useUsableAccount();
@@ -103,7 +107,7 @@ function NeedsMicrosoft() {
     <StatusPanel
       icon="user"
       title={t("pages.skins.needsMsTitle")}
-      actions={<Button icon="microsoft" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>}
+      actions={<Button size="s" icon="microsoft" onClick={() => void startMsLogin()}>{t("components.account.msLogin")}</Button>}
     >
       {t("pages.skins.needsMsBody")}
     </StatusPanel>
@@ -122,7 +126,7 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
     const retry = () => void profile.refetch();
     return <ErrorBox title={t("pages.skins.loadErrorTitle")} error={profile.error} onRetry={retry} />;
   }
-  if (!profile.data) return <Skel h={336} />;
+  if (!profile.data) return <Skel h={LOOK_SKELETON_HEIGHT_PX} />;
   const { skin, capes } = profile.data;
   const cape = capes.find((c) => c.active);
 
@@ -140,20 +144,21 @@ function CurrentLook({ account }: { account: MicrosoftAccount }) {
         <Hint>{skin ? t("pages.skins.modelLine", { model: t(`pages.skins.variant.${skin.variant}`) }) : t("pages.skins.defaultSkin")}</Hint>
         <Actions wrap>
           <Button
+            size="s"
             icon="save"
             disabled={!skin || save.isPending}
             onClick={() => save.mutate({ accountId: account.id, name: account.username })}
           >
             {t("pages.skins.saveToLibrary")}
           </Button>
-          <Button variant="ghost" icon="undo" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.useDefault")}</Button>
+          <Button size="s" variant="ghost" icon="undo" onClick={() => resetConfirm.ask(account)}>{t("pages.skins.useDefault")}</Button>
         </Actions>
       </div>
       <ConfirmDialog
         {...resetConfirm.dialogProps({
           title: () => t("pages.skins.useDefaultTitle"),
           text: () => t("pages.skins.useDefaultText"),
-          confirmLabel: t("pages.settings.resetLabel"),
+          confirmLabel: t("pages.skins.useDefaultConfirm"),
           pending: reset.isPending,
           onConfirm: ({ id }, close) => reset.mutate({ accountId: id }, { onSuccess: close }),
         })}
@@ -197,7 +202,7 @@ function Library({ account }: { account: MicrosoftAccount | null }) {
           error={t("pages.instances.loadErrorTitle")}
           loading={
             <CardGrid aria-busy aria-label={t("components.common.loadingAria")}>
-              <SkelList n={3} h={308} />
+              <SkelList n={3} h={SKIN_CARD_SKELETON_HEIGHT_PX} />
             </CardGrid>
           }
           empty={

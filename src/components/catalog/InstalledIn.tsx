@@ -49,5 +49,5 @@ export function InstalledChipRow({ instances }: { instances?: Instance[] }) {
 /** Im Projektkopf mit Haken. */
 export function InstalledChipHead({ instances }: { instances?: Instance[] }) {
   const label = useInstalledLabel(instances, HEAD_CHIP_MAX);
-  return label && <Tip label={label.tip} describe={label.describe}><Chip icon="check">{label.text}</Chip></Tip>;
+  return label && <Tip label={label.tip} describe={label.describe}><Chip size="s" icon="check">{label.text}</Chip></Tip>;
 }

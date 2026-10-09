@@ -1,6 +1,6 @@
 /* Kit-Karten (Inventar): Szenenkarte (Steinplatte mit Bildrahmen und Namensschild), thumb 96×64, Neu-Kachel (leerer Slot),
    Kartenraster, kleine Szene, Auswahlkarte (Choice), Platte (Panel).
-   Bildrahmen = Slot (eingelassen), Platte/Namensschild = Stein (erhaben); „gewählt“ = Akzent (--acc) + ▶ am Namensschild.
+   Bildrahmen = Slot (eingelassen), Platte/Namensschild = Stein (erhaben); „gewählt“ (Choice, Kacheln) = globale Auswahl-Tokens, „aktuell“ (Szenenkarte) = Instanzakzent (--acc).
    Hover hellt den Rand auf (keine Bewegung), Druck senkt die Fläche. data-force="hover|press|focus" erzwingt den Zustand (Vorschau /_kit). */
 
 @keyframes vx-rise { from { opacity: 0; transform: translateY(8px); } }
@@ -68,10 +68,9 @@
 .vx-card[data-variant="thumb"]:is(:hover, [data-force="hover"], [data-pressed]) .vx-card-t { color: var(--fg); }
 .vx-card[data-variant="thumb"]:is(:hover, [data-force="hover"]) .vx-card-frame { border-color: var(--fg-2); }
 
-/* „aktuell“ (mini): Platte in Akzentfarbe, Namensschild getönt, ▶ am rechten Rand */
+/* „aktuell“ (mini): Platte in Akzentfarbe, Namensschild getönt (die Unterzeile behält die ganze Breite) */
 .vx-card[data-cur]::before { background: var(--acc-mid); border-color: var(--acc); box-shadow: inset var(--u2) var(--u2) 0 var(--acc-hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--acc-lo); }
 .vx-card[data-cur] .vx-card-cap { --face: var(--acc-dim); }
-.vx-card[data-cur] .vx-card-cap::after { content: ""; flex: none; width: var(--u3); height: calc(var(--px) * 5); margin-left: auto; background: var(--acc); clip-path: var(--arrow); }
 
 /* Ring an der Karte (über allem): gewählt = Akzent, Fokus = Creme, Fokus auf Gewähltem = Doppelring */
 .vx-card::after { content: ""; position: absolute; z-index: 4; inset: calc(var(--u2) * -1); pointer-events: none; clip-path: var(--ring); }
@@ -81,13 +80,13 @@
 
 
 /* ---------- Auswahlkachel (PickTile) und Vorschau des Instanzbilds ---------- */
-/* PickTile: Slot; gewählt = Akzentrahmen + --acc-dim */
-.vx-pick { --acc-dim: color-mix(in srgb, var(--acc) 16%, var(--panel)); position: relative; isolation: isolate; display: grid; place-items: center; flex: none; width: 48px; height: 48px; color: var(--fg); cursor: pointer; }
+/* PickTile: Slot; gewählt = globale Auswahl (--sel-bg, --sel-ring) */
+.vx-pick { position: relative; isolation: isolate; display: grid; place-items: center; flex: none; width: 48px; height: 48px; color: var(--fg); cursor: pointer; }
 .vx-pick[data-size="32"] { width: 32px; height: 32px; }
 .vx-pick::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); background: var(--sunk); border: var(--px) solid; border-color: var(--slot-bd); box-shadow: var(--slot-sh); transition: background-color var(--st); }
 .vx-pick:is(:hover, [data-force="hover"])::before { border-color: var(--fg-2); }
 .vx-pick:is(:active, [data-force="press"])::before { background: var(--edge); }
-.vx-pick[aria-pressed="true"]::before, .vx-pick[aria-pressed="true"]:hover::before { background: var(--acc-dim); border-color: var(--acc); box-shadow: inset 0 0 0 var(--px) var(--acc); }
+.vx-pick[aria-pressed="true"]::before, .vx-pick[aria-pressed="true"]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
 .vx-pick.fx:focus-visible::after { content: ""; position: absolute; inset: calc(var(--px) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
 .vx-swatch { display: block; width: 16px; height: 16px; background: var(--sw); box-shadow: inset 0 0 0 var(--px) rgba(3,5,10,.9); }
 /* Vorschau des Instanzbilds neben der Auswahl: quadratisch, Pixel-Icon k = 2 */
@@ -112,14 +111,14 @@
 .vx-add:is(:active, [data-force="press"]) > .vx-add-in { translate: 0 var(--px); }
 
 /* Tooltip der Karte (vx-tip): voller Titel (nur wenn abgeschnitten) über dem Bedienhinweis */
-.vx-tip .vx-tt { display: block; font-weight: 700; color: #fff; }
+.vx-tip .vx-tt { display: block; font-weight: 700; color: var(--fg-strong); }
 .vx-tip .vx-tt-s { display: block; color: var(--fg-2); }
 .vx-tip .vx-tt-h { display: block; }
-.vx-tip :is(.vx-tt, .vx-tt-s) + .vx-tt-h { margin-top: 4px; color: #B7AEE0; }
+.vx-tip :is(.vx-tt, .vx-tt-s) + .vx-tt-h { margin-top: 4px; color: var(--tip-label); }
 
 /* ---------- Auswahlkarte (Choice) ---------- */
-/* m: Zeile in scrollenden Listen; l: Steinplatte. Gewählt = Akzentrahmen + --acc-dim + ▶ links (Platz im Innenabstand). */
-.vx-choice { --acc-dim: color-mix(in srgb, var(--acc) 16%, var(--panel)); position: relative; isolation: isolate; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; height: 56px; padding: 0 10px 0 22px; text-align: left; color: var(--fg); cursor: pointer; }
+/* m: Zeile in scrollenden Listen; l: Steinplatte. Gewählt = globale Auswahl (--sel-bg, --sel-ring) + ▶ links (Platz im Innenabstand). */
+.vx-choice { position: relative; isolation: isolate; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 100%; height: 56px; padding: 0 10px 0 22px; text-align: left; color: var(--fg); cursor: pointer; }
 .vx-choice::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); border: var(--px) solid transparent; transition: background-color var(--st); }
 .vx-choice-m { display: grid; place-items: center; min-width: 0; }
 .vx-choice-t { min-width: 0; }
@@ -130,14 +129,15 @@
 .vx-choice:is(:hover, [data-force="hover"]):not(:disabled)::before { background: var(--hv-row); }
 .vx-choice:is(:active, [data-force="press"]):not(:disabled)::before { background: var(--sunk); border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
 .vx-choice:is(:active, [data-force="press"]):not(:disabled) > * { translate: 0 var(--px); }
-.vx-choice[data-selected]::before, .vx-choice[data-selected]:hover::before { background: var(--acc-dim); border-color: var(--acc); box-shadow: inset 0 0 0 var(--px) var(--acc); }
+.vx-choice[data-selected]::before, .vx-choice[data-selected]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
+.vx-choice:is([data-selected], :hover:not(:disabled)), .vx-pickcard[data-selected] { --fg-3: var(--fg-2); }
 /* ▶ hängt am Bildfeld (::after gehört dem Fokusring) */
-.vx-choice[data-selected] > .vx-choice-m::before { content: ""; position: absolute; left: var(--u2); top: 50%; width: var(--u3); height: calc(var(--px) * 5); margin-top: calc(var(--px) * -2.5); background: var(--acc); clip-path: var(--arrow); pointer-events: none; }
+.vx-choice[data-selected] > .vx-choice-m::before { content: ""; position: absolute; left: var(--u2); top: 50%; width: var(--u3); height: calc(var(--px) * 5); margin-top: calc(var(--px) * -2.5); background: var(--sel-ring); clip-path: var(--arrow); pointer-events: none; }
 .vx-choice:disabled { color: var(--fg-3); cursor: default; }
 .vx-choice:disabled .vx-choice-m { opacity: .5; }
 /* Fokus: in scrollenden Listen eng (1 Einheit), sonst wie .fx; auf Gewähltem Doppelring (außen Creme, innen Akzent) */
 .vx-choice[data-size="m"].fx:focus-visible::after, .vx-choice[data-size="m"][data-force="focus"]::after { content: ""; position: absolute; inset: calc(var(--px) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
-.vx-choice.fx[data-selected][data-size]:is(:focus-visible, [data-force="focus"])::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); padding: var(--u2); background: linear-gradient(var(--acc) 0 0) content-box, var(--focus); clip-path: var(--ring2); pointer-events: none; z-index: 5; }
+.vx-choice.fx[data-selected][data-size]:is(:focus-visible, [data-force="focus"])::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); padding: var(--u2); background: linear-gradient(var(--sel-ring) 0 0) content-box, var(--focus); clip-path: var(--ring2); pointer-events: none; z-index: 5; }
 .vx-choice[data-size="l"][data-force="focus"]:not([data-selected])::after { content: ""; position: absolute; inset: calc(var(--u2) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
 /* l: Steinplatte (steht allein, z. B. Onboarding) */
 .vx-choice[data-size="l"] { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; height: 72px; padding: 0 14px 0 30px; }
@@ -146,11 +146,11 @@
 .vx-choice[data-size="l"] .vx-choice-t span { color: var(--fg-2); }
 .vx-choice[data-size="l"]:is(:hover, [data-force="hover"]):not(:disabled)::before { background: color-mix(in oklab, var(--panel-2) 80%, var(--line-2)); }
 .vx-choice[data-size="l"]:is(:active, [data-force="press"]):not(:disabled)::before { background: var(--sunk); border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
-.vx-choice[data-size="l"][data-selected]::before, .vx-choice[data-size="l"][data-selected]:hover::before { background: var(--acc-dim); border-color: var(--acc); box-shadow: inset 0 0 0 var(--px) var(--acc); }
+.vx-choice[data-size="l"][data-selected]::before, .vx-choice[data-size="l"][data-selected]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
 .vx-choice[data-size="l"][data-selected] > .vx-choice-m::before { left: var(--u4); }
 
 /* ---------- Auswahlkarte (PickCard): Bild im Slot, darunter Name und Zusatz; gewählt wie Choice l ---------- */
-.vx-pickcard { --acc-dim: color-mix(in srgb, var(--acc) 16%, var(--panel)); position: relative; isolation: isolate; display: grid; gap: 4px; align-content: start; justify-items: start; width: 100%; min-width: 0; padding: 12px; text-align: left; color: var(--fg); cursor: pointer; }
+.vx-pickcard { position: relative; isolation: isolate; display: grid; gap: 4px; align-content: start; justify-items: start; width: 100%; min-width: 0; padding: 12px; text-align: left; color: var(--fg); cursor: pointer; }
 .vx-pickcard::before { content: ""; position: absolute; inset: 0; z-index: -1; clip-path: var(--n1); background: var(--panel-2); border: var(--px) solid var(--edge); box-shadow: inset var(--u2) var(--u2) 0 var(--line-hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--bg-2); transition: background-color var(--st); }
 .vx-pickcard-pic { position: relative; display: grid; place-items: center; width: 100%; height: 112px; margin-bottom: 6px; color: var(--fg-3); }
 .vx-pickcard-flag { position: absolute; top: var(--u4); left: var(--u4); z-index: 2; }
@@ -159,11 +159,11 @@
 .vx-pickcard:is(:hover, [data-force="hover"]):not(:disabled)::before { background: var(--panel-3); }
 .vx-pickcard:is(:active, [data-force="press"]):not(:disabled)::before { background: var(--sunk); border-color: var(--slot-bd); box-shadow: var(--slot-sh); }
 .vx-pickcard:is(:active, [data-force="press"]):not(:disabled) > * { translate: 0 var(--px); }
-.vx-pickcard[data-selected]::before, .vx-pickcard[data-selected]:hover::before { background: var(--acc-dim); border-color: var(--acc); box-shadow: inset 0 0 0 var(--px) var(--acc); }
+.vx-pickcard[data-selected]::before, .vx-pickcard[data-selected]:hover::before { background: var(--sel-bg); border-color: var(--sel-ring); box-shadow: var(--sel-edge); }
 .vx-pickcard:disabled { color: var(--fg-3); cursor: default; }
 .vx-pickcard:disabled .vx-pickcard-pic { opacity: .5; }
 .vx-pickcard.fx:is(:focus-visible, [data-force="focus"])::after { content: ""; position: absolute; inset: calc(var(--px) * -1); background: var(--focus); clip-path: var(--ring); pointer-events: none; z-index: 5; }
-.vx-pickcard.fx[data-selected]:is(:focus-visible, [data-force="focus"])::after { inset: calc(var(--u2) * -1); padding: var(--u2); background: linear-gradient(var(--acc) 0 0) content-box, var(--focus); clip-path: var(--ring2); }
+.vx-pickcard.fx[data-selected]:is(:focus-visible, [data-force="focus"])::after { inset: calc(var(--u2) * -1); padding: var(--u2); background: linear-gradient(var(--sel-ring) 0 0) content-box, var(--focus); clip-path: var(--ring2); }
 
 /* ---------- Platte (Panel): erhaben (plate = --panel, raised = --panel-2) oder eingelassen (sunk, Slot) ----------
    Dasselbe Rezept tragen Leiste und Inhaltsfläche des Arbeitsbereichs (layout.css). */

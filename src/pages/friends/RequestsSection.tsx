@@ -21,7 +21,7 @@ type RequestActions = {
 export function RequestsSection({ requests, ...actions }: { requests: FriendRequest[] } & RequestActions) {
   const { t } = useI18n();
   return (
-    <section id={REQUESTS_ANCHOR} className="friends-block">
+    <section id={REQUESTS_ANCHOR}>
       <SectionHeader title={<>{t("friends.requests.title")}<Count value={requests.length} muted /></>} size="sub" as="h2" />
       <List variant="accounts" aria-label={t("friends.requests.title")}>
         {requests.map((request) => (

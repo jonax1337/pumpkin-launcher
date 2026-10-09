@@ -159,9 +159,10 @@ export function DiscoverPage() {
       {/* Bleibt beim Öffnen von Details erhalten, damit Suche und geladene Seiten nicht verloren gehen. */}
       <ContextMenu items={listMenu}>
       <Page className="disc" hidden={!!projectId}>
+        <div className="disc-sticky">
         <PageHeader
           title={t("ui.nav.discover")}
-          tabs={tabs.length > 1 && (
+          tabs={
             <Tabs
               idBase="disc"
               label={t("pages.discover.categoryLabel")}
@@ -169,7 +170,7 @@ export function DiscoverPage() {
               onChange={openTab}
               items={tabs.map((tab) => ({ value: tab, label: typeLabel(tab), icon: TYPE_ICONS[tab] }))}
             />
-          )}
+          }
         />
         {/* Suchfeld bewusst breiter als in der Bibliothek */}
         <Toolbar search="l" label={t("pages.discover.searchFilterLabel")}>
@@ -204,11 +205,12 @@ export function DiscoverPage() {
             />
           )}
         </Toolbar>
+        </div>
         <Workspace>
         <WorkspaceContent className="disc-results">
         <TabPanel idBase="disc" value={type}>
           <div className="disc-extras">
-            {starterAvailable && (
+            {starterAvailable && !query && (
               <ChipButton pressed={showStarter} onClick={() => change({ starter: !showStarter })}>{t("pages.discover.starter")}</ChipButton>
             )}
             {!showStarter && <OtherTypeHits source={source} types={tabs.filter((tab) => tab !== type)} requestFor={requestFor} onPick={openTab} />}

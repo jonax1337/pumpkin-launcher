@@ -12,9 +12,14 @@ export const MB_PER_GB = 1024;
 export const fileName = (path: string) => path.split(/[\\/]/).pop()!;
 
 const DATE_OPTIONS: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short", year: "numeric" };
+/** Kurzes Datum für knappe Plätze (Kartenunterzeilen): Jahr nur, wenn es nicht das laufende ist. */
+const DAY_MONTH_OPTIONS: Intl.DateTimeFormatOptions = { day: "2-digit", month: "short" };
 
 /** Intl-Formatierer sind teuer und hängen an der Sprache: je Sprache einmal bauen und behalten. */
-const cache = new Map<Language, { date: Intl.DateTimeFormat; dateTime: Intl.DateTimeFormat; relative: Intl.RelativeTimeFormat }>();
+const cache = new Map<Language, {
+  date: Intl.DateTimeFormat; dayMonth: Intl.DateTimeFormat; dateTime: Intl.DateTimeFormat;
+  relative: Intl.RelativeTimeFormat; relativeShort: Intl.RelativeTimeFormat;
+}>();
 
 function formatters() {
   const lang = currentLanguage();
@@ -22,22 +27,27 @@ function formatters() {
   if (!f) {
     f = {
       date: new Intl.DateTimeFormat(lang, DATE_OPTIONS),
+      dayMonth: new Intl.DateTimeFormat(lang, DAY_MONTH_OPTIONS),
       dateTime: new Intl.DateTimeFormat(lang, { ...DATE_OPTIONS, hour: "2-digit", minute: "2-digit" }),
       relative: new Intl.RelativeTimeFormat(lang, { numeric: "auto" }),
+      relativeShort: new Intl.RelativeTimeFormat(lang, { numeric: "auto", style: "short" }),
     };
     cache.set(lang, f);
   }
   return f;
 }
 
-export function relativeTime(ms: number | null): string {
+/** „vor 2 Stunden“ bzw. ab 30 Tagen das Datum; `compact` kürzt beides („vor 2 Std.“, „09. Sept.“) für knappe Plätze. */
+export function relativeTime(ms: number | null, compact = false): string {
   if (ms == null) return t("format.neverPlayed");
   const diff = ms - Date.now();
   const abs = Math.abs(diff);
-  if (abs < HOUR) return formatters().relative.format(Math.round(diff / MINUTE), "minute");
-  if (abs < DAY) return formatters().relative.format(Math.round(diff / HOUR), "hour");
-  if (abs < RELATIVE_TIME_MAX_DAYS * DAY) return formatters().relative.format(Math.round(diff / DAY), "day");
-  return formatDate(ms);
+  const f = formatters();
+  const relative = compact ? f.relativeShort : f.relative;
+  if (abs < HOUR) return relative.format(Math.round(diff / MINUTE), "minute");
+  if (abs < DAY) return relative.format(Math.round(diff / HOUR), "hour");
+  if (abs < RELATIVE_TIME_MAX_DAYS * DAY) return relative.format(Math.round(diff / DAY), "day");
+  return compact && new Date(ms).getFullYear() === new Date().getFullYear() ? f.dayMonth.format(ms) : formatDate(ms);
 }
 
 export function formatDate(ms: number): string {

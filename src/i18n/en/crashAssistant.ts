@@ -5,6 +5,7 @@ export const crashAssistant: typeof deCrashAssistant = {
   "crashAssistant.heading": "What happened?",
   "crashAssistant.loadFailed": "Analyzing the crash failed.",
   "crashAssistant.evidence": "Excerpt from the report",
+  "crashAssistant.more": "More findings ({n})",
   "crashAssistant.severity.error": "Cause found",
   "crashAssistant.severity.warning": "Probable",
   "crashAssistant.severity.info": "Note",

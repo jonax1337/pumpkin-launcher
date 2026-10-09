@@ -81,7 +81,6 @@ export function AddFriendDialog({ initialTab, onClose }: { initialTab: AddFriend
       open
       onOpenChange={(open) => !open && onClose()}
       title={t("friends.add.title")}
-      height="m"
       busy={pending}
       footer={
         tab === "mine" ? (

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router";
 import { useI18n } from "@/i18n";
 import { PlayStatus } from "@/components/play/PlayStatus";
 import { NewInstanceDialog } from "@/components/NewInstanceDialog";
-import { SkelList } from "@/components/SkelList";
 import { Onboarding } from "@/components/Onboarding";
 import { useInstanceMenu } from "@/components/instance";
 import { byRecent, pickRecentInstance, useInstances } from "@/hooks/useInstances";
@@ -15,7 +14,7 @@ import { useLook } from "@/store/look";
 import { Actions, Button, ButtonLink, ContextMenu, ErrorBox, HeroMeta, HeroShade, Page, SectionHeader, Skel, type MenuEntry } from "@/ui";
 import { HeroActions } from "./home/HeroActions";
 import { HeroInfo } from "./home/HeroInfo";
-import { Rail, TILE_H, TILE_W } from "./home/Rail";
+import { Rail, RailSkeleton } from "./home/Rail";
 
 function HomeInstancesHeader() {
   const { t } = useI18n();
@@ -27,9 +26,9 @@ function HomeInstancesHeader() {
       actions={
         <Actions wrap>
           <NewInstanceDialog>
-            <Button icon="plus">{t("components.newInstance.title")}</Button>
+            <Button size="s" icon="plus">{t("components.newInstance.title")}</Button>
           </NewInstanceDialog>
-          <ButtonLink to="/instances" iconEnd="chev-right">{t("ui.nav.library")}</ButtonLink>
+          <ButtonLink size="s" to="/instances" iconEnd="chev-right">{t("ui.nav.library")}</ButtonLink>
         </Actions>
       }
     />
@@ -46,12 +45,13 @@ function HomeSkeleton() {
           <div className="titlebox"><Skel h={72} w="min(520px, 80%)" /></div>
           <HeroMeta><Skel h={16} w={320} /></HeroMeta>
         </div>
-        <Actions gap={12}><Skel h={56} w={272} /><Skel h={40} w={40} /></Actions>
+        <Actions gap={12}><Skel h="var(--vx-h-l)" w={272} /><Skel h="var(--vx-h-l)" w="var(--vx-h-l)" /></Actions>
+        {/* Statuszeile unter den Knöpfen: auch im echten Hero reserviert (PlayStatus), damit sich die Höhe nicht ändert */}
         <div className="pstat" />
       </div>
       <div className="cont">
         <HomeInstancesHeader />
-        <div className="railwrap"><div className="rail"><SkelList n={4} w={TILE_W} h={TILE_H} /></div></div>
+        <div className="railwrap"><RailSkeleton n={4} /></div>
       </div>
     </section>
   );

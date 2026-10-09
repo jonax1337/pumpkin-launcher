@@ -53,7 +53,7 @@ export type ListRowProps = {
   hit?: Hit;
   /** Name der Trefferfläche, falls `hit.label` fehlt. */
   hitLabel?: string;
-  /** gewählt: Akzentrahmen (2 Einheiten) + Tönung (--acc-dim) */
+  /** gewählt: globale Auswahl (--sel-bg, --sel-ring) */
   selected?: boolean;
   /** ausgeschaltet: Bild gedämpft, Name --fg-2 */
   off?: boolean;
@@ -67,7 +67,7 @@ export type ListRowProps = {
   menu?: MenuEntry[];
 } & ComponentProps<"div">;
 
-/** Zeile einer List. Hover = Platte --hv-row, Name wird #fff (kein Unterstrich); Druck auf die Trefferfläche dunkler. */
+/** Zeile einer List. Hover = Platte --hv-row (kein Unterstrich); Druck auf die Trefferfläche dunkler. */
 export function ListRow({ hit, hitLabel, selected, off, feature, dep, index, menu, className, style, children, ...props }: ListRowProps) {
   const row = (
     <div

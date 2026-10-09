@@ -3,6 +3,7 @@
 .announcements-fetch-status:empty { position: absolute; }
 /* Leiste: Kopf, Beitragsliste und Nachladen als bündige Abschnitte der Platte */
 .announcements-rail { padding: 0; }
+.announcements-rail-title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .announcements-rail-header { display: grid; gap: 8px; justify-items: start; padding: var(--pg-pad); border-bottom: var(--px) solid var(--line); }
 .announcements-list { list-style: none; margin: 0; padding: 0; max-height: max(280px, calc(100dvh - 360px)); overflow-y: auto; overscroll-behavior-y: contain; }
 .announcements-list > li { border-bottom: var(--px) solid var(--line); }
@@ -26,20 +27,21 @@
 .announcement-list-item:focus-visible { outline: var(--px) solid var(--focus); outline-offset: calc(var(--px) * -1); }
 .announcement-list-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 22px; }
 .announcement-list-meta time, .announcement-list-author { color: var(--fg-2); font-size: calc(13px * var(--tz)); overflow-wrap: anywhere; }
-.announcement-list-title { font: 800 calc(18px * var(--tz))/1.15 var(--f-display); letter-spacing: .01em; overflow-wrap: anywhere; }
+.announcement-list-title { font: 800 var(--hd-card)/1.15 var(--f-display); letter-spacing: .01em; overflow-wrap: anywhere; }
 .announcements-rail-footer { padding: var(--pg-pad); }
 /* Lesefläche: Platte des Kits, Titel mit hartem Schatten */
 .announcements-preview, .announcement-article { min-width: 0; padding: var(--pg-pad); }
-.announcements-eyebrow { margin: 0 0 14px; color: var(--acc-hi); font: calc(19px * var(--tz))/1.2 var(--f-px); text-transform: uppercase; letter-spacing: .04em; }
-.announcements-latest .announcements-latest-title { font-size: clamp(30px, 3vw, 48px); line-height: 1.1; overflow-wrap: anywhere; }
+.announcements-eyebrow { margin: 0 0 14px; color: var(--acc-hi); font: var(--hd-card)/1.2 var(--f-px); text-transform: uppercase; letter-spacing: .04em; }
+.announcements-latest .announcements-latest-title { font-size: var(--hd-hero); line-height: 1.1; max-width: 32ch; overflow-wrap: anywhere; }
+.announcements-excerpt { max-width: 80ch; margin: 16px 0 0; color: var(--fg-2); line-height: 1.6; }
 .announcements-latest .vx-btn { margin-top: 24px; }
 .announcement-article-header { padding-bottom: 20px; border-bottom: var(--px) solid var(--line); }
 .announcement-article-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-.announcement-article .announcement-title { font-size: clamp(28px, 2.8vw, 44px); line-height: 1.1; overflow-wrap: anywhere; scroll-margin-top: 24px; }
-.announcement-title:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 6px; }
+.announcement-article .announcement-title { font-size: var(--hd-hero); line-height: 1.1; width: fit-content; max-width: min(100%, 32ch); overflow-wrap: anywhere; scroll-margin-top: 24px; }
+.announcement-title:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 2px; }
 .announcement-meta { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 14px; color: var(--fg-2); font-size: calc(13px * var(--tz)); overflow-wrap: anywhere; }
 .announcement-article-header > .vx-btn { margin-top: 14px; }
-.announcement-article .desc { max-width: 72ch; min-width: 0; margin-top: 24px; }
+.announcement-article .desc { max-width: 80ch; min-width: 0; margin-top: 24px; }
 .announcements-page .desc a[href]:focus-visible,
 .announcements-page .desc summary:focus-visible { outline: var(--px) solid var(--focus); outline-offset: 3px; }
 .announcements-page .vx-btn { max-width: 100%; height: auto; min-height: var(--vx-h-m); white-space: normal; }

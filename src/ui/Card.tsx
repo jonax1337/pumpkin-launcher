@@ -35,6 +35,8 @@ export type SceneCardProps = {
   menu?: MenuEntry[];
   /** Bedienhinweis im Tooltip; der volle Titel erscheint dort nur, wenn er abgeschnitten ist. */
   tip?: ReactNode;
+  /** Seite des Tooltips (Standard oben); der Hinweis fängt nie den Zeiger ab. */
+  tipSide?: "top" | "bottom";
   className?: string;
   "data-force"?: ForcedState;
 };
@@ -55,8 +57,8 @@ function SceneMedia({ look }: { look: SceneLook }) {
  * Trefferfläche der Karte mit Tooltip: voller Titel und Unterzeile nur, wenn sie abgeschnitten sind;
  * der Bedienhinweis `tip` immer.
  */
-function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
-  hit: Hit; title: string; sub?: string; tip?: ReactNode; current?: boolean; pressed?: boolean;
+function CardHit({ hit, title, sub, tip, tipSide = "top", current, pressed, titleRef, subRef }: {
+  hit: Hit; title: string; sub?: string; tip?: ReactNode; tipSide?: "top" | "bottom"; current?: boolean; pressed?: boolean;
   titleRef: RefObject<HTMLElement | null>; subRef?: RefObject<HTMLElement | null>;
 }) {
   const [truncated, setTruncated] = useState<{ title: boolean; sub: boolean } | null>(null);
@@ -71,7 +73,7 @@ function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
         <HitEl hit={hit} fallbackLabel={title} current={current} pressed={pressed} />
       </T.Trigger>
       <T.Portal>
-        <T.Content className="vx-tip" side="top" sideOffset={8} collisionPadding={8}>
+        <T.Content className="vx-tip" data-pass="" side={tipSide} sideOffset={8} collisionPadding={8}>
           {truncated?.title && <span className="vx-tt">{title}</span>}
           {truncated?.sub && <span className="vx-tt-s">{sub}</span>}
           {tip != null && <span className="vx-tt-h">{tip}</span>}
@@ -83,10 +85,10 @@ function CardHit({ hit, title, sub, tip, current, pressed, titleRef, subRef }: {
 
 /**
  * Szenenkarte: breite Pixel-Landschaft, Instanz-Icon und Bildunterschrift, und eine
- * Trefferfläche (`hit`, Link oder Knopf) über allem. Platte mit Bildrahmen (Slot) und Namensschild; Hover hellt den Rand auf, „aktuell“ färbt die Platte in der Akzentfarbe (▶ am Namensschild).
+ * Trefferfläche (`hit`, Link oder Knopf) über allem. Platte mit Bildrahmen (Slot) und Namensschild; Hover hellt den Rand auf, „aktuell“ färbt die Platte in der Akzentfarbe.
  * Fokusring an der Karte (über Rahmen und Bildunterschrift).
  */
-export function SceneCard({ look, art, title, sub, status, primary, hit, current, menu, tip, className, "data-force": force }: SceneCardProps) {
+export function SceneCard({ look, art, title, sub, status, primary, hit, current, menu, tip, tipSide = "top", className, "data-force": force }: SceneCardProps) {
   const titleRef = useRef<HTMLElement>(null);
   const subRef = useRef<HTMLElement>(null);
   const card = (
@@ -107,7 +109,7 @@ export function SceneCard({ look, art, title, sub, status, primary, hit, current
         </span>
       </span>
       {status && <span className="vx-card-st">{status}</span>}
-      <CardHit hit={hit} title={title} sub={sub} tip={tip} current={current} titleRef={titleRef} subRef={subRef} />
+      <CardHit hit={hit} title={title} sub={sub} tip={tip} tipSide={tipSide} current={current} titleRef={titleRef} subRef={subRef} />
       {primary && <div className="vx-card-tr">{primary}</div>}
     </div>
   );

@@ -28,9 +28,10 @@ function useMounted() {
  * Startet (beide nicht klickbar), Beenden (Klick fragt „Minecraft beenden?“), Erneut starten nach Absturz.
  * `l` 272×56, `m` 176×40, `i` 32×32.
  * `main`: der Spielen-Knopf der Seite (Start, Instanzkopf); Strg+Enter klickt ihn.
+ * `neutral`: ohne Instanzfarbe (Akzent der Umgebung), für Listenzeilen.
  */
-export function PlayButton({ instance, size = "l", onLaunched, tabIndex, main }: {
-  instance: Instance; size?: PlaySize; onLaunched?: () => void; tabIndex?: number; main?: boolean;
+export function PlayButton({ instance, size = "l", onLaunched, tabIndex, main, neutral }: {
+  instance: Instance; size?: PlaySize; onLaunched?: () => void; tabIndex?: number; main?: boolean; neutral?: boolean;
 }) {
   const phase = usePhase(instance.id);
   const percent = useInstallPercent(instance);
@@ -50,6 +51,6 @@ export function PlayButton({ instance, size = "l", onLaunched, tabIndex, main }:
     void play(instance, () => mounted.current && onLaunched?.());
   }
 
-  const button = <PlayPlate state={state} size={size} acc={acc} main={main} tabIndex={tabIndex} onClick={click} />;
+  const button = <PlayPlate state={state} size={size} acc={neutral ? undefined : acc} main={main} tabIndex={tabIndex} onClick={click} />;
   return size === "i" ? <Tip label={state.label}>{button}</Tip> : button;
 }

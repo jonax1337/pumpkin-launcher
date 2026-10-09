@@ -63,7 +63,7 @@ export function HeroMeta({ className, ...props }: ComponentProps<"div">) {
   return <div className={cn("vx-hero-meta", className)} {...props} />;
 }
 
-/** Abdunklung der Szene in harten Bändern (keine Verläufe); füllt den Szenenkopf, Text steht unten. */
+/** Abdunklung der Szene in weichen Verläufen; füllt den Szenenkopf, Text steht unten. */
 export function HeroShade() {
   return <div className="vx-shade" aria-hidden />;
 }

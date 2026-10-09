@@ -1,29 +1,46 @@
 /* ---------- Start ---------- */
 .home { position: relative; min-height: 100%; display: grid; grid-template-rows: minmax(250px, 1fr) auto; grid-template-columns: minmax(0, 1fr); overflow: hidden; }
 .home > .scene { z-index: 0; }
-/* Abdunklung: gemeinsame Bänder (ui/layout.css .vx-shade), hier über die untere Dreiviertelseite und dichter, damit Titel und Leiste lesbar bleiben */
-.home .vx-shade { --sh-h: 81.25%; --sh-c: rgb(0 0 0 / .4); }
+/* Abdunklung (ui/layout.css .vx-shade): links und unten dicht, damit Titel und Leiste lesbar bleiben, rechts bleibt die Szene hell; weiche Verläufe wie bis 0.4.0 */
+.home .vx-shade { background:
+  linear-gradient(90deg, rgba(7, 10, 17, .94) 0, rgba(7, 10, 17, .88) 28%, rgba(7, 10, 17, .6) 48%, rgba(7, 10, 17, 0) 68%),
+  linear-gradient(0deg, rgba(7, 10, 17, .98) 0, rgba(7, 10, 17, .94) 170px, rgba(7, 10, 17, 0) 320px),
+  radial-gradient(120% 90% at 70% 40%, transparent 55%, rgba(7, 10, 17, .55) 100%); }
 /* Hero: Titel, Metazeile, Aktionen im Abstand 8 / 16 (Rhythmus-Tokens); der Rest der Szene gehört der Zeile darüber */
 .hero { position: relative; z-index: 2; align-self: end; padding: var(--pg-gap-l) var(--gut); display: flex; flex-direction: column; gap: var(--pg-gap-m); min-width: 0; }
 .hero-k { display: flex; flex-direction: column; gap: var(--pg-gap-s); }
-/* Der Titel reserviert zwei Zeilen, damit die Seite beim Instanzwechsel nicht springt */
-.titlebox { height: calc(var(--hd-hero-xl) * 1.8); display: flex; align-items: flex-end; }
-.titlebox .vx-h { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; padding-bottom: .02em; }
+/* Der Titel reserviert zwei Zeilen (je .95 Zeilenhöhe), damit die Seite beim Instanzwechsel nicht springt.
+   Harte Kontur und Schlagschatten gegen helle Wolken; sie liegen im Polster (der Zeilenschnitt overflow: hidden würde sie sonst kappen), die negativen Ränder halten den Text an seinem Platz. */
+.titlebox { height: calc(var(--hd-hero-xl) * 1.9); display: flex; align-items: flex-end; }
+.titlebox .vx-h { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance;
+  padding: var(--px) var(--px) var(--u2); margin: calc(var(--px) * -1) calc(var(--px) * -1) calc(var(--u2) * -1);
+  text-shadow: var(--px) 0 0 #000, calc(var(--px) * -1) 0 0 #000, 0 calc(var(--px) * -1) 0 #000, 0 var(--u2) 0 #000; }
+/* Metazeile: halbfett, Kontur ein Gerätepixel und Schlagschatten; die Trenner heller (sonst verschwinden sie im Himmel) */
+.home .vx-hero-meta .vx-meta { font-weight: 600; text-shadow: var(--dp, 1px) 0 0 #000, calc(var(--dp, 1px) * -1) 0 0 #000, 0 calc(var(--dp, 1px) * -1) 0 #000, 0 var(--px) 0 #000; }
+.home .vx-hero-meta .vx-meta-i + .vx-meta-i::before { background: var(--fg-2); }
 /* Instanzleiste und Hero teilen die Seitenränder; Sammlungsaktionen stehen direkt über den Karten. */
 .cont { position: relative; z-index: 2; width: 100%; min-width: 0; padding: 0 var(--gut) var(--pg-bottom); }
-.home .library-heading { height: auto; min-height: 40px; flex-wrap: wrap; gap: var(--pg-gap-s) var(--pg-gap-m); margin-bottom: var(--pg-gap-s); }
+.home .library-heading { height: auto; min-height: var(--vx-h-s); flex-wrap: wrap; gap: var(--pg-gap-s) var(--pg-gap-m); margin-bottom: var(--pg-gap-s); }
 .home .library-heading .vx-sech-a { min-width: 0; max-width: 100%; }
-.railwrap { position: relative; }
-.rail { --fl: 0px; --fr: 0px; display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding: 8px 8px 10px; margin: 0 -8px; scrollbar-width: none;
+/* Maße der Leiste: Polster oben/unten und Kartenbreite (wie --mini in ui/card.css); die Medienhöhe der Karte (16:9, innerhalb der Platte) legt die Pfeile fest */
+.railwrap { --rail-pt: 8px; --rail-pb: 10px; --tile-w: 256px; --tile-media-h: calc((var(--tile-w) - var(--u3) * 2) * 9 / 16); position: relative; }
+.rail { --fl: 0px; --fr: 0px; display: flex; gap: 14px; overflow-x: auto; overflow-y: hidden; padding: var(--rail-pt) 8px var(--rail-pb); margin: 0 -8px; scrollbar-width: none;
   /* Verlauf nur an Rändern, hinter denen noch Kacheln liegen */
   mask-image: linear-gradient(90deg, transparent 0, #000 var(--fl), #000 calc(100% - var(--fr)), transparent 100%); }
 .rail::-webkit-scrollbar { display: none; }
-.rail > li, .rail > .vx-skel { flex: none; }
-.rail > li { display: flex; }
+.rail > li { flex: none; display: flex; }
 .railwrap[data-l] .rail { --fl: 64px; }
 .railwrap[data-r] .rail { --fr: 64px; }
-/* Blättern-Pfeile (Steinknöpfe): fest über den Kachelrändern, nur sichtbar, wenn es in die Richtung weitergeht */
-.railwrap > .rarr { position: absolute; z-index: 3; top: 8px; bottom: 10px; margin: auto 0; opacity: 0; visibility: hidden; transition: opacity .12s steps(2, end), visibility 0s linear .12s; }
-.railwrap > .rarr.l { left: -4px; }
-.railwrap > .rarr.r { right: -4px; }
+/* Blättern-Pfeile (Steinknöpfe): mittig im Bildfeld der Karten (nicht über dem Namensschild), nur sichtbar, wenn es in die Richtung weitergeht */
+.railwrap > .rarr { position: absolute; z-index: 3; top: calc(var(--rail-pt) + var(--u3) + (var(--tile-media-h) - var(--vx-h-m)) / 2); opacity: 0; visibility: hidden; transition: opacity .12s steps(2, end), visibility 0s linear .12s; }
+.railwrap > .rarr.l { left: 0; }
+.railwrap > .rarr.r { right: 0; }
 .railwrap[data-l] > .rarr.l, .railwrap[data-r] > .rarr.r { opacity: 1; visibility: visible; transition: opacity .12s steps(2, end), visibility 0s; }
+/* Zustände deutlich: Hover heller Rand und Fläche, Druck eingedrückt (die Szenenfläche des Knopfs ändert sich sonst kaum) */
+.home .railwrap > .rarr[data-scene] { --face-h: var(--panel-3); --face-p: var(--sunk); --rim: var(--fg); }
+
+/* Mindestfenster (800×600) und niedrige Fenster: Hero und Leiste rücken zusammen, damit die Startseite ohne Scrollen passt */
+@media (max-height: 700px) {
+  .hero { padding-block: var(--pg-gap-s); }
+  .cont { padding-bottom: var(--pg-gap-s); }
+}

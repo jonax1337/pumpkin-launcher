@@ -1,7 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { useI18n } from "@/i18n";
 import { Cell, Checkbox, Chip, Count, List, ListHeader, ListRow, RowTitle, SceneThumb } from "@/ui";
-import { cssVars } from "@/ui/util";
 import { loaderLine } from "@/components/common";
 import { FreshImportChip, useIsFreshImport } from "@/components/FreshImportChip";
 import { InstanceIcon } from "@/components/InstanceIcon";
@@ -70,7 +69,6 @@ function InstanceRow({ instance, index }: { instance: Instance; index: number })
       selected={pick.picked}
       menu={items}
       index={Math.min(index, MAX_STAGGERED_ROWS)}
-      style={cssVars({ "--acc": look.acc })}
     >
       <span className="lib-pick">
         <SceneThumb bio={look.bio} seed={look.seed} art={<InstanceIcon instance={instance} bio={look.bio} />} />
@@ -82,7 +80,7 @@ function InstanceRow({ instance, index }: { instance: Instance; index: number })
       <Cell hide={WIDTH.md}>{relativeTime(instance.lastPlayedAt)}</Cell>
       <Cell hide={WIDTH.xl}>{instance.playtimeSecs > 0 ? formatPlaytime(instance.playtimeSecs) : "–"}</Cell>
       <Cell className="lib-status" flex><LibStatus instance={instance} /></Cell>
-      <PlayButton instance={instance} size="i" />
+      <PlayButton instance={instance} size="i" neutral />
       <InstanceMenuButton instance={instance} size="s" variant="ghost" showOpen={false} />
     </ListRow>
   );

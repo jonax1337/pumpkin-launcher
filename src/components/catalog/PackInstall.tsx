@@ -78,7 +78,6 @@ export function usePackConfirm(pack: ProjectRef, source: Source) {
       title={t("components.pack.newInstanceTitle")}
       sub={pack.title}
       size="s"
-      height="s"
       footer={<DialogActions cancel={t("common.cancel")} confirm={{ label: t("components.instance.createAction"), width: 170, form: "pack-confirm", disabled: !picked?.version || install.blocked }} />}
     >
       <PackConfirmBody

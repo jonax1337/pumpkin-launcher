@@ -2,12 +2,11 @@
   min-width: 0;
 }
 
-.friends-page .friends-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+/* Schmal steht die Freundesliste vor den Anfragen */
+@media (max-width: 960px) {
+  .friends-page .friends-rail {
+    order: 1;
+  }
 }
 
 .friends-page .friends-online {
@@ -55,9 +54,7 @@
   flex-wrap: wrap;
 }
 
-.friends-page .friends-content {
-  container: friends-list / inline-size;
-}
+.friends-page .friends-content { container: friends-list / inline-size; }
 
 .friends-page .friends-content .vx-toolbar {
   align-items: flex-start;
@@ -105,9 +102,14 @@
   }
 }
 
-/* Abschnitt in der Leiste (Anfragen, Aktivität) */
-.friends-page .friends-block {
-  margin-top: 24px;
+/* Aktivität im Spiel: unter der Liste, aufgeklappt in fester Höhe scrollbar */
+.friends-page .friends-activity {
+  margin-top: var(--pg-gap-l);
+}
+
+.friends-page .friends-activity-list {
+  max-height: 360px;
+  overflow-y: auto;
 }
 
 .friends-page .friends-block-note {
@@ -161,8 +163,9 @@
   margin-block: 8px 12px;
 }
 
-/* Dialog „Freund hinzufügen“ */
+/* Dialog „Freund hinzufügen“: die Reiter teilen eine Mindesthöhe, damit der Dialog beim Wechseln nicht springt */
 .friends-add-panel {
+  min-height: 220px;
   margin-top: 16px;
 }
 

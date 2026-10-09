@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { FriendAvatar, SelfAsserted } from "@/components/friends/FriendAvatar";
 import { useAcknowledgeFriend, useInviteGuests } from "@/hooks/useFriends";
 import { useI18n, type TKey } from "@/i18n";
@@ -45,25 +46,31 @@ function PresenceCell({ friend }: { friend: Friend }) {
 }
 
 /** „Beitreten“ bei einer offenen Einladung, sonst „Einladen“, solange ich teile und der Freund online ist. */
-function ActionCell({ friend, invite, session }: { friend: Friend; invite: Invite | undefined; session: HostSession | undefined }) {
+function ActionCell({ friend, label, invite, session }: { friend: Friend; label: string; invite: Invite | undefined; session: HostSession | undefined }) {
   const { t } = useI18n();
   return (
     <Cell flex align="end">
       {invite ? (
         <Button size="s" variant="primary" icon="play" onClick={() => requestInviteDialog(invite.id)}>{t("friends.action.join")}</Button>
       ) : (
-        session && canInvite(friend, session) && <InviteButton friend={friend} session={session} />
+        session && canInvite(friend, session) && <InviteButton friend={friend} label={label} session={session} />
       )}
     </Cell>
   );
 }
 
-function InviteButton({ friend, session }: { friend: Friend; session: HostSession }) {
+/** Während des Sendens nennt der Knopf den Vorgang; danach verschwindet er (der Freund ist eingeladen), darum bestätigt ein Toast. */
+function InviteButton({ friend, label, session }: { friend: Friend; label: string; session: HostSession }) {
   const { t } = useI18n();
   const inviteGuests = useInviteGuests();
+  // Der Knopf ist beim Abschluss schon weg, deshalb kein Callback von `mutate`; Fehler meldet der zentrale Mutations-Handler.
+  const invite = () =>
+    inviteGuests
+      .mutateAsync({ sessionId: session.id, friendIds: [friend.id] })
+      .then(() => toast.success(t("friends.action.invited", { name: label })), () => undefined);
   return (
-    <Button size="s" icon="share" disabled={inviteGuests.isPending} onClick={() => inviteGuests.mutate({ sessionId: session.id, friendIds: [friend.id] })}>
-      {t("friends.action.invite")}
+    <Button size="s" icon="share" disabled={inviteGuests.isPending} onClick={invite}>
+      {inviteGuests.isPending ? t("friends.action.inviting") : t("friends.action.invite")}
     </Button>
   );
 }
@@ -104,7 +111,7 @@ export function FriendRow({ friend, label, invite, session, actions }: {
             <Button size="s" onClick={() => actions.askRemove({ id: friend.id, name: label })}>{t("common.remove")}</Button>
           </Cell>
         ) : (
-          <ActionCell friend={friend} invite={invite} session={session} />
+          <ActionCell friend={friend} label={label} invite={invite} session={session} />
         )}
         {gone ? <span /> : <RowMenu friend={friend} label={label} actions={actions} />}
       </ListRow>

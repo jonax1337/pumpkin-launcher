@@ -6,6 +6,20 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 
 ## Unreleased
 
+### Interface polish
+
+- Menus and popovers stay on screen and scroll in small windows; the settings
+  and news side rail no longer shifts below 960 px.
+- Buttons follow one size rule (page header 40 px, section and row actions
+  32 px); unselected checkboxes and radios are clearly visible; selected rows
+  share one selection colour.
+- Discover keeps its search bar in view, Friends moves in-game activity into a
+  collapsible section, and the Home page fits the 800×600 minimum window.
+  Hero scenes keep their soft gradients.
+- Fixes: wrong confirm label when resetting a skin, "Modpack version" header on
+  mod pages, log lines hidden under the warning bar, ambiguous version chips in
+  the instance header, and hero text legibility on bright scenes.
+
 ### Inventar interface
 
 - The whole launcher now uses the "Inventar" look, inspired by Minecraft's own

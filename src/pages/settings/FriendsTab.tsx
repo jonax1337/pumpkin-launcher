@@ -256,7 +256,7 @@ function IdentityAction({ mutation, icon, buttonLabel, title, text, doneMessage 
 
   return (
     <>
-      <Button variant="danger" icon={icon} onClick={() => setAsking(true)}>{buttonLabel}</Button>
+      <Button variant="danger" size="s" icon={icon} onClick={() => setAsking(true)}>{buttonLabel}</Button>
       <ConfirmDialog open={asking} onOpenChange={setAsking} title={title} text={text} confirmLabel={buttonLabel} pending={mutation.isPending} onConfirm={() => void confirm()} />
     </>
   );
@@ -360,7 +360,7 @@ export function FriendsTab() {
         <FormSection title={t("friendsSettings.ingameActions.label")} level={3}><p>{t("friendsSettings.ingameActions.hint")}</p></FormSection>
         <FormSection title={t("friendsSettings.fingerprintLabel")} level={3}><p>{t("friendsSettings.fingerprintAside")}</p></FormSection>
       </SettingsInfo>
-      <FormSection title={t("friendsSettings.ingameMenu.label")} level={3}>
+      <FormSection title={t("friendsSettings.ingameMenu.label")} srOnlyTitle level={3}>
         <IngameMenuRow settings={state.settings} />
       </FormSection>
       {state.availability === "available" ? <AvailableSettings state={state} /> : <UnavailableSettings availability={state.availability} />}

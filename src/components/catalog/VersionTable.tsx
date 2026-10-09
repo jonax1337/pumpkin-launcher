@@ -33,7 +33,7 @@ export function VersionTable({ versions, action }: { versions: ContentVersion[];
         <caption className="sr">{t("components.detail.allVersions")}</caption>
         <thead>
           <tr>
-            <th scope="col">{t("components.pack.versionLabel")}</th>
+            <th scope="col">{t("common.version")}</th>
             <th scope="col">{t("components.detail.colType")}</th>
             <th scope="col">Minecraft</th>
             <th scope="col" className="vtab-opt">{t("components.common.loader")}</th>

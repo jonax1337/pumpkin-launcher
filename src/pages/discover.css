@@ -1,12 +1,26 @@
 /* Entdecken: Ergebnisfläche der Seite. Unlayered (von der Seite importiert). */
+/* Titel, Reiter und Werkzeugleiste bleiben beim Scrollen stehen; der obere Seitenrand gehört zur klebenden Fläche, damit nichts darüber durchscheint. */
+.disc .disc-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pg-gap-m);
+  margin-top: calc(var(--pg-top) * -1);
+  padding: var(--pg-top) 0 var(--pg-gap-s);
+  background: var(--bg);
+}
+/* Auf niedrigen Fenstern bliebe kaum Platz für die Treffer */
+@media (max-height: 720px) { .disc .disc-sticky { position: static; } }
 .disc .disc-results .vx-sech {
   height: auto;
   min-height: 32px;
   flex-wrap: wrap;
   row-gap: 8px;
 }
-.disc .disc-extras { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-bottom: 10px; }
-.disc .disc-extras:empty { display: none; }
+/* Die Zeile reserviert die Höhe eines Chips, damit „Meistgeladen“ zwischen den Reitern nicht springt */
+.disc .disc-extras { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin-bottom: 10px; min-height: 28px; }
 
 .disc-proj .proj-b {
   grid-template-columns: minmax(0, 1fr) 280px;
@@ -33,9 +47,11 @@
 
 .disc-proj .vtab-sec {
   overflow-x: auto;
+  container-type: inline-size;
 }
+.disc-proj .proj-side .vx-panel { padding: var(--pg-pad); }
 
 @media (max-width: 960px) {
   .disc-proj .proj-b { grid-template-columns: minmax(0, 1fr); }
-  .disc-proj .proj-side { position: static; order: -1; }
+  .disc-proj .proj-side { position: static; }
 }

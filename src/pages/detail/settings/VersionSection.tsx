@@ -35,7 +35,7 @@ export function VersionSection({ instance }: { instance: Instance }) {
       <FormRow label={t("detail.settings.gameVersionLabel")} aside={t("detail.settings.versionAside")}>
         <Actions wrap className="st-inline">
           <span>{versionText(instance)}</span>
-          <GuardedButton blocked={busy} icon="swap" onClick={() => setChanging(true)}>
+          <GuardedButton size="s" blocked={busy} icon="swap" onClick={() => setChanging(true)}>
             {t("detail.migrate.change")}
           </GuardedButton>
         </Actions>
@@ -43,6 +43,7 @@ export function VersionSection({ instance }: { instance: Instance }) {
       <FormRow label={t("detail.settings.repairLabel")} hint={t("detail.settings.repairHint")}>
         <Actions>
           <Button
+            size="s"
             icon="refresh"
             width={REPAIR_BUTTON_WIDTH}
             disabled={isBusy(phase) || install.isPending}
@@ -71,7 +72,7 @@ export function DangerSection({ instance }: { instance: Instance }) {
   return (
     <FormSection plate title={t("detail.settings.dangerSection")} className="st-danger">
       <FormRow label={t("detail.settings.deleteInstance")} hint={t("detail.settings.deleteInstanceText")}>
-        <Button variant="danger" icon="trash" disabled={isBusy(phase)} onClick={() => askDelete(instance)}>
+        <Button size="s" variant="danger" icon="trash" disabled={isBusy(phase)} onClick={() => askDelete(instance)}>
           {t("common.delete")}
         </Button>
       </FormRow>

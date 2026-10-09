@@ -64,6 +64,8 @@ export const friends = {
   "friends.sub.offline": "Offline",
   "friends.action.join": "Beitreten",
   "friends.action.invite": "Einladen",
+  "friends.action.inviting": "Lädt ein…",
+  "friends.action.invited": "{name} eingeladen",
   "friends.menu.fingerprint": "Fingerabdruck anzeigen",
   "friends.menu.block": "Blockieren",
   "friends.notice.renamed": "{previous} heißt jetzt {name}.",
