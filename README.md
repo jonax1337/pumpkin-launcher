@@ -88,7 +88,7 @@ Open **Settings > Support**. Choose **Report a bug** for a GitHub issue or **Ope
 
 If Pumpkin will not open, use [Discussions in your browser](https://github.com/jonax1337/pumpkin-launcher/discussions); you do not need the app to ask for help. For Linux startup or sign-in failures, include your distribution and version, the package used (`.deb` or AppImage) and the exact error. Use **Settings > Support** only if the app opens.
 
-For a game crash, open **Library > your instance > Log > Share log > Upload** after reading the notice. This uploads the cleaned last-start log or crash report to mclo.gs and copies its link. Anyone with the link can read it; your player name remains visible. Review the log before sharing. **Copy debug info** in the log also includes that instance's mod list. For the historical **0.2.0** in-game Friends startup problem, see the [release-specific workaround](CHANGELOG.md#known-limits); it does not establish a fix in 0.3.0.
+For a game crash, open **Library > your instance > Log > Share log > Upload** after reading the notice. This uploads the cleaned last-start log or crash report to mclo.gs and copies its link. Anyone with the link can read it; your player name remains visible. Review the log before sharing. **Copy debug info** in the log also includes that instance's mod list. For the historical **0.2.0** in-game Friends startup problem, see the [release-specific workaround](CHANGELOG.md#known-limits-1); it does not establish a fix in 0.3.0.
 Report security problems privately as described in [SECURITY.md](.github/SECURITY.md).
 
 Pumpkin has no trackers or telemetry. **Settings > About > Privacy** explains which services each feature contacts.

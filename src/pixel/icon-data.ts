@@ -133,8 +133,6 @@ const ICON_SET = {
 export const ICON_CELLS = 8;
 
 export type IconName = keyof typeof ICON_SET;
-/** Alle Entwürfe des Satzes, z. B. für das Kit-Specimen. */
-export const ICON_NAMES = Object.keys(ICON_SET) as IconName[];
 
 /** Pixelform eines Icons: Pfade (voll, zweiter Ton) in Zellen-Einheiten und leere Spalten rechts. */
 type IconShape = { solid: string; dim: string; blankEnd: number };

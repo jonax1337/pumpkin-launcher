@@ -79,7 +79,7 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 
 ## Code conventions
 
-- Frontend: TypeScript and React; use the existing components and the pixel design system in `src/ui/` and `src/pixel/`. The kit keeps its look in CSS and its layout in Tailwind utilities (see `src/ui/README.md`).
+- Frontend: TypeScript and React. Build UI from the components in `@/ui` (`src/ui/`; component table, rules and pitfalls in [`src/ui/README.md`](src/ui/README.md)) and the pixel scenes and icons in `src/pixel/`. Layout (display, gap, padding, sizes, breakpoints) is Tailwind in your own markup, overridden per call with `className`. The look (colours, borders, states) belongs to the kit: page CSS does not select `.lk-*` classes or restyle kit internals and does not use `!important`. Page-owned styling goes into a stylesheet next to the page, imported by `src/index.css` or by the page. A missing component or variant is added to the kit (look in `src/ui/look/*.css`, export in `src/ui/index.ts`, example on the `/_kit` preview that `pnpm dev` serves; see "Adding or changing a component" in the kit README).
 - Backend: keep Tauri commands thin and put logic in services and state. Use the existing `thiserror` and `tracing` patterns.
 - Backend commands: register them in `src-tauri/src/lib.rs`, the `Backend` type in `src/lib/backend.ts`, the Tauri adapter in `src/lib/backend-tauri.ts` and the browser mock in `src/lib/mock-*.ts`.
 - User-facing text: keep German and English dictionaries in sync under `src/i18n/`. Backend errors use `coded!` keys from the error dictionaries. Use everyday language.
@@ -88,7 +88,7 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 - GitHub Actions are pinned to commit SHAs with version comments. Commit subjects should be short and imperative.
 
 For module boundaries and data flow, see [Architecture](docs/ARCHITECTURE.md).
-UI tokens, the Inventar surface classes, icons and text-size behavior are described in [Pixelkino](docs/design/PIXELKINO.md); `docs/design/concepts/` holds the static design mockups.
+The design language (palette, pixel grid, Inventar surfaces, icons, motion, accessibility) is described in [Pixelkino](docs/design/PIXELKINO.md); `docs/design/concepts/` holds the static design mockups.
 The [Pumpkin Bridge reference](docs/bridge/README.md) describes the launcher–game channel; [mod/README.md](mod/README.md) describes its build.
 
 ## Microsoft sign-in for forks

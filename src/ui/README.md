@@ -1,6 +1,6 @@
 # Interface kit
 
-The Pixelkino interface kit, split into independent layers:
+The Pixelkino interface kit (`@/ui`), split into independent layers. This file is the single description of the kit; the design language (palette, pixel grid, surfaces, motion, accessibility) is in [PIXELKINO.md](../../docs/design/PIXELKINO.md).
 
 | Layer | Where | Contains |
 | --- | --- | --- |
@@ -14,7 +14,10 @@ The Pixelkino interface kit, split into independent layers:
 - Look files contain no layout. Technical exceptions: `position: relative; isolation: isolate` where the surface lives on `::before` (notched plates, list rows, cards), and the dialog's `transform: translate(-50%,-50%)`, which its keyframe animation requires.
 - The look is reusable without the components: put `lk-btn lk-stone lk-text` plus `data-variant`/`data-size` on any element.
 - Sonner keeps one global toast store: mount only one `Toaster`.
-- **Window-width breakpoints are inclusive**: `le-720:`, `le-820:`, `le-900:`, `le-960:` (workspace stacks), `le-1040:`, `le-1096:`, `le-1180:`, `le-1280:` (`@custom-variant` in `theme.css`) apply up to and including that width, like the old `max-width: Npx`. Never use `max-[Npx]:` for window widths (Tailwind v4 compiles it to `width < N`) or `[@media(max-width:…)]:`; add a new step to `theme.css` instead. Container queries (`@max-[640px]/name:`) stay as they are.
+- **Window-width breakpoints are inclusive**: `le-720:`, `le-820:`, `le-900:`, `le-960:` (workspace stacks), `le-1040:`, `le-1096:`, `le-1180:`, `le-1280:` (`@custom-variant` in `theme.css`) apply up to and including that width, like CSS `max-width: Npx`. Never use `max-[Npx]:` for window widths (Tailwind v4 compiles it to `width < N`) or `[@media(max-width:…)]:`; add a new step to `theme.css` instead. Container queries (`@max-[640px]/name:`) are a separate mechanism and stay as they are.
+- **Layer order**: `src/index.css` puts all stylesheets into `@layer components`, in the order base, shell, pages, dialogs/onboarding/accounts/friends, kit (`ui/ui.css`), play, branding; Tailwind utilities (layer `utilities`) therefore beat all of them, which is what makes `className` overrides work. `theme.css` is imported at the top level without a layer. A page stylesheet imported by its page component (`discover.css`, `announcements.css`, `friends/friends.css`) is **unlayered** and beats utilities too: keep such files to page-owned classes and never use them to restyle kit internals.
+- **`cn` merging**: components build their class list with `cn` (`@/lib/utils`, tailwind-merge). Conflicting utilities of the same group are resolved in favour of the caller (`w-full` replaces the default width). Two different size utilities that tailwind-merge does not recognise as one group (arbitrary `text-[…]` vs. `text-ctl-m`) have no guaranteed winner; use the component's `size` prop instead.
+- **Page CSS and the kit**: layout is Tailwind in the page's own markup. Page CSS is for page-owned classes (scenes, sticky regions, bespoke shapes). It never selects `.lk-*`, never uses `!important`, and reaches into overlays only through `data-kit-overlay`/`data-kit-item`/`data-kit-part` (see Overlays below).
 
 ## Components
 
@@ -55,7 +58,7 @@ Menu and tooltip behavior (context menu, keyboard, host tooltips) lives in `menu
 - `FormRow` and `FormSection` use container queries: use `FormRow` inside `FormSection` (or any `@container`).
 - `Chip` always shows the pixel square unless `icon` is set (no `dot` prop). `Popover`/`Menu` do not emit `data-size`/`data-pad`/`data-wide`; sizes are classes.
 - Page-specific overrides (for example for the project page in the side panel) belong in the page CSS, selected through `data-kit-overlay` (see below), not in the kit.
-- No Buddy in the kit: `Empty` shows `ill` only if given; the app wraps it as `EmptyState` (`@/components/EmptyState`, with `mood`) and `ErrorBox` (`@/components/ErrorBox`). Toasts use kit icons in the `[data-icon]` slot for every type.
+- No Buddy in the kit: `Empty` shows `ill` only if given, and toasts use kit icons in the `[data-icon]` slot for every type. The app wraps `Empty` as `EmptyState` (`@/components/EmptyState`, with `mood`; shows the Buddy unless `ill` is passed) and `ErrorBox` (`@/components/ErrorBox`) puts the Buddy into a `StatusPanel`.
 
 ### Forms, buttons, status, page, tables
 
@@ -104,4 +107,11 @@ Menu and tooltip behavior (context menu, keyboard, host tooltips) lives in `menu
 | `roving.ts` | `useRoving` (arrow-key navigation in tabs, segments, radios) |
 | `KitPage.tsx` | development preview (`/_kit`) |
 
-Preview: `/_kit` in `pnpm dev`.
+The preview page `/_kit` (`KitPage.tsx`, route registered only when `import.meta.env.DEV`) shows the components with mock data and pins states through `data-force="hover|press|focus"`; start it with `pnpm dev` and open `http://localhost:1420/_kit`. It is a visual aid, not a test report.
+
+## Adding or changing a component
+
+1. Look goes into `look.css` or the matching `look/*.css` as `lk-*` classes with `data-*` state; no display, spacing or sizes (see Rules). Colours and sizes come from the tokens in `tokens.css`/`surface.css`.
+2. Layout goes into the component as Tailwind utilities merged with `cn`, with `className` last so callers can override it.
+3. Export the component and its prop types from `index.ts`, add it to the component table above, and show it in `KitPage.tsx`.
+4. Pages import from `@/ui` only, never from a kit file or a `look/*.css` file, and components do not import CSS themselves (`ui.css` collects it).

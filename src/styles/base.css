@@ -32,7 +32,6 @@
   --ctl: #5F7094;
   --ctl-hi: #8A9ABD;
   --hi: rgba(255,255,255,.14);
-  --hi-2: rgba(255,255,255,.06);
   /* Markierter Menüeintrag: 1,6:1 gegen --panel (Text --fg 9,8:1) */
   --hl: #2E3B57;
   --lo: rgba(0,0,0,.45);
@@ -65,8 +64,6 @@
   --f-px: "Jersey 10", "Consolas", monospace;
   --f-mono: "Cascadia Mono", ui-monospace, Consolas, monospace;
 
-  /* Höhen (fest, unabhängig von --px) */
-  --h-s: 32px; --h-m: 40px; --h-l: 56px;
   --bar: 48px;
   --side: 64px;
   /* Gemeinsamer Seitenrand; Arbeitsbereiche nutzen die verfügbare Fensterbreite. */
@@ -82,9 +79,6 @@
   --ring: polygon(evenodd, 0 var(--px), var(--px) var(--px), var(--px) 0, calc(100% - var(--px)) 0, calc(100% - var(--px)) var(--px), 100% var(--px), 100% calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) 100%, var(--px) 100%, var(--px) calc(100% - var(--px)), 0 calc(100% - var(--px)), 0 var(--px), var(--px) var(--px), var(--px) calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) var(--px), var(--px) var(--px), 0 var(--px));
   /* Doppelring (Fokus auf Gewähltem): außen wie --ring, 1 Einheit Lücke, innen ein zweiter Ring; Farben per Hintergrund (Padding 2 Einheiten = innerer Ring) */
   --ring2: polygon(evenodd, 0 var(--px), var(--px) var(--px), var(--px) 0, calc(100% - var(--px)) 0, calc(100% - var(--px)) var(--px), 100% var(--px), 100% calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) 100%, var(--px) 100%, var(--px) calc(100% - var(--px)), 0 calc(100% - var(--px)), 0 var(--px), var(--px) var(--px), var(--px) calc(100% - var(--px)), calc(100% - var(--px)) calc(100% - var(--px)), calc(100% - var(--px)) var(--px), var(--px) var(--px), var(--u2) var(--u3), var(--u3) var(--u3), var(--u3) var(--u2), calc(100% - var(--u3)) var(--u2), calc(100% - var(--u3)) var(--u3), calc(100% - var(--u2)) var(--u3), calc(100% - var(--u2)) calc(100% - var(--u3)), calc(100% - var(--u3)) calc(100% - var(--u3)), calc(100% - var(--u3)) calc(100% - var(--u2)), var(--u3) calc(100% - var(--u2)), var(--u3) calc(100% - var(--u3)), var(--u2) calc(100% - var(--u3)), var(--u2) var(--u3), var(--u3) var(--u3), var(--u3) calc(100% - var(--u3)), calc(100% - var(--u3)) calc(100% - var(--u3)), calc(100% - var(--u3)) var(--u3), var(--u3) var(--u3), var(--u2) var(--u3), var(--px) var(--px), 0 var(--px));
-
-  /* Bevel: Licht oben links, Schatten unten rechts, je 1 Einheit, innerhalb eines 1-Einheit-Rahmens */
-  --bv-raised: inset 0 0 0 var(--px) var(--line-2), inset var(--u2) var(--u2) 0 var(--hi), inset calc(var(--u2) * -1) calc(var(--u2) * -1) 0 var(--lo);
 }
 /* Abgeleitete Akzente dort neu rechnen, wo --acc gesetzt wird (sonst erben alle die Kupfer-Werte von :root).
    Schatten und Sockel mischen in OKLab mit dem neutralen Grund: Farbton bleibt, keine braunen Ränder bei kühlen Biomen. */

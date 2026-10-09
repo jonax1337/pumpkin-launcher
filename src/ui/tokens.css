@@ -44,10 +44,8 @@
   /* Eigene Größen von Heading: Titel in schmaler Leiste (size="bar") und Projekttitel (size="title") */
   --hd-bar: 24px;
   --hd-title: 44px;
-  /* Pixelschrift (Jersey 10): nur diese drei Stufen */
-  --fs-px-s: 16px;
+  /* Pixelschrift (Jersey 10) */
   --fs-px-m: 18px;
-  --fs-px-l: 20px;
   /* Textfarben über --fg/--fg-2/--fg-3 hinaus: Fließtext (Beschreibungen), Titel/Gruppenköpfe im Tooltip- und Menürahmen, betonter Text */
   --fg-prose: #C9D1DE;
   --tip-label: #B7AEE0;

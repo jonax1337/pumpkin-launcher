@@ -1,8 +1,8 @@
 # Pixelkino design reference
 
-Last updated: 2026-10-08.
+Last updated: 2026-10-09.
 
-Pixelkino is Pumpkin Launcher's dark pixel interface, rendered in the **Inventar** style: a game-menu look made of recessed slots, bevelled stone plates with a hard text shadow, creative-inventory tabs, item-tooltip menus, XP-bar progress and hotbar-style selection. Scenes are the visually expressive layer; controls and page backgrounds stay flat and quiet. Current styles and components are authoritative.
+Pixelkino is Pumpkin Launcher's dark pixel interface, rendered in the **Inventar** style: a game-menu look made of recessed slots, bevelled stone plates with a hard text shadow, creative-inventory tabs, item-tooltip menus, XP-bar progress and hotbar-style selection. Scenes are the visually expressive layer; controls and page backgrounds stay flat and quiet. Current styles and components are authoritative. This document is the design language; the component kit (`src/ui`) and its API, rules and pitfalls are described in [`src/ui/README.md`](../../src/ui/README.md).
 
 Static design references (not implemented code, open in a browser):
 
@@ -14,7 +14,7 @@ The [`concepts/`](concepts/README.md) folder is design history; it is not edited
 To open the component examples, follow [development setup](../../CONTRIBUTING.md#development-setup),
 run `pnpm dev` from the repository root and visit
 [`http://localhost:1420/_kit`](http://localhost:1420/_kit). This is the browser development
-route with mock data, not a shipped player page.
+route with mock data (`src/ui/KitPage.tsx`), not a shipped player page.
 
 ## Source map
 
@@ -22,24 +22,19 @@ route with mock data, not a shipped player page.
 | --- | --- |
 | Global colors, fonts, pixel unit default, notches, reset, scrollbars, focus, text helpers | `src/styles/base.css` |
 | App shell (window bar, side bar, plate, scenes) and shared page frame | `src/styles/shell.css` |
-| Page styles, next to their page | `src/pages/home/home.css`, `src/pages/instances/library.css`, `src/pages/detail/detail.css`, `src/pages/detail/screenshots/screenshots.css`, `src/pages/discover.css`, `src/pages/discover-project.css`, `src/pages/announcements.css`, `src/pages/settings/settings-layout.css`, `src/pages/skins/skins.css`, `src/pages/skins/skin-card.css`, `src/pages/friends/friends.css` |
+| Page styles, next to their page | `src/pages/**/*.css` (for example `home/home.css`, `instances/library.css`, `detail/detail.css`, `discover.css`, `announcements.css`) |
 | Dialog, onboarding, account and friends content | `src/components/dialogs.css`, `src/components/onboarding.css`, `src/components/accounts/accounts.css`, `src/components/friends/friends.css` |
-| Kit tokens and surface recipes | `src/ui/tokens.css` (values), `src/ui/surface.css` (`.lk-slot`, `.lk-pit`, `.lk-stone`, `.lk-text`) |
-| Kit components | `src/ui/*.tsx` (layout as Tailwind utilities), imported through `@/ui`; see `src/ui/README.md` |
-| Kit look (colours, borders, bevels, states) | `src/ui/look.css` and `src/ui/look/*.css` (`lk-*` classes), collected with the other kit styles by `src/ui/ui.css` |
-| Tailwind bridge for kit tokens | `src/ui/theme.css` (`@theme inline`, imported at the top level of `src/index.css`) |
-| Kit specimen page (`/_kit`, development only) | `src/ui/KitPage.tsx` |
+| Kit components, look, tokens, Tailwind bridge, preview | `src/ui/` (`*.tsx`, `look.css` + `look/*.css`, `tokens.css`, `surface.css`, `theme.css`, `KitPage.tsx`); see `src/ui/README.md` |
 | Pixel unit and icon cell sizes | `src/pixel/unit.ts` |
 | Icon set (8×8 drawings) | `src/pixel/icon-data.ts`, rendered by `src/ui/Icon.tsx` |
 | Scene generation/configuration | `src/pixel/{scene,sceneBuilder,sceneConfig}.ts`, `PixelScene.tsx` |
 | Play/status controls | `src/components/play/`, `src/components/play.css` |
-| Motion and accessibility styles | `src/ui/motion.css`, `src/ui/a11y.css` |
-| Prose (Markdown) | `src/ui/prose.css` |
+| Motion, accessibility and prose (Markdown) styles | `src/ui/motion.css`, `src/ui/a11y.css`, `src/ui/prose.css` |
 | Appearance and shortcuts | `src/app/useAppearance.ts`, `shortcuts.ts`, `mainTabs.ts` |
-| Command palette (Ctrl/Cmd+K) | `src/app/palette/`; styles in `src/app/palette/palette.css` |
+| Command palette (Ctrl/Cmd+K) | `src/app/palette/` |
 | Seasonal branding | `src/branding/` (`branding.css`), repository `branding/` assets |
 
-All stylesheets are imported centrally by `src/index.css` into `@layer components`; components never import CSS themselves. Order: base, shell, pages, dialogs/onboarding/accounts/friends, kit (`ui/ui.css`), play, branding, palette. Shared surfaces and icons use `lk-`, kit components use `lk-` plus data attributes for variants. `index.html` establishes `theme, base, components, utilities` before stylesheets. Class names must not accidentally collide with Tailwind utilities.
+`src/index.css` imports the base, shell, page, dialog, kit (`ui/ui.css`), play and branding stylesheets into `@layer components`; a few pages import their own stylesheet. Components never import CSS themselves. `index.html` establishes `theme, base, components, utilities`. Layer order and the rules for page CSS are in `src/ui/README.md`. Shared surfaces and kit components use `lk-` classes plus data attributes for variants. Class names must not accidentally collide with Tailwind utilities.
 
 ## Inventar style
 
@@ -89,7 +84,7 @@ devicePixels = round(targetCssPixels × devicePixelRatio)
 --px = devicePixels / devicePixelRatio
 ```
 
-Recompute when display resolution/DPR changes. Borders, notches, bevels, rings and scene pixels are integer multiples of this unit (`--u2`/`--u3`/`--u4` are 2/3/4 units). Layout heights, spacing and columns are fixed CSS sizes, **not** multiples of the selected pixel size, so changing pixel appearance does not move controls. Icons, glyphs and avatars use their own unit `--iu` (3 CSS px rounded to device pixels) and do not follow `--px`.
+Recompute when display resolution/DPR changes. Borders, notches, bevels, rings and scene pixels are integer multiples of this unit (`--u2`/`--u3`/`--u4` are 2/3/4 units). Layout heights, spacing and columns are fixed CSS sizes, **not** multiples of the selected pixel size, so changing pixel appearance does not move controls. Icon slots use their own whole-device-pixel cell (`--ic-s/m/l/xl`); glyphs, avatars and the skin figure use the icon unit `--iu` (3 CSS px rounded to device pixels). Neither follows `--px`.
 
 Corners use stepped clip paths (`--n1` one step, `--n2` two steps, `--nt`, `--nl`), not rounded radii. No blur shadows, no `border-radius`; transitions use `steps()` and movements jump whole units. Focus rings follow the same grid.
 
@@ -116,22 +111,7 @@ detail header.
 the available width; there is no global reading-width cap. `PageHeader` supplies a
 compact title, small optional count, wrapping actions and a bottom divider.
 
-The shared workspace is a Kit API exported from `@/ui`, implemented in
-`src/ui/Layout.tsx` with Tailwind layout utilities and the look in `src/ui/look.css`:
-
-- `Workspace` takes an optional `rail` slot. Its rail column is 280 px; content
-  fills the remaining width. Without a rail it is one full-width column.
-- `WorkspaceRail` supplies the context/navigation region and sticky positioning.
-- `WorkspaceContent` supplies the content surface. Use `variant="plain"` when
-  an enclosing sheet already provides the surface.
-- `WorkspaceTabs` reuses `Tabs`: vertical stone plates on wide windows, horizontal
-  segments when the workspace stacks at 960 px. Pair its `idBase` with `TabPanel`.
-
-Keyboard navigation of tabs follows the orientation; selected tabs remain
-visible while switching or resizing. `TabPanel` has a visible keyboard focus
-outline. The `/_kit` specimen page is itself built from `Workspace`, its rail
-and `WorkspaceContent`. Use this structure for meaningful context/navigation, not as
-a mandatory two-column wrapper for every collection.
+The workspace (`Workspace`, `WorkspaceRail`, `WorkspaceContent`, `WorkspaceTabs` from `@/ui`; see `src/ui/README.md`) has a 280 px rail beside the content, which fills the remaining width; it stacks at a window width of 960 px and its tabs turn from vertical stone plates into horizontal segments. Use it for meaningful context/navigation, not as a mandatory two-column wrapper for every collection. Tabs follow the orientation with the keyboard, selected tabs remain visible while switching or resizing, and `TabPanel` has a visible keyboard focus outline.
 
 The library uses full-width grouped lists, with no grid/list toggle. Settings
 use responsive form groups while keeping individual controls at a usable width
@@ -153,7 +133,7 @@ selection controls, Play and menus in fixed columns. Below 640 px of library
 container width, names move above metadata/actions so zoom and narrow windows
 cannot hide the name or push Play and menus outside the row. Group collapsing,
 ordering, search, filters, persisted sorting and keyboard navigation remain
-available. An old saved grid preference no longer affects the library.
+available.
 
 Other composed surfaces: the skins page shows the rotating figure on a stepped podium in a slot with an "Active" chip on the worn skin; Settings › Storage stacks hard segments with a legend; the friends page shows the relay connection as a status plate; the shortcuts overview is a two-column grid of key-cap rows.
 
