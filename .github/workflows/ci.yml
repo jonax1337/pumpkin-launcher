@@ -72,6 +72,11 @@ jobs:
       - name: cargo check
         run: cargo check --manifest-path src-tauri/Cargo.toml --locked
 
+      # Der Rauchtest braucht das Feature `smoke` und wird sonst nur nachts in Mod smoke gebaut.
+      - name: cargo check (smoke test)
+        if: runner.os == 'Linux'
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked --features smoke --test smoke
+
       # Nur Warnungen: Der Bestand an Funden wird erst abgebaut, bevor `-D warnings` den Build bricht.
       - name: cargo clippy (warnings only)
         if: runner.os == 'Linux'

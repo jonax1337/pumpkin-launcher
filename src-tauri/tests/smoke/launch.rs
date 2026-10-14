@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use launcher_lib::models::{Account, GameWindow, Instance};
 use launcher_lib::services::content::ModIdScanner;
 use launcher_lib::services::modbridge::ingame::{inject, FailureKind, Injection, InjectionRequest, InjectionState, JavaMajors, LaunchFacts, ModSource, StartupWatch, UserArgs};
-use launcher_lib::services::launch::{self, ExitCause, LaunchSpec, ProcessExit, Running};
+use launcher_lib::services::launch::{self, ExitCause, GameCommand, LaunchSpec, ProcessExit, Running};
 use launcher_lib::services::modbridge::ModBridge;
 use launcher_lib::services::rules::Env;
 use launcher_lib::services::{auth, java, loader, Dirs};
@@ -138,7 +138,8 @@ impl Game {
                 *unpoisoned(&exit) = Some(result);
             }
         };
-        let process = launch::spawn(java, &prepared.args, &prepared.game_dir, prepared.injection.env(), on_line, |_| {}, on_exit).map_err(|error| error.to_string())?;
+        let command = GameCommand { wrapper: None, java, args: &prepared.args, argfile_dir: None, game_dir: &prepared.game_dir, env: prepared.injection.env() };
+        let process = launch::spawn(&command, on_line, |_| {}, on_exit).map_err(|error| error.to_string())?;
         prepared.injection.bind_pid(bridge, instance_id, process.pid);
         Ok(Self { pid: process.pid, started, process, lines, exit, breaker })
     }
