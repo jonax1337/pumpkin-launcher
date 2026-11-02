@@ -4,29 +4,27 @@ Last updated: 2026-11-02.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
-## Unreleased
+## 0.6.0 — 2026-11-02
 
 ### Removed
 
 - Friends: friend codes and requests, online status, sharing and joining worlds, find-by-name directory and relays.
-- Pumpkin Bridge in-game mod, with its build and release pipeline.
-
-### Fixed
-
-- Release builds failed because the updater npm package and Rust crate had different minor versions.
-
-## 0.5.1 — 2026-11-02
+- Pumpkin Bridge in-game mod, with its build and release pipeline. Releases no longer build a mod matrix.
 
 ### Branding
 
 - Replace Buddy and seasonal variants with the carved Pumpkin Block identity on a clean 16×16 pixel grid.
 - Keep the original wordmark in the title bar without a separate logo; retain the existing interface layout and UI style.
 - Remove the seasonal branding selector and migrate saved settings without changing other preferences.
-- Refresh app, window, installer, website and Bridge icons. Track native icon changes during builds and explicitly set the current window icon.
+- Refresh app, window, installer and website icons. Track native icon changes during builds and explicitly set the current window icon.
 
 ### Security
 
 - Update ZIP extraction and updater dependencies, TLS and certificate validation, trust roots, Tokio and constant-time utilities to address current RustSec advisories.
+
+### Fixed
+
+- Release builds failed because the updater npm package and Rust crate had different minor versions. 0.5.1 was therefore never published; its changes ship in 0.6.0.
 
 ### Maintenance
 
