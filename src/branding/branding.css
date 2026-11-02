@@ -1,8 +1,2 @@
-/* Die vorbereiteten SVGs bleiben unverändert; feste Slots verhindern Layoutsprünge. */
-.brand-mark, .buddy { display: block; flex: none; object-fit: contain; image-rendering: pixelated; }
-:root[data-season] {
-  --bg-2: color-mix(in srgb, var(--copper) 3%, #0A0E17);
-  --panel: color-mix(in srgb, var(--copper) 2%, #0F1521);
-  --panel-2: color-mix(in srgb, var(--copper) 3%, #151D2C);
-  --panel-3: color-mix(in srgb, var(--copper) 4%, #1D2739);
-}
+/* Feste Slots erhalten das Layout; das Pumpkin Block bleibt kantenscharf. */
+.brand-mark { display: block; flex: none; object-fit: contain; image-rendering: pixelated; }

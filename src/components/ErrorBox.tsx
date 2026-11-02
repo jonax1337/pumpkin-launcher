@@ -1,5 +1,5 @@
-/** Fehlerbox der App: Fehler in Alltagssprache mit Buddy als Symbol; mit `title` ist die Backend-Meldung das Detail. */
-import { Buddy } from "@/branding/Brand";
+/** Fehlerbox der App: Fehler in Alltagssprache mit BrandMark als Symbol; mit `title` ist die Backend-Meldung das Detail. */
+import { BrandMark } from "@/branding/Brand";
 import { useI18n } from "@/i18n";
 import { Button, StatusPanel } from "@/ui";
 
@@ -11,7 +11,7 @@ export function ErrorBox({ error, title, onRetry, className }: { error: unknown;
   return (
     <StatusPanel
       tone="bad"
-      icon={<Buddy mood="oops" size={48} />}
+      icon={<BrandMark size={48} />}
       role="alert"
       className={className}
       title={title ?? message(error)}

@@ -72,7 +72,7 @@ Component-specific setup and commands:
 - [Friends contracts](docs/friends/SPEC.md), [directory Worker](directory/README.md) and [relay operations](docs/friends/RELAY-OPS.md)
 - [CurseForge proxy](proxy/README.md) and [website](website/README.md)
 - [Minecraft API probe](tools/mc-api-probe/README.md), [production mod smoke harness](tools/mod-smoke/README.md) and [P2P connection tool](tools/p2p-spike/README.md)
-- [Branding assets](branding/pumpkin-launcher/README.md), [Buddy motion](branding/pumpkin-launcher/motion/README.md) and [launch video](media/launch-video/README.md)
+- [Branding assets](branding/pumpkin-launcher/README.md) and [launch video](media/launch-video/README.md)
 
 `pnpm tauri build` creates packages for the current OS. See [Release packaging](#release-packaging) for signing and embedded Bridge artifacts.
 For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:website` writes `website/dist/`.
@@ -88,7 +88,7 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 - GitHub Actions are pinned to commit SHAs with version comments. Commit subjects should be short and imperative.
 
 For module boundaries and data flow, see [Architecture](docs/ARCHITECTURE.md).
-The design language (palette, pixel grid, Inventar surfaces, icons, motion, accessibility) is described in [Pixelkino](docs/design/PIXELKINO.md); `docs/design/concepts/` holds the static design mockups.
+The design language (palette, pixel grid, Inventar surfaces, icons, motion, accessibility) is described in [Pixelkino](docs/design/PIXELKINO.md).
 The [Pumpkin Bridge reference](docs/bridge/README.md) describes the launcher–game channel; [mod/README.md](mod/README.md) describes its build.
 
 ## Microsoft sign-in for forks
@@ -290,7 +290,7 @@ publisher is Jonas Laux.
 When upgrading the Tauri CLI, compare its template with this pinned source
 and port lifecycle fixes before publishing the next installer.
 
-`pnpm build` stages committed seasonal installer images together with the icons.
+`pnpm build` stages committed Pixel-P installer images together with the icons.
 Artwork regeneration is documented in the [branding guide](branding/pumpkin-launcher/README.md#windows-installer-artwork).
 To package only Windows NSIS locally:
 

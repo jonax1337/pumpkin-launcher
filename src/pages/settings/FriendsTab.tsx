@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { type UseMutationResult } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Buddy } from "@/branding/Brand";
+import { BrandMark } from "@/branding/Brand";
 import { useAllAccounts } from "@/components/accounts/useAccounts";
 import { FriendsOptInDialog } from "@/components/friends/FriendsOptInDialog";
 import { QueryList } from "@/components/QueryList";
@@ -44,7 +44,7 @@ function EnableGate({ onEnable }: { onEnable: () => void }) {
   const { t } = useI18n();
   return (
     <Surface kind="pit" className="grid justify-items-center gap-2.5 px-5 py-8 text-center">
-      <Buddy size={96} mood="idle" />
+      <BrandMark size={96} />
       <Heading level="sub">{t("friends.gate.disabled.title")}</Heading>
       <p className="max-w-[52ch] text-(--fg-2)">{t("friendsSettings.enableAside")}</p>
       <Button variant="primary" size="l" icon="friends" onClick={onEnable}>{t("friends.gate.disabled.action")}</Button>

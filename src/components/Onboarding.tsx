@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { Button, Choice, Glyph, Heading, Hint, Icon, Panel, Steps, useRoving, type IconName } from "@/ui";
 import type { GlyphName, GlyphPalette } from "@/pixel/icons";
 import { PixelScene } from "@/pixel/PixelScene";
-import { Buddy } from "@/branding/Brand";
+import { BrandMark } from "@/branding/Brand";
 import { useOfflineAllowed, useUsableAccount } from "@/store/offline";
 import { accountName, isValidPlayerName, useSettings } from "@/store/settings";
 
@@ -19,9 +19,9 @@ const CTA_WIDTH = "w-[232px]";
 
 /** Karte vor der Szene: links am Rand, mittig; Innenabstand und Höhe schrumpfen in kleinen Fenstern. */
 const CARD = "onb-card absolute top-1/2 left-gut flex w-[min(540px,calc(calc(var(--vw1,1vw)*100)_-_32px))] -translate-y-1/2 flex-col p-[24px_28px_18px] [@media(max-height:700px)]:p-[18px_24px_14px]";
-/** Kopfzeile: Maskottchen und Titel; das Maskottchen schrumpft bei kleiner und weicht bei sehr kleiner Höhe (200 % Zoom). */
+/** Kopfzeile: Markenzeichen und Titel; das Markenzeichen schrumpft bei kleiner und weicht bei sehr kleiner Höhe (200 % Zoom). */
 const HEADING_ROW = "mb-3 flex items-center gap-3 [@media(max-height:700px)]:mb-2";
-const BUDDY = "[@media(max-height:700px)]:size-[52px] [@media(max-height:500px)]:hidden";
+const MARK = "[@media(max-height:700px)]:size-[52px] [@media(max-height:500px)]:hidden";
 const TITLE = "leading-[.95] [--hd-hero:36px] [@media(max-height:700px)]:[--hd-hero:30px] [@media(max-height:500px)]:mb-1 [@media(max-height:500px)]:[--hd-hero:var(--hd-dialog)]";
 
 type Start = "vanilla" | "faster" | "modpack" | "file" | "import";
@@ -104,7 +104,7 @@ export function Onboarding() {
           <form onSubmit={next} className="onb-form">
             {steps}
             <div className={HEADING_ROW}>
-              <Buddy mood="hello" size={96} className={BUDDY} />
+              <BrandMark size={96} className={MARK} />
               <Heading level="hero" id="onb-t" className={TITLE}>{t("components.onboarding.welcome")}</Heading>
             </div>
             <p>{offlineOk ? t("components.account.askName") : t("components.account.msLoginPrompt")}</p>
@@ -127,7 +127,7 @@ export function Onboarding() {
           <>
             {steps}
             <div className={HEADING_ROW}>
-              <Buddy mood={starter.busy ? "loading" : "hello"} size={96} className={BUDDY} />
+              <BrandMark size={96} className={MARK} />
               <Heading level="hero" id="onb-t" className={TITLE}>{t("components.onboarding.pickStart")}</Heading>
             </div>
             <p>{t("components.onboarding.moreLater")}</p>

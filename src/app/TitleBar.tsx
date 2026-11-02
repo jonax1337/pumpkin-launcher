@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useI18n, type TKey } from "@/i18n";
 import { AccountMenu } from "@/components/accounts/AccountMenu";
 import { api } from "@/lib/api";
-import { BrandMark, BrandWordmark } from "@/branding/Brand";
+import { BrandWordmark } from "@/branding/Brand";
 import { SessionChip } from "@/components/friends/SessionChip";
 import { closeWarning, type CloseWarning } from "@/components/friends/sharingModel";
 import { useSharingActivity, type SharingActivity } from "@/components/friends/useSharingActivity";
@@ -60,7 +60,6 @@ export function TitleBar({ online }: { online: boolean }) {
   return (
     <header className="bar" data-tauri-drag-region>
       <div className="wm" data-tauri-drag-region>
-        <BrandMark bar />
         <BrandWordmark bar />
       </div>
       <div className="bar-mid" data-tauri-drag-region>

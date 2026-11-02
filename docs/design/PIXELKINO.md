@@ -4,13 +4,6 @@ Last updated: 2026-10-09.
 
 Pixelkino is Pumpkin Launcher's dark pixel interface, rendered in the **Inventar** style: a game-menu look made of recessed slots, bevelled stone plates with a hard text shadow, creative-inventory tabs, item-tooltip menus, XP-bar progress and hotbar-style selection. Scenes are the visually expressive layer; controls and page backgrounds stay flat and quiet. Current styles and components are authoritative. This document is the design language; the component kit (`src/ui`) and its API, rules and pitfalls are described in [`src/ui/README.md`](../../src/ui/README.md).
 
-Static design references (not implemented code, open in a browser):
-
-- [concepts/kit-concepts.html](concepts/kit-concepts.html): component languages side by side; Inventar is the adopted one.
-- [concepts/launcher/launcher.html](concepts/launcher/launcher.html): the complete launcher (all screens, dialogs, menus, 8×8 icon set) as a static mockup. Open it with `?theme=slots#<screen>` for Inventar. Regenerate it with `node build.mjs` in `concepts/launcher/`.
-
-The [`concepts/`](concepts/README.md) folder is design history; it is not edited when the app changes.
-
 To open the component examples, follow [development setup](../../CONTRIBUTING.md#development-setup),
 run `pnpm dev` from the repository root and visit
 [`http://localhost:1420/_kit`](http://localhost:1420/_kit). This is the browser development
@@ -32,7 +25,7 @@ route with mock data (`src/ui/KitPage.tsx`), not a shipped player page.
 | Motion, accessibility and prose (Markdown) styles | `src/ui/motion.css`, `src/ui/a11y.css`, `src/ui/prose.css` |
 | Appearance and shortcuts | `src/app/useAppearance.ts`, `shortcuts.ts`, `mainTabs.ts` |
 | Command palette (Ctrl/Cmd+K) | `src/app/palette/` |
-| Seasonal branding | `src/branding/` (`branding.css`), repository `branding/` assets |
+| Static Pumpkin Block branding | `src/branding/` (`branding.css`), repository `branding/` assets |
 
 `src/index.css` imports the base, shell, page, dialog, kit (`ui/ui.css`), play and branding stylesheets into `@layer components`; a few pages import their own stylesheet. Components never import CSS themselves. `index.html` establishes `theme, base, components, utilities`. Layer order and the rules for page CSS are in `src/ui/README.md`. Shared surfaces and kit components use `lk-` classes plus data attributes for variants. Class names must not accidentally collide with Tailwind utilities.
 
@@ -145,7 +138,7 @@ Other composed surfaces: the skins page shows the rotating figure on a stepped p
 | `--panel`, `--panel-2`, `--panel-3` | `#0F1521`, `#151D2C`, `#1D2739` | Surfaces and elevation |
 | `--sunk` | `#0B1019` | Recessed controls |
 | `--fg`, `--fg-2`, `--fg-3` | `#EBF0F8`, `#A9B4C8`, `#8491A8` | Text hierarchy |
-| `--copper` | `#E39860`, seasonally overridden | Brand and selected state |
+| `--copper` | `#E39860` | Brand and selected state |
 | `--acc` | Instance biome accent | This instance's primary action |
 | `--ink` | `#120C07` | Text on accent |
 | `--run`, `--warn`, `--bad` | `#8CC8F0`, `#FFD84A`, `#FF6D86` | Running, warning and error |
@@ -153,7 +146,7 @@ Other composed surfaces: the skins page shows the rotating figure on a stepped p
 
 The accent identifies an instance/action; a status color describes a condition. Warning/error states also use symbols, text or form, never color alone. Biome accents are chosen away from warning/error/brand tones; the original design target is OKLab distance ×100 of at least 8, or 6 from running color because running also has text/icon. These are design targets, not a current accessibility certification.
 
-Accent bevels mix with the dark base in OKLab, not brown. Recompute dependent values both at root and elements overriding `--acc`, so a biome does not inherit copper bevels. Seasonal copper likewise drives enabled checkbox/toggle bevels (`--copper-hi`, `--copper-lo`).
+Accent bevels mix with the dark base in OKLab, not brown. Recompute dependent values both at root and elements overriding `--acc`, so a biome does not inherit copper bevels. Fixed copper drives enabled checkbox/toggle bevels (`--copper-hi`, `--copper-lo`).
 
 Hover is a surface, not an active-state line. `--hv-row`/`--hv-ctl` and pressed variants adapt to ordinary/overlay contexts. Selected means accent or copper border plus tint; current means accent bar. Text underline is reserved for prose, not hovered collection names.
 

@@ -37,7 +37,7 @@ h1,h2,h3,p,figure { margin: 0; }
 .marketing .site-header { position: fixed; inset: 0 0 auto; transition: background-color .35s ease,border-color .35s ease; }
 .marketing .site-header[data-overlay] { background: transparent; border-color: transparent; }
 .brand { display: inline-flex; gap: 10px; align-items: center; font-family: "Jersey 10", monospace; font-size: 27px; line-height: .85; letter-spacing: 1px; white-space: nowrap; }
-.brand > span > span { display: block; margin-top: 2px; font: 600 9px/1 "Hanken Grotesk Variable",sans-serif; letter-spacing: 5px; }
+.brand .brand-wordmark { width: 192px; height: 48px; object-fit: contain; }
 .site-header > .brand { justify-self: start; }
 .site-header > .button { grid-column: 3; justify-self: end; }
 .brand img { image-rendering: pixelated; }
@@ -176,8 +176,8 @@ code { padding: 1px 6px; background: #070a11; border: 1px solid var(--line); col
 .faq-section { display: grid; grid-template-columns: .85fr 1.15fr; gap: 90px; align-items: start; align-content: start; padding-top: clamp(90px,12svh,140px); }
 .faq-heading .eyebrow { margin-bottom: 24px; }
 .faq-heading h2 { font-size: 100px; }
-.buddy-note { display: flex; gap: 13px; align-items: center; margin-top: 35px; }
-.buddy-note p { color: #7f8da4; font-size: 12px; line-height: 1.6; }
+.brand-note { display: flex; gap: 13px; align-items: center; margin-top: 35px; }
+.brand-note p { color: #7f8da4; font-size: 12px; line-height: 1.6; }
 .faq-list details { border-bottom: 1px solid var(--line); }
 .faq-list summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 28px 0; font-size: 16px; cursor: pointer; }
 .faq-list summary::-webkit-details-marker { display: none; }
@@ -189,7 +189,7 @@ code { padding: 1px 6px; background: #070a11; border: 1px solid var(--line); col
 .outro-landscape { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; object-fit: cover; z-index: -3; }
 .outro-shade { position: absolute; inset: 0; z-index: -2; background: linear-gradient(0deg,#070a11 0%,#070a1170 50%,#070a11 100%); }
 .outro-content { padding-block: 70px; }
-.outro-buddy { margin: 0 auto 18px; image-rendering: pixelated; }
+.outro-mark { margin: 0 auto 18px; image-rendering: pixelated; }
 .outro h2 { font-size: clamp(70px,8vw,116px); }
 .outro h2 .copper { display: inline-block; transform-origin: 50% 100%; }
 .outro p { color: #b7c1d3; font-size: 15px; line-height: 1.8; margin-top: 23px; }
@@ -225,7 +225,7 @@ code { padding: 1px 6px; background: #070a11; border: 1px solid var(--line); col
   .site-header > .button { grid-column: 2; }
   .brand { font-size: 23px; gap: 7px; }
   .brand img { width: 30px; height: 30px; }
-  .brand > span > span { font-size: 8px; letter-spacing: 4px; }
+  .brand .brand-wordmark { width: 96px; height: 24px; }
   .site-header nav { display: none; }
   .button-small { font-size: 9px; gap: 9px; padding-inline: 10px; }
   .hero-landscape img { object-position: 61% center; }
@@ -258,11 +258,11 @@ code { padding: 1px 6px; background: #070a11; border: 1px solid var(--line); col
   .feature-list h3 { font-size: 25px; }
   .feature-list p { font-size: 13px; }
   .faq-heading h2 { font-size: clamp(64px,20vw,82px); }
-  .buddy-note { margin-top: 22px; }
+  .brand-note { margin-top: 22px; }
   .faq-list summary { font-size: 14px; padding-block: 23px; }
   .faq-list details p { font-size: 13px; }
   .outro h2 { font-size: clamp(61px,15vw,90px); }
-  .outro-buddy { width: 65px; height: 65px; }
+  .outro-mark { width: 65px; height: 65px; }
   .outro p { font-size: 13px; }
   .footer-top { grid-template-columns: minmax(0,1fr) auto; gap: 25px 16px; }
   .footer-top > p { grid-column: 1 / -1; grid-row: 2; width: 100%; font-size: 11px; }

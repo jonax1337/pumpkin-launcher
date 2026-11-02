@@ -1,5 +1,5 @@
 /**
- * Pixel-Icons des Kits: ein 8×8-Raster je Icon (Entwurf: docs/design/concepts/launcher/icons/set-a.mjs + set-b.mjs).
+ * Pixel-Icons des Kits: ein 8×8-Raster je Icon.
  * Zeichen: `X` = voll, `o` = zweiter Ton (50 % Deckkraft), `.` = leer.
  * Regel: 1 Icon-Pixel = 1 Zelle; die Zellgröße legt der Größen-Slot fest (ui/Icon, unit.ts), nie gebrochen skaliert.
  */

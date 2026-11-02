@@ -161,7 +161,7 @@ function animateFinale(main, revealed) {
     defaults: { ease: "power3.out" },
     scrollTrigger: entranceTrigger(outro, revealed),
   })
-    .from(outro.querySelector(".outro-buddy"), { y: 70, scale: 0.35, rotation: -25, opacity: 0, duration: 1.1, ease: "back.out(1.6)" }, 0)
+    .from(outro.querySelector(".outro-mark"), { y: 70, scale: 0.35, rotation: -25, opacity: 0, duration: 1.1, ease: "back.out(1.6)" }, 0)
     .from(outro.querySelector("h2"), { y: 80, scale: 0.92, opacity: 0, duration: 1.1 }, 0.12)
     .from(outro.querySelector("h2 .copper"), { scale: 1.25, rotation: 3, duration: 1.2 }, 0.2)
     .from(outro.querySelector("p"), { y: 28, opacity: 0, duration: 0.8 }, 0.45);

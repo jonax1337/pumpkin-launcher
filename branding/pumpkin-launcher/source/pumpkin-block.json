@@ -1,0 +1,36 @@
+{
+  "identity": "Pumpkin Block",
+  "grid": 16,
+  "palette": {
+    "b": "#663C13",
+    "g": "#68763C",
+    "v": "#53602F",
+    "l": "#F4AB30",
+    "h": "#E99822",
+    "a": "#D7831B",
+    "d": "#C77829",
+    "r": "#A75A11",
+    "c": "#4A2B0F",
+    "q": "#8B450F",
+    "u": "#FDBD4A",
+    "f": "#2B1A0C"
+  },
+  "pixels": [
+    ".......bbb......",
+    ".......bbc......",
+    "..gggggbccgggv..",
+    ".buggggbcgvvhab.",
+    ".buahhdlhalhdab.",
+    ".budlhdllalhdrc.",
+    ".bldfldllalfdrc.",
+    ".bhfffdlldfffrc.",
+    ".bhdhlrlldhhdrc.",
+    ".bhdhhrffdhhdrc.",
+    ".bhffhrlldhffrc.",
+    ".bhffffffffffrc.",
+    ".bhafffhlfffdrc.",
+    ".cadaaraaradqdc.",
+    ".cdrddqddqdrqrc.",
+    "..cccccccccccc.."
+  ]
+}

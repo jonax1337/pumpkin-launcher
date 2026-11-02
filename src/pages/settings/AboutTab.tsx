@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { Heading, Hint, LinkList, LinkRow, Panel } from "@/ui";
-import { BrandWordmark, Buddy } from "@/branding/Brand";
+import { BrandWordmark, BrandMark } from "@/branding/Brand";
 import { UpdateCheckButton, UpdateChip, UpdateDetails } from "@/components/AppUpdate";
 import { PrivacyNotice } from "@/components/PrivacyNotice";
 import { SupportSection } from "@/components/support";
@@ -50,7 +50,7 @@ export function AboutTab() {
   return (
     <>
       <Panel level="raised" className="flex flex-wrap items-center gap-x-4 gap-y-3 p-4">
-        <Buddy mood="hello" size={48} />
+        <BrandMark size={48} />
         <div className="grid min-w-0 flex-[1_1_220px] gap-1">
           <BrandWordmark />
           <span className="text-ctl-s text-(--fg-2)">{t("common.version")} {version} · {t("components.update.hint")}</span>

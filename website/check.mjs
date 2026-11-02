@@ -59,11 +59,10 @@ for (const [name, page] of Object.entries({ "index.html": html, ...legalHtml }))
     }
   }
 }
-for (const season of ["standard", "spring", "summer", "halloween", "winter"]) {
-  const original = readFileSync(new URL(`../branding/pumpkin-launcher/assets/${season}/mark.svg`, root));
-  const staged = readFileSync(new URL(`assets/brand/${season}/mark.svg`, root));
-  assert.deepEqual(staged, original, `${season} must preserve the approved asset`);
-}
+const originalMark = readFileSync(new URL("../branding/pumpkin-launcher/assets/mark.svg", root));
+assert.deepEqual(readFileSync(new URL("assets/brand/mark.svg", root)), originalMark, "Website must use the canonical Pumpkin Block");
+assert.deepEqual(readFileSync(new URL("assets/brand/favicon.svg", root)), originalMark, "Favicon must use Pumpkin Block");
+assert.deepEqual(readFileSync(new URL("assets/brand/wordmark.svg", root)), readFileSync(new URL("../branding/pumpkin-launcher/wordmark/light.svg", root)), "Website must preserve the concept lettering");
 assert.equal((html.match(/<h1\b/g) ?? []).length, 1);
 assert.equal(files.filter((name) => name.startsWith("world-")).length, 4);
 assert.ok(!/url\(["']?(?:https?:)?\/\//.test(readBuiltStyles()), "No external fonts or images in CSS");
@@ -79,7 +78,7 @@ for (const route of LEGAL_ROUTES) {
 }
 const openPlaceholders = [...new Set(Object.values(legalHtml).flatMap((page) => page.match(/\[(?:NAME|ANSCHRIFT|E-MAIL)\]/g) ?? []))];
 if (openPlaceholders.length) console.warn(`Legal pages still contain placeholders ${openPlaceholders.join(" ")}; fill them before publishing.`);
-console.log(`Website OK: English page language, local links, 5 original marks, 4 app landscapes, icons, download links and legal pages verified in ${fileURLToPath(output)}`);
+console.log(`Website OK: English page language, local links, the fixed Pumpkin Block identity, 4 app landscapes, icons, download links and legal pages verified in ${fileURLToPath(output)}`);
 
 function checkDownloadSection(page) {
   const section = page.match(/<section\b[^>]*\bid="download"[^>]*>[\s\S]*?<\/section>/)?.[0];

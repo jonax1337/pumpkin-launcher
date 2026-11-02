@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="website/assets/launcher-home.png" alt="Pumpkin Launcher home screen with seasonal buddy mascot" width="820">
+  <img src="website/assets/launcher-home.png" alt="Pumpkin Launcher home screen with the Pumpkin Block logo" width="820">
 </p>
 
 ## Download and install

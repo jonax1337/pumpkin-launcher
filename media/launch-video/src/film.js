@@ -1,5 +1,5 @@
 // "One Take" — the whole film is one continuous camera move through a single
-// pixel world, following Buddy. Static art is drawn once; everything that
+// pixel world, following Pumpkin Block. Static art is drawn once; everything that
 // moves is derived from timeline time, either by GSAP tweens or by render(t).
 (function () {
   const P = window.PIX;
@@ -30,7 +30,7 @@
     : { hub: [1200, 780], modrinth: [560, 420], curse: [1850, 400], ftb: [1850, 1160], technic: [560, 1150] };
   const [mx, my] = POS.modrinth, [cx, cy] = POS.curse, [fx, fy] = POS.ftb, [tx, ty] = POS.technic, [hx, hy] = POS.hub;
   const NEST = V ? [mx - 60, my - 430] : [mx - 190, my - 380];
-  // where Buddy hovers at each island: right of it (landscape) / below it (portrait)
+  // where Pumpkin Block hovers at each island: right of it (landscape) / below it (portrait)
   const HOV = (p) => (V ? [p[0] + 70, p[1] + 250] : [p[0] + 232, p[1] - 96]);
 
   const SOURCES = [
@@ -154,7 +154,7 @@
   const hub = makeIsland(hubSrc, POS.hub, { w: 172, h: 124, top: 30, depth: 62, vines: 10 });
   const nest = makeIsland({ biome: "hub", seed: 5, deco: [{ t: "tuft", x: 8 }, { t: "lantern", x: 36 }] }, [NEST[0], NEST[1] + 22], { w: 44, h: 40, top: 12, depth: 20, vines: 3 });
   nest.phase = 0.4;
-  const HUBC = [hx, hy - 22]; // Buddy sitting on the hub
+  const HUBC = [hx, hy - 22]; // Pumpkin Block sitting on the hub
 
   // hub glow + shockwave rings
   const glowArt = P.canvas(64, 64);
@@ -176,7 +176,7 @@
   ring.c.style.height = "1600px";
   ringNode.appendChild(ring.c);
 
-  // ------------------------------------------------------------------ Buddy's flight
+  // ------------------------------------------------------------------ Pumpkin Block's flight
   const K2 = (t, p, hold) => ({ t, x: p[0], y: p[1], hold });
   const add2 = (p, d) => [p[0] + d[0], p[1] + d[1]];
   const mid = (a, b, d) => [(a[0] + b[0]) / 2 + d[0], (a[1] + b[1]) / 2 + d[1]];
@@ -393,7 +393,7 @@
     el("div", "tg", r);
   });
 
-  // ------------------------------------------------------------------ path, items, Buddy (above the window)
+  // ------------------------------------------------------------------ path, items, Pumpkin Block (above the window)
   const pathPts = [];
   for (let s = 3.4; s <= 23.5; s += 0.055) pathPts.push({ s, x: bSpline(s, "x"), y: bSpline(s, "y") });
   const PB = pathPts.reduce((b, p) => [Math.min(b[0], p.x), Math.min(b[1], p.y), Math.max(b[2], p.x), Math.max(b[3], p.y)], [1e9, 1e9, -1e9, -1e9]);
@@ -422,14 +422,14 @@
   });
 
   const flyer = el("div", "", world, { position: "absolute", left: "0px", top: "0px", width: "96px", height: "96px", transformOrigin: "48px 50px", zIndex: 5 });
-  const buddy = P.buddy(["sleep", "oops", "idle", "success", "hello", "loading"]);
-  buddy.svg.style.width = "96px";
-  buddy.svg.style.height = "96px";
-  buddy.svg.style.position = "absolute";
-  flyer.appendChild(buddy.svg);
+  const brandMark = P.brandMark();
+  brandMark.svg.style.width = "96px";
+  brandMark.svg.style.height = "96px";
+  brandMark.svg.style.position = "absolute";
+  flyer.appendChild(brandMark.svg);
   const wings = [0, 1].map((side) => {
     const box = el("div", "", null, { position: "absolute", left: side ? "68px" : "8px", top: "39px", width: "20px", height: "16px", transform: side ? "scaleX(-1)" : "" });
-    flyer.insertBefore(box, buddy.svg);
+    flyer.insertBefore(box, brandMark.svg);
     return P.wingFrames().map((c) => {
       Object.assign(c.style, { position: "absolute", left: "0px", top: "0px", width: "20px", height: "16px", display: "none" });
       box.appendChild(c);
@@ -544,7 +544,7 @@
   const cSpline = pchip(keys, ["x", "y", "lz"]);
   const camAt = (t) => ({ x: cSpline(t, "x"), y: cSpline(t, "y"), z: Math.exp(cSpline(t, "lz")) });
 
-  // ------------------------------------------------------------------ Buddy state at time t
+  // ------------------------------------------------------------------ Pumpkin Block state at time t
   const S_END = V ? 0.66 : 0.8;
   const UI_S = 0.5;
   const hop = (t, t0, t1, a, b, apex) => {
@@ -831,9 +831,8 @@
       }
     }
 
-    // Buddy
+    // Pumpkin Block
     const B = budAt(t);
-    buddy.pose(B.pose, B.pt);
     const bp = B.p, bpPrev = budPos(t - 0.06), bpNext = budPos(t + 0.06);
     const bvx = (bpNext[0] - bpPrev[0]) / 0.12;
     let brot = t < 23.5 && t > 3.3 ? clamp(bvx * 0.012, -16, 16) : 0;
@@ -862,7 +861,7 @@
       d.style.transform = `translate(${Math.round((pp[0] + 8 * Math.sin(q * 2.1)) / 2) * 2}px, ${Math.round((pp[1] + 20 * B.s) / 2) * 2}px) scale(${(3 - q * 0.22) * Math.max(0.5, B.s)})`;
     });
 
-    // the flight path Buddy drew, revealed for the overview
+    // the flight path Pumpkin Block drew, revealed for the overview
     let n = pathPts.length;
     if (t < 24) { n = 0; while (n < pathPts.length && pathPts[n].s <= t) n++; }
     if (n !== lastPathN) {
@@ -877,7 +876,7 @@
     }
     pathNode.style.opacity = t < 20 ? 0.35 : t < 24 ? 0.35 + 0.65 * smooth((t - 20) / 1.5) : Math.max(0, 1 - (t - 24) / 0.5);
 
-    // items: pop on the island → caught into Buddy's orbit → burst on the drop
+    // items: pop on the island → caught into Pumpkin Block's orbit → burst on the drop
     const spin = t * 2.6;
     const orbR = 46;
     for (const it of items) {
@@ -923,7 +922,7 @@
       });
     }
 
-    // hub glow: charges up with Buddy's approach, flares on the slam
+    // hub glow: charges up with Pumpkin Block's approach, flares on the slam
     let g = 0.12;
     if (t > 20) g = 0.12 + 0.45 * smooth(clamp((t - 20) / 3.5, 0, 1));
     if (t >= 24) g = 0.4 + 0.6 * Math.exp(-(t - 24) * 2.2);
@@ -959,7 +958,7 @@
       L.c.style.transform = `scale(${sc})`;
     }
 
-    // fx: confetti launches from Buddy's screen position
+    // fx: confetti launches from Pumpkin Block's screen position
     const cf = [(W / 2 + (bp[0] - cam.x) * cam.z) / 4, (H / 2 + (bp[1] - cam.y) * cam.z) / 4];
     drawFx(t, velS, t > 36.5 ? cf : null);
   };
@@ -1008,13 +1007,13 @@
     tl.to(f2, { y: 0, duration: 0.12, ease: "back.out(3)" }, ts + 0.06);
   });
 
-  // Buddy stomps "Anlegen" → instance page
+  // Pumpkin Block stomps "Anlegen" → instance page
   tl.fromTo(pressAnlegen, { opacity: 0 }, { opacity: 1, duration: 0.02, ease: "none" }, 29.47);
   tl.to(disc, { x: -1516, duration: 0.5, ease: "power3.inOut" }, 29.6);
   tl.fromTo(inst, { x: 1516 }, { x: 0, duration: 0.5, ease: "power3.inOut" }, 29.6);
   tl.fromTo(sceneBox, { clipPath: "inset(60px 0px 900px 1600px)" }, { clipPath: "inset(60px 0px 480px 84px)", duration: 0.5, ease: "power3.inOut" }, 29.6);
 
-  // loader chips pop exactly when Buddy lands on them
+  // loader chips pop exactly when Pumpkin Block lands on them
   tl.fromTo(ldLabel, { opacity: 0 }, { opacity: 1, duration: 0.2, ease: "steps(2)" }, 29.95);
   lds.forEach((d, i) => {
     tl.fromTo(d, { y: 26, opacity: 0, scale: 0.6 }, { y: 0, opacity: 1, scale: 1, duration: 0.3, ease: "back.out(3)" }, 29.85 + i * 0.5);
@@ -1025,7 +1024,7 @@
   tl.to(ldOn, { y: 6, duration: 0.05, ease: "none" }, 32.25);
   tl.to(ldOn, { y: 0, duration: 0.15, ease: "back.out(3)" }, 32.31);
 
-  // SPIELEN: Buddy lands on it, it installs, it starts
+  // SPIELEN: Pumpkin Block lands on it, it installs, it starts
   tl.to(face, { y: 6, duration: 0.05, ease: "none" }, 33.0);
   tl.to(face, { y: 0, duration: 0.1, ease: "back.out(3)" }, 33.14);
   tl.set([st2, st3], { opacity: 0 }, 0);
@@ -1057,7 +1056,7 @@
   });
   tl.fromTo(oUrl, { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.45, ease: "steps(9)" }, 39.3);
 
-  // transparent overlay canvases and Buddy's deliberate flights over the UI are layered on purpose
+  // transparent overlay canvases and Pumpkin Block's deliberate flights over the UI are layered on purpose
   [fxC.c, pathNode, ringNode, glow, winGlow].forEach((n) => {
     n.setAttribute("data-layout-ignore", "");
     n.setAttribute("data-layout-allow-occlusion", "");

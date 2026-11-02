@@ -1,6 +1,6 @@
 # Pumpkin Launcher website
 
-Standalone English-language static marketing site built with HTML, CSS, GSAP and ScrollTrigger, independently of Tauri. It uses the launcher's original fonts, pixel icons, seasonal Buddy logos and landscape artwork.
+Standalone English-language static marketing site built with HTML, CSS, GSAP and ScrollTrigger, independently of Tauri. It uses the launcher's original fonts, pixel icons, fixed Pumpkin Block identity and landscape artwork.
 
 ## Development and deployment
 
@@ -19,7 +19,7 @@ Fonts, images and animation scripts are served locally. The site has no trackers
 ## Files and behavior
 
 - `index.html`: English landing page, features, FAQ and platform download links. Main sections use a viewport-height minimum and grow with content on smaller screens. The beta is not tied to a displayed version. No app screenshots, trailer, download-verification disclosure or seasonal-logo strip.
-- `main.js`: seasonal branding and initialization of navigation, downloads, icons and motion.
+- `main.js`: initialization of navigation, downloads, icons and motion.
 - `motion.js`: a one-time page-load entrance with masked headline reveals, landscape zoom and staggered content; focus, pointer activation or wheel input completes it immediately. Desktop scenes add scroll-driven card entrances, deeper parallax and pointer-responsive card tilt, followed by a staged outro. Effects use transforms and opacity, without scroll snapping or pinning. Reduced motion disables these effects; touch/mobile layouts use lighter entrances without parallax or tilt.
   Scroll reveals prepare offscreen start states before entering the viewport. Visible/restored content skips entrance setup, and entered containers remain recorded across breakpoint and reduced-motion changes so completed text does not disappear and replay.
 - `disclosures.js`: reversible height transitions for native FAQ disclosures. Reduced motion opens/closes instantly; resize or a preference change finishes an active transition. Completed transitions clear fixed heights and refresh scroll positions. The FAQ heading stays top-aligned.
@@ -38,7 +38,7 @@ Download links use `/releases/latest/download/<name>` with stable names created 
 
 | Asset | Source |
 |---|---|
-| `assets/brand/` | Staged by Vite from `branding/pumpkin-launcher/assets/*/mark.svg` and `web/favicon.svg`; not versioned |
+| `assets/brand/` | Staged by Vite from `branding/pumpkin-launcher/assets/mark.svg` and `web/favicon.svg`; not versioned |
 | Pixel icons | `src/pixel/icon-data.ts` |
 | `assets/world-*.png` | `SceneHost` / `src/pixel/scene.ts`: seed 27, flat mode, standard sun anchor, forest/nether/snow/sea biomes |
 | `assets/platform-windows.svg` | Pixel treatment of the square symbol from the [Windows 11 logo source](https://upload.wikimedia.org/wikipedia/commons/e/e6/Windows_11_logo.svg), with original blue scenery |
@@ -46,8 +46,8 @@ Download links use `/releases/latest/download/<name>` with stable names created 
 | `assets/platform-linux.svg` | Original pixel penguin and teal scenery; the penguin appears only on Linux |
 | Fonts | Latin Hanken Grotesk variable, Big Shoulders Display 800 and Jersey 10; unused weights/subsets are excluded |
 
-Landscape images below the hero load lazily. Seasonal primary branding uses the same local-date calendar as the app (`src/branding/calendar.ts`); only the footer's seasonal collection has been removed. See [branding](../branding/pumpkin-launcher/README.md).
+Landscape images below the hero load lazily. The primary brand mark and favicon always use the same static Pumpkin Block as the app. See [branding](../branding/pumpkin-launcher/README.md).
 
-Existing screenshot and trailer source assets are not referenced by the website and do not enter `dist/`. The repository's main README still uses `assets/launcher-home.png`.
+The repository README uses `assets/launcher-home.png`. Obsolete screenshots and trailer exports have been removed.
 
 For browser verification, use Playwright against `pnpm preview:website`: check desktop/mobile layouts, sticky navigation, icon-only back-to-top, keyboard focus, FAQ disclosures, OS guide selection/focus cycling/closing, legal routes and download targets. Ensure opening a guide does not move the page or download cards, and mobile guides scroll without hiding the close control. Exercise rapid section jumps, resize and reduced-motion changes with GSAP enabled. Preview with `--base /pumpkin-launcher/` to verify subdirectory links. Compare initial resource transfer sizes in fresh browser contexts at the same viewport; local measurements do not establish production load times.

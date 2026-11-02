@@ -55,7 +55,7 @@ export function LogView({ lines, shown, highlight }: { lines: LogLine[] | undefi
           {lines?.length ? (
             <EmptyState size="pane" title={t("components.log.noMatches")}>{t("components.log.noLinesForFilter")}</EmptyState>
           ) : (
-            <EmptyState size="pane" mood="sleep" title={t("components.log.noOutputYet")}>{t("components.log.startInstanceHint")}</EmptyState>
+            <EmptyState size="pane" title={t("components.log.noOutputYet")}>{t("components.log.startInstanceHint")}</EmptyState>
           )}
         </div>
       )}

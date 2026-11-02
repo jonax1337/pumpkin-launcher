@@ -368,7 +368,7 @@
   };
   function clampN(v, a, b) { return Math.max(a, Math.min(b, v)); }
 
-  // Little leaf wings in Buddy's brand greens: up / level / down, joint on the right.
+  // Little leaf wings in the brand greens: up / level / down, joint on the right.
   P.wingFrames = function () {
     const F = [
       ["kk........", "kGkk......", "kGGgkk....", ".kGgggkk..", ".kggggggk.", "..kkggggkk", "....kkkkk.", ".........."],
@@ -462,42 +462,9 @@
     return layers;
   };
 
-  // ------------------------------------------------------------------ buddy
-  // Inline SVG holding every pose of the requested motions; poses are switched
-  // from timeline time (see film.js), never by SMIL.
-  P.buddy = function (motions) {
-    const ns = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(ns, "svg");
-    svg.setAttribute("viewBox", "0 0 48 48");
-    svg.setAttribute("shape-rendering", "crispEdges");
-    const map = {};
-    motions.forEach((m) => {
-      const def = window.BUDDY[m];
-      map[m] = {};
-      Object.keys(def.poses).forEach((id) => {
-        const g = document.createElementNS(ns, "g");
-        g.innerHTML = def.poses[id];
-        g.style.display = "none";
-        svg.appendChild(g);
-        map[m][id] = g;
-      });
-    });
-    let shown = null;
-    return {
-      svg,
-      pose(motion, t) {
-        const def = window.BUDDY[motion];
-        const loops = motion === "idle" || motion === "sleep" || motion === "loading";
-        const lt = loops ? ((t % def.dur) + def.dur) % def.dur : Math.max(0, Math.min(def.dur - 0.001, t));
-        let id = def.frames[def.frames.length - 1].pose;
-        for (const f of def.frames) if (lt >= f.a && lt < f.b) { id = f.pose; break; }
-        const g = map[motion][id];
-        if (g !== shown) {
-          if (shown) shown.style.display = "none";
-          g.style.display = "";
-          shown = g;
-        }
-      },
-    };
+  // The same fixed logo as the launcher; only its surrounding composition moves.
+  P.brandMark = function () {
+    const svg = new DOMParser().parseFromString(window.BRAND_MARK, "image/svg+xml").documentElement;
+    return { svg: document.importNode(svg, true) };
   };
 })();

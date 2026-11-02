@@ -26,6 +26,10 @@ const DEFAULT_DIST: &str = "../mod/build/mod-index";
 const GENERATED_FILE: &str = "embedded_mod.rs";
 
 fn main() {
+    // Icon resources must invalidate the Windows executable as well as codegen.
+    for icon in ["icons/icon.ico", "icons/icon.png", "icons/128x128.png"] {
+        println!("cargo:rerun-if-changed={icon}");
+    }
     tauri_build::build();
     if let Err(reason) = embed_bridge_mod() {
         println!("cargo:warning=Pumpkin Bridge nicht eingebettet: {reason}");

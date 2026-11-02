@@ -48,7 +48,7 @@ export const palette = {
   "palette.kw.openInstancesFolder": "ordner instanzordner explorer dateien instanzen",
   "palette.motionOff": "Bewegte Szenen ausschalten",
   "palette.motionOn": "Bewegte Szenen einschalten",
-  "palette.kw.motion": "animation bewegung szenen buddy reduzieren",
+  "palette.kw.motion": "animation bewegung szenen reduzieren",
   "palette.textSize": "Textgröße ändern",
   "palette.textSizeChange": "{from} → {to}",
   "palette.kw.textSize": "schrift schriftgröße text größe zoom",

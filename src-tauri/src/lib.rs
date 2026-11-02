@@ -117,8 +117,11 @@ pub fn run() {
             services::argfile::sweep_stale(&state.dirs);
             app.manage(services::shortcut_key::ShortcutKey::in_dir(&state.dirs.root));
             app.manage(state);
+            let window_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/128x128.png"))?;
             for window in &windows {
-                tauri::WebviewWindowBuilder::from_config(app, window)?.build()?;
+                tauri::WebviewWindowBuilder::from_config(app, window)?
+                    .icon(window_icon.clone())?
+                    .build()?;
             }
             let notices = app.state::<state::AppState>().startup_notices.clone();
             if !notices.is_empty() {

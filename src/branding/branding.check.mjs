@@ -1,42 +1,37 @@
-// Run: pnpm check:branding (Node with TypeScript stripping).
+// Run: pnpm check:branding. Verify the fixed brand across native and embedded surfaces.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { currentSeason, nextSeasonCheck, SEASONS } from './calendar.ts';
-import { seasonForDate } from '../../branding/pumpkin-launcher/seasons.mjs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
-for (const [month, day, expected] of [
-  [1, 1, 'winter'], [2, 28, 'winter'], [3, 1, 'spring'], [5, 31, 'spring'],
-  [6, 1, 'summer'], [8, 31, 'summer'], [9, 1, 'standard'], [9, 30, 'standard'],
-  [10, 1, 'halloween'], [11, 2, 'halloween'], [11, 3, 'standard'],
-  [11, 30, 'standard'], [12, 1, 'winter'], [12, 31, 'winter'],
-]) {
-  for (const hour of [0, 12, 23]) assert.equal(currentSeason(new Date(2026, month - 1, day, hour)).id, expected);
-  for (const { id } of SEASONS) {
-    assert.equal(currentSeason(new Date(2026, month - 1, day), id).id, id, 'Fixed choice ignores every seasonal boundary');
-  }
+const root = new URL('../../', import.meta.url);
+const brand = new URL('branding/pumpkin-launcher/', root);
+const read = path => readFileSync(new URL(path, root));
+const mark = readFileSync(new URL('assets/mark.svg', brand));
+assert.match(mark.toString(), /viewBox="0 0 16 16"/);
+assert.doesNotMatch(mark.toString(), /<animate|<image|<script/);
+assert.deepEqual(read('app-icon.svg'), mark);
+assert.deepEqual(read('branding/pumpkin-launcher/web/favicon.svg'), mark);
+const manifest = JSON.parse(readFileSync(new URL('manifest.json', brand)));
+assert.equal(manifest.identity, 'Pumpkin Block');
+assert.deepEqual(manifest.canvas, [16, 16]);
+assert.equal(manifest.grid, 16);
+assert.equal(manifest.reference.replacementFonts, false);
+const wordmark = read('branding/pumpkin-launcher/wordmark/light.svg').toString();
+assert.match(wordmark, /viewBox="0 0 357 40"/);
+assert.doesNotMatch(wordmark, /<image|<text|font-family/);
+for (const [path, info] of Object.entries(manifest.files)) {
+  const bytes = readFileSync(new URL(path, brand));
+  assert.equal(bytes.length, info.bytes, path);
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), info.sha256, path);
 }
-assert.equal(currentSeason(new Date(2026, 9, 1), 'auto').id, 'halloween', 'Returning to auto uses the current date');
-assert.equal(currentSeason(new Date(2026, 9, 1), 'unknown').id, 'halloween', 'Unknown stored choice falls back to auto');
-assert.equal(currentSeason(new Date(2028, 1, 29)).id, 'winter');
-for (const invalid of ['', '2026-02-29', '2026-13-01', '2026-04-31']) assert.equal(seasonForDate(invalid), 'standard');
-assert.equal(nextSeasonCheck(new Date(2026, 8, 30, 23, 59, 59, 500)), 500);
-assert.equal(nextSeasonCheck(new Date(2026, 9, 1)), 60_000);
-
-if (!process.argv.includes('--tz-child')) {
-  for (const TZ of ['Europe/Berlin', 'America/Los_Angeles', 'Pacific/Kiritimati']) {
-    execFileSync(process.execPath, [fileURLToPath(import.meta.url), '--tz-child'], { env: { ...process.env, TZ } });
-  }
-  const root = new URL('../../branding/pumpkin-launcher/', import.meta.url);
-  for (const { id } of SEASONS) {
-    for (const mood of ['idle', 'hello', 'loading', 'success', 'oops', 'sleep', 'poster']) {
-      const svg = readFileSync(new URL(`motion/${id}/${mood}.svg`, root), 'utf8');
-      assert.match(svg, /viewBox="0 0 48 48"/);
-      if (mood !== 'poster') assert.match(svg, /prefers-reduced-motion/);
-    }
-    assert.match(readFileSync(new URL(`assets/${id}/mark.svg`, root), 'utf8'), /<svg/);
-    assert.equal(readFileSync(new URL(`assets/${id}/128x128.png`, root)).subarray(1, 4).toString(), 'PNG');
-  }
-  console.log('Branding OK: automatic and fixed choices, season boundaries, local midnight, leap year, 3 time zones, all 45 runtime assets.');
+for (const filename of ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns']) {
+  assert.deepEqual(read('src-tauri/icons/' + filename), read('branding/pumpkin-launcher/assets/' + filename), filename);
 }
+for (const filename of ['logo.png', 'icon.png']) {
+  assert.deepEqual(read('mod/src/main/resources/assets/pumpkin_bridge/' + filename), read('branding/pumpkin-launcher/assets/32x32.png'), filename);
+}
+for (const filename of ['sidebar.bmp', 'header.bmp']) {
+  assert.deepEqual(read('src-tauri/installer/' + filename), read('branding/pumpkin-launcher/installer/' + filename), filename);
+}
+assert.ok(readdirSync(new URL('assets/', brand)).every(name => !['spring', 'summer', 'halloween', 'winter', 'standard'].includes(name)));
+console.log('Branding OK: clean Pumpkin Block pixel grids, manifest hashes, identical app/mod/native icons and installer artwork.');
