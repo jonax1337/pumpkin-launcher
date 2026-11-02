@@ -370,7 +370,7 @@ for i in range(6):                                                         # win
 whoosh(24.8, 1.0, g=0.1, up=True, f0=500, f1=8000)
 noise_burst(29.47, 0.03, 0.2, hp=2000, decay=200)                          # click "Anlegen"
 blip(29.47, f=hz("E5"), g=0.07, dur=0.05, duty=0.5, slide=-12)
-for i in range(4):                                                         # Buddy bonks the source switcher
+for i in range(4):                                                         # Pumpkin Block bonks the source switcher
     note(hz("C5"), 27.5 + i * 0.5, 0.14, "tri", gain=0.16, a=0.001, d=0.08, s=0.3, r=0.03, slide=14)
     blip(27.5 + i * 0.5, f=hz("A5"), g=0.04, dur=0.04, duty=0.5, slide=12)
 for i in range(5):                                                         # loader chips 30–32
@@ -381,11 +381,11 @@ for i in range(16):                                                        # pro
     blip(33.25 + i * 0.1, f=hz("C5") * 2 ** (i / 12), g=0.045, dur=0.04, duty=0.125, slide=0)
 coin(34.9, g=0.1, base="G5", jump="C6")
 whoosh(35.0, 1.6, g=0.22, up=True, f0=150, f1=9000)                       # dive into the world
-note(hz("C5"), 37.0, 0.22, duty=0.25, gain=0.07, a=0.001, d=0.1, s=0.6, r=0.05, slide=12)   # buddy jump
+note(hz("C5"), 37.0, 0.22, duty=0.25, gain=0.07, a=0.001, d=0.1, s=0.6, r=0.05, slide=12)   # logo jump
 coin(38.0, g=0.12)                                                         # wordmark
 sparkle(38.05, ["G6", "C7", "E7", "G7"], g=0.05)
 
-# ---- Buddy
+# ---- Pumpkin Block
 def whirr(t0, dur, g=0.03):
     n = int(dur * SR)
     t = np.arange(n) / SR
@@ -420,7 +420,7 @@ note(hz("G4"), 32.4, 0.3, duty=0.25, gain=0.06, a=0.002, d=0.1, s=0.7, r=0.04, s
 boing(36.5, g=0.14, base="G4", semis=12)                                  # lands in the world
 blip(39.6, f=hz("G6"), g=0.06, dur=0.08, slide=0)                         # waves
 blip(39.72, f=hz("C7"), g=0.06, dur=0.12, slide=0)
-for T in (4, 8, 12, 16):                                                  # Buddy swallows the orbit on departure
+for T in (4, 8, 12, 16):                                                  # Pumpkin Block swallows the orbit on departure
     t0 = T + 2.72 + (0.35 if T == 16 else 0)
     for j in range(4):
         note(hz("E6") * 2 ** (-j * 3 / 12), t0 + 0.3 + j * 0.05, 0.06, "tri", gain=0.045, a=0.001, d=0.04, s=0.3, r=0.02)

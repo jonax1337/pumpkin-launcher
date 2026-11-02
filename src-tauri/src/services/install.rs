@@ -257,7 +257,7 @@ fn extract_natives(jar: &Path, dest: &Path, exclude: &[String]) -> AppResult<u64
     let mut count = 0;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
-        let name = entry.name().to_owned();
+        let name = entry.name()?.into_owned();
         let is_native = [".dll", ".so", ".dylib", ".jnilib"].iter().any(|ext| name.ends_with(ext));
         if entry.is_dir() || !is_native || exclude.iter().any(|e| name.starts_with(e.as_str())) {
             continue;

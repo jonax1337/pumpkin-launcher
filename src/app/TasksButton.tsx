@@ -124,7 +124,7 @@ export function TasksButton() {
           ))}
         </List>
       ) : (
-        <EmptyState size="pane" mood="sleep" title={t("ui.tasks.emptyTitle")}>{t("ui.tasks.emptyBody")}</EmptyState>
+        <EmptyState size="pane" title={t("ui.tasks.emptyTitle")}>{t("ui.tasks.emptyBody")}</EmptyState>
       )}
     </Popover>
   );

@@ -48,7 +48,7 @@ export const palette: typeof dePalette = {
   "palette.kw.openInstancesFolder": "folder instances directory explorer files",
   "palette.motionOff": "Turn off animated scenes",
   "palette.motionOn": "Turn on animated scenes",
-  "palette.kw.motion": "animation motion scenes buddy reduce",
+  "palette.kw.motion": "animation motion scenes reduce",
   "palette.textSize": "Change text size",
   "palette.textSizeChange": "{from} → {to}",
   "palette.kw.textSize": "font size text zoom scale",

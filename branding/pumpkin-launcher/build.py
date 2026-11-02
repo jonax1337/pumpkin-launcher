@@ -1,96 +1,100 @@
-"""Prepare native system icons from approved SVGs; never installs app files."""
+"""Build clean Pumpkin Block pixel-grid artwork. Run --check to verify grid integrity."""
 import base64
-from hashlib import sha256
+from hashlib import sha256, sha1
 from io import BytesIO
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
-from zipfile import ZipFile, ZIP_DEFLATED
+
 from PIL import Image
 
-ROOT=Path(__file__).resolve().parent
-SOURCE=ROOT/'source'
-DATA=json.loads((SOURCE/'seasons.json').read_text(encoding='utf-8'))
-ICO_SIZES=(16,24,32,48,64,128,256)
-PNG_FILES={'32x32.png':32,'128x128.png':128,'128x128@2x.png':256}
-FILES={'mark.svg','lockup.svg','icon.ico','icon.icns',*PNG_FILES}
+ROOT = Path(__file__).resolve().parent
+SOURCE = ROOT / 'source'
+sys.path.insert(0, str(SOURCE))
+from pixel_art import INK, PAPER, mark_image, reference_info, source_assets
+
+ICO_SIZES = (16, 24, 32, 48, 64, 128, 256)
+PNG_FILES = {'16x16.png': 16, '32x32.png': 32, '128x128.png': 128, '128x128@2x.png': 256}
 
 
 def render_sources():
-    result=subprocess.run(['node',str(SOURCE/'render-svg.cjs')],check=True,capture_output=True,text=True)
-    encoded=json.loads(result.stdout)
-    frames={key:{int(size):Image.open(BytesIO(base64.b64decode(png))).convert('RGBA') for size,png in sizes.items()} for key,sizes in encoded.items()}
-    for v in DATA['variants']:
-        assert sha256(frames[v['id']][32].tobytes()).hexdigest()==v['approvedPixelHash'],v['id']
-    return frames
+    result = subprocess.run(['node', str(SOURCE / 'render-svg.cjs')], check=True, capture_output=True, text=True)
+    encoded = json.loads(result.stdout)
+    decode = lambda value: Image.open(BytesIO(base64.b64decode(value))).convert('RGBA')
+    return ({int(size): decode(png) for size, png in encoded['frames'].items()},
+            {name: decode(png) for name, png in encoded['wordmarks'].items()})
 
 
-def verify(frames):
-    checked=0
-    for v in DATA['variants']:
-        key=v['id']; folder=ROOT/'assets'/key; expected=frames[key]
-        assert {p.name for p in folder.iterdir() if p.is_file()}==FILES,(key,'unexpected files')
-        for filename,size in PNG_FILES.items():
-            with Image.open(folder/filename) as image:
-                assert image.size==(size,size) and image.convert('RGBA').tobytes()==expected[size].tobytes(),(key,filename)
-                checked+=1
-        with Image.open(folder/'icon.ico') as ico:
-            assert ico.ico.sizes()=={(s,s) for s in ICO_SIZES},key
-            for size in ICO_SIZES:
-                assert ico.ico.getimage((size,size)).convert('RGBA').tobytes()==expected[size].tobytes(),(key,'ico',size)
-                checked+=1
-        with Image.open(folder/'icon.icns') as icns:
-            for size in icns.info['sizes']:
-                pixels=size[0]*size[2]
-                assert icns.icns.getimage(size).convert('RGBA').tobytes()==expected[pixels].tobytes(),(key,'icns',size)
-                checked+=1
-    with Image.open(ROOT/'web/favicon.ico') as favicon:
-        assert favicon.ico.sizes()=={(s,s) for s in (16,32,48)}
-        for size in (16,32,48):
-            assert favicon.ico.getimage((size,size)).convert('RGBA').tobytes()==frames['standard'][size].tobytes()
-            checked+=1
-    motion_manifest=ROOT/'motion/manifest.json'
-    if motion_manifest.exists():
-        motion=json.loads(motion_manifest.read_text(encoding='utf-8'))
-        for key,entry in motion['seasons'].items():
-            assert sha256((ROOT/'assets'/key/'mark.svg').read_bytes()).hexdigest()==entry['sourceSha256'],'Rebuild motion/build.py after changing the SVG source.'
-    print(f'Validated {checked} native images against direct SVG renders; all five approved 32px designs match.')
+def verify(frames, wordmarks):
+    for path, expected in source_assets(ROOT).items():
+        assert path.read_text(encoding='utf-8') == expected, f'Stale grid source: {path}'
+        assert '<image' not in expected and '<text' not in expected, f'Not vector-only: {path}'
+    reference = mark_image()
+    assert frames[16].tobytes() == reference.tobytes(), 'SVG changed the logical 16x16 grid'
+    assert frames[256].tobytes() == reference.resize((256, 256), Image.Resampling.NEAREST).tobytes(), 'SVG introduced subpixel edges'
+    assert len(reference.getcolors()) <= 13, 'Unexpected texture noise or extra colors'
+    for name in ('light', 'dark'):
+        raw = (ROOT / 'wordmark' / f'{name}.svg').read_bytes()
+        expected_sha = reference_info()['wordmarkOrigin'][name]['gitBlobSha']
+        assert sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest() == expected_sha, 'Original GitHub wordmark changed'
+        assert wordmarks[name].size == (357, 40), 'Original wordmark proportions changed'
+    for filename, size in PNG_FILES.items():
+        with Image.open(ROOT / 'assets' / filename) as image:
+            assert image.size == (size, size) and image.convert('RGBA').tobytes() == frames[size].tobytes(), filename
+    with Image.open(ROOT / 'assets/icon.ico') as ico:
+        assert ico.ico.sizes() == {(s, s) for s in ICO_SIZES}
+        for size in ICO_SIZES:
+            assert ico.ico.getimage((size, size)).convert('RGBA').tobytes() == frames[size].tobytes()
+    with Image.open(ROOT / 'assets/icon.icns') as icns:
+        for size in icns.info['sizes']:
+            assert icns.icns.getimage(size).convert('RGBA').tobytes() == frames[size[0] * size[2]].tobytes()
+    assert (ROOT / 'web/favicon.svg').read_bytes() == (ROOT / 'assets/mark.svg').read_bytes()
+    with Image.open(ROOT / 'web/favicon.ico') as ico:
+        assert ico.ico.sizes() == {(s, s) for s in (16, 32, 48)}
+        for size in (16, 32, 48):
+            assert ico.ico.getimage((size, size)).convert('RGBA').tobytes() == frames[size].tobytes()
+    for filename, expected in [('sidebar.bmp', (328, 628)), ('header.bmp', (300, 114))]:
+        with Image.open(ROOT / 'installer' / filename) as image:
+            assert image.size == expected and image.mode == 'RGB', filename
+    manifest = json.loads((ROOT / 'manifest.json').read_text(encoding='utf-8'))
+    assert manifest['identity'] == 'Pumpkin Block'
+    assert manifest['reference'] == reference_info()
+    for path, info in manifest['files'].items():
+        data = (ROOT / path).read_bytes()
+        assert len(data) == info['bytes'] and sha256(data).hexdigest() == info['sha256'], path
+    print('Pumpkin Block verified: 16x16 mark, unchanged original GitHub wordmarks, native exports and manifest.')
 
 
 def build():
-    frames=render_sources()
     if '--check' in sys.argv:
-        verify(frames); return
-    manifest={'brand':DATA['brand'],'integrated':True,'sourceFormat':'SVG','calendarStatus':'active','variants':{},'files':{}}
-    for v in DATA['variants']:
-        key=v['id']; images=frames[key]; folder=ROOT/'assets'/key
-        for filename,size in PNG_FILES.items(): images[size].save(folder/filename)
-        images[256].save(folder/'icon.ico',sizes=[(s,s) for s in ICO_SIZES],append_images=[images[s] for s in ICO_SIZES])
-        images[1024].save(folder/'icon.icns',append_images=[images[s] for s in (32,64,128,256,512,1024)])
-        manifest['variants'][key]={'name':v['name'],'start':v['start'],'end':v['end'],'svg':f'assets/{key}/mark.svg','lockup':f'assets/{key}/lockup.svg','windows':f'assets/{key}/icon.ico','macos':f'assets/{key}/icon.icns','runtimePng':f'assets/{key}/32x32.png'}
-    images=frames['standard']
-    images[48].save(ROOT/'web/favicon.ico',sizes=[(s,s) for s in (16,32,48)],append_images=[images[s] for s in (16,32,48)])
-    shutil.copyfile(ROOT/'assets/standard/mark.svg',ROOT/'web/favicon.svg')
-    metadata=[{k:v[k] for k in ('id','name','label','start','end','period','note','accent')} for v in DATA['variants']]
-    (ROOT/'seasons.mjs').write_text('export const SEASONS = '+json.dumps(metadata,ensure_ascii=False,indent=2)+';\n\n'+(SOURCE/'calendar.mjs').read_text(encoding='utf-8'),encoding='utf-8')
-    shutil.copyfile(SOURCE/'preview.html',ROOT/'index.html')
-    for directory in ('assets','web','wordmark'):
-        for file in sorted((ROOT/directory).rglob('*')):
-            if file.is_file(): manifest['files'][file.relative_to(ROOT).as_posix()]={'bytes':file.stat().st_size,'sha256':sha256(file.read_bytes()).hexdigest()}
-    if (ROOT/'motion/manifest.json').exists():
-        manifest['motion']={'manifest':'motion/manifest.json','preview':'motion/index.html'}
-        for file in sorted((ROOT/'motion').rglob('*.svg')):
-            manifest['files'][file.relative_to(ROOT).as_posix()]={'bytes':file.stat().st_size,'sha256':sha256(file.read_bytes()).hexdigest()}
-    (ROOT/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-    verify(frames)
-    with ZipFile(ROOT/'pumpkin-launcher-assets.zip','w',ZIP_DEFLATED) as archive:
-        for file in sorted(ROOT.rglob('*')):
-            if file.is_file() and file.suffix!='.zip' and '__pycache__' not in file.parts and 'qa' not in file.relative_to(ROOT).parts:
-                archive.write(file,file.relative_to(ROOT))
-    print(f'Prepared {len(manifest["files"])} assets; SVG for UI, native formats only for system use.')
+        verify(*render_sources())
+        return
+    for path, content in source_assets(ROOT).items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8', newline='\n')
+    frames, wordmarks = render_sources()
+    for filename, size in PNG_FILES.items():
+        frames[size].save(ROOT / 'assets' / filename)
+    frames[256].save(ROOT / 'assets/icon.ico', sizes=[(s, s) for s in ICO_SIZES], append_images=[frames[s] for s in ICO_SIZES])
+    frames[1024].save(ROOT / 'assets/icon.icns', append_images=[frames[s] for s in (32, 64, 128, 256, 512, 1024)])
+    (ROOT / 'web').mkdir(exist_ok=True)
+    frames[48].save(ROOT / 'web/favicon.ico', sizes=[(s, s) for s in (16, 32, 48)], append_images=[frames[s] for s in (16, 32, 48)])
+    shutil.copyfile(ROOT / 'assets/mark.svg', ROOT / 'web/favicon.svg')
+    shutil.copyfile(ROOT / 'assets/mark.svg', ROOT.parents[1] / 'app-icon.svg')
+    subprocess.run([sys.executable, str(ROOT / 'installer/build.py')], check=True)
+    paths = [p for folder in ('assets', 'wordmark', 'web') for p in (ROOT / folder).rglob('*') if p.is_file()]
+    paths += [ROOT / 'installer' / f for f in ('sidebar.bmp', 'header.bmp')]
+    manifest = {'brand': 'Pumpkin Launcher', 'identity': 'Pumpkin Block', 'sourceFormat': 'SVG paths',
+                'canvas': [16, 16], 'grid': 16, 'reference': reference_info(),
+                'mark': 'assets/mark.svg', 'wordmark': 'wordmark/light.svg',
+                'palette': {'ink': INK, 'primary': '#C77829', 'highlight': '#E8AE4C', 'leaf': '#68763C', 'paper': PAPER},
+                'files': {p.relative_to(ROOT).as_posix(): {'bytes': p.stat().st_size, 'sha256': sha256(p.read_bytes()).hexdigest()} for p in sorted(paths)}}
+    (ROOT / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+    verify(frames, wordmarks)
+    print(f'Built clean Pumpkin Block grid artwork: {len(paths)} assets.')
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     build()

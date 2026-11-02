@@ -40,7 +40,8 @@ pub(crate) fn zip_paths(
         if entry.is_dir() {
             continue;
         }
-        let Some(rel) = entry.name().strip_prefix(prefix) else { continue };
+        let name = entry.name()?;
+        let Some(rel) = name.strip_prefix(prefix) else { continue };
         if skip.iter().any(|s| rel == *s || rel.strip_prefix(s).is_some_and(|r| r.starts_with('/'))) {
             continue;
         }

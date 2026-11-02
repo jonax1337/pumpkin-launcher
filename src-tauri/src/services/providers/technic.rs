@@ -244,7 +244,7 @@ fn loader_from(profile: &serde_json::Value) -> AppResult<(String, ModLoader, Opt
 /// `bin/` gehört dem Technic-Launcher und wird nicht übernommen.
 fn inspect(temp: TempFile, name: &str) -> AppResult<Pack> {
     let mut zip = zip::ZipArchive::new(fs::File::open(&temp.0)?)?;
-    let names: Vec<String> = zip.file_names().map(str::to_string).collect();
+    let names: Vec<String> = zip.file_names().map(|name| name.map(|name| name.into_owned())).collect::<Result<_, _>>()?;
     // Manche Zips haben einen einzelnen Ordner um alles.
     let prefix = if names.iter().any(|n| n == "bin/version.json") {
         String::new()

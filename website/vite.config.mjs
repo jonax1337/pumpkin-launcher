@@ -5,12 +5,10 @@ import { copyFileSync, mkdirSync } from "node:fs";
 // Stage only the approved web SVGs. Keep ZIPs, generators and native icons out of the site.
 const branding = new URL("../branding/pumpkin-launcher/", import.meta.url);
 const assets = new URL("./assets/brand/", import.meta.url);
-for (const season of ["standard", "spring", "summer", "halloween", "winter"]) {
-  const target = new URL(`${season}/`, assets);
-  mkdirSync(target, { recursive: true });
-  copyFileSync(new URL(`assets/${season}/mark.svg`, branding), new URL("mark.svg", target));
-}
+mkdirSync(assets, { recursive: true });
+copyFileSync(new URL("assets/mark.svg", branding), new URL("mark.svg", assets));
 copyFileSync(new URL("web/favicon.svg", branding), new URL("favicon.svg", assets));
+copyFileSync(new URL("wordmark/light.svg", branding), new URL("wordmark.svg", assets));
 
 const page = (name) => fileURLToPath(new URL(name, import.meta.url));
 

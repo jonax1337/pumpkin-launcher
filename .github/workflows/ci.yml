@@ -35,7 +35,7 @@ jobs:
       - name: Build website
         run: pnpm build:website
 
-      - name: Check branding calendar & assets
+      - name: Check branding assets
         run: pnpm check:branding
 
       - name: Check frontend helpers (Modrinth, formatting, routes)

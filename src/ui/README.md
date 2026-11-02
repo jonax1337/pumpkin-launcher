@@ -58,7 +58,7 @@ Menu and tooltip behavior (context menu, keyboard, host tooltips) lives in `menu
 - `FormRow` and `FormSection` use container queries: use `FormRow` inside `FormSection` (or any `@container`).
 - `Chip` always shows the pixel square unless `icon` is set (no `dot` prop). `Popover`/`Menu` do not emit `data-size`/`data-pad`/`data-wide`; sizes are classes.
 - Page-specific overrides (for example for the project page in the side panel) belong in the page CSS, selected through `data-kit-overlay` (see below), not in the kit.
-- No Buddy in the kit: `Empty` shows `ill` only if given, and toasts use kit icons in the `[data-icon]` slot for every type. The app wraps `Empty` as `EmptyState` (`@/components/EmptyState`, with `mood`; shows the Buddy unless `ill` is passed) and `ErrorBox` (`@/components/ErrorBox`) puts the Buddy into a `StatusPanel`.
+- Branding stays in the app layer: the kit Empty shows ill only if given, and toasts use kit icons. The app wraps Empty as EmptyState (with Pumpkin Block as its default illustration) and ErrorBox uses Pumpkin Block in its icon slot.
 
 ### Forms, buttons, status, page, tables
 

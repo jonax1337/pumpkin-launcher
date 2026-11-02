@@ -1,6 +1,6 @@
 # Pumpkin Launcher launch video
 
-A 44-second, 60 fps continuous camera move through a pixel world, with Buddy and a synthesized chiptune soundtrack. HyperFrames renders the HTML/GSAP composition into landscape and portrait MP4s.
+A 44-second, 60 fps continuous camera move through a pixel world, with Pumpkin Block and a synthesized chiptune soundtrack. HyperFrames renders the HTML/GSAP composition into landscape and portrait MP4s.
 
 ## Sources
 
@@ -10,12 +10,11 @@ A 44-second, 60 fps continuous camera move through a pixel world, with Buddy and
 | `src/pixel.js` | Seeded pixel-art generators |
 | `src/film.css` | Composition styling |
 | `audio/music.py` | Deterministic music and sound-effect synthesis |
-| `build.mjs` | Stage composition sources, Buddy poses, logos, fonts and audio |
+| `build.mjs` | Stage composition sources, the fixed Pumpkin Block, logos, fonts and audio |
 | `yt/` | 1920×1080 HyperFrames project |
 | `tiktok/` | 1080×1920 project for Shorts/Reels/TikTok |
-| `videos/` | Retained MP4 exports |
 
-`yt/src`, `yt/assets`, `tiktok/src`, `tiktok/assets` and `audio/soundtrack.wav` are generated. The build reads Buddy assets from `branding/` and fonts from the root dependencies; branding edits flow into the next render.
+`yt/src`, `yt/assets`, `tiktok/src`, `tiktok/assets` and `audio/soundtrack.wav` are generated. The build reads Pumpkin Block assets from `branding/` and fonts from the root dependencies; branding edits flow into the next render.
 
 ## Usage
 
@@ -43,16 +42,10 @@ npm run preview:yt       # or preview:tiktok
 npm run render
 ```
 
-Render output goes to `yt/renders/pumpkin-launcher-yt-16x9.mp4` and `tiktok/renders/pumpkin-launcher-tiktok-9x16.mp4`. Copy the desired exports into `videos/` to update the retained H.264/AAC files. `npm run check` is the optional HyperFrames layout/contrast tool for both compositions.
+Render output goes to `yt/renders/pumpkin-launcher-yt-16x9.mp4` and `tiktok/renders/pumpkin-launcher-tiktok-9x16.mp4`. Generated exports remain outside the tracked source tree. `npm run check` is the optional HyperFrames layout/contrast tool for both compositions.
 
 ## Composition
 
-At 120 BPM, each bar lasts two seconds. Buddy wakes under an aurora, visits the Modrinth/CurseForge/FTB/Technic islands, gathers their content, reveals the launcher and launches into a world before the wordmark outro.
+At 120 BPM, each bar lasts two seconds. The Pumpkin Block appears under an aurora, visits the Modrinth/CurseForge/FTB/Technic islands, gathers their content, reveals the launcher and launches into a world before the wordmark outro.
 
-Camera position and log-zoom use monotone cubic interpolation, with banking, parallax and beat-synced motion. Seeded graphics and timeline-based `render(t)` make frames reproducible. Buddy poses come from the standard motion SVGs but are selected by the timeline rather than SMIL. World text uses `data-layout-allow-occlusion` because the effect canvas is treated as opaque by the layout tool; foreground text remains included in its analysis.
-
-The [website asset-source reference](../../website/README.md#asset-sources) describes the
-separate silent trailer and 22.5-second poster. Changing the retained landscape export
-does not update those files: no web encoding/poster extraction command or pinned settings
-are recorded in the repository. The render commands above reproduce composition exports,
-not the exact website derivatives.
+Camera position and log-zoom use monotone cubic interpolation, with banking, parallax and beat-synced motion. Seeded graphics and timeline-based `render(t)` make frames reproducible. The Pumpkin Block is the same fixed SVG used by the launcher; the composition moves the mark without changing its artwork. World text uses `data-layout-allow-occlusion` because the effect canvas is treated as opaque by the layout tool; foreground text remains included in its analysis.

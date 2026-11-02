@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { PumpkinChoice } from "@/branding/calendar";
 import type { LanguageChoice } from "@/i18n/types";
 import { EMPTY_LAUNCH } from "@/lib/launchSettings";
 import type { JvmPreset } from "@/lib/jvm";
@@ -40,8 +39,6 @@ interface SettingsState {
   textSize: TextSize;
   /** Bewegte Szenen (Sterne, Wolken, Glut); pausieren ohnehin, solange Minecraft läuft. */
   motion: boolean;
-  /** Automatisch nach Jahreszeit oder eine dauerhaft gewählte Pumpkin-Variante. */
-  pumpkin: PumpkinChoice;
   /** Das laufende Spiel in Discord zeigen (Version und Loader, sonst nichts); aus, bis der Spieler es einschaltet. */
   discordPresence: boolean;
   /**
@@ -64,7 +61,7 @@ interface SettingsState {
 type SettingsPatch = Partial<
   Pick<
     SettingsState,
-    "javaPath" | "memoryMb" | "minMemoryMb" | "jvmPreset" | "jvmArgs" | "launch" | "window" | "launcherOnPlay" | "pxSize" | "textSize" | "motion" | "pumpkin" | "discordPresence" | "language"
+    "javaPath" | "memoryMb" | "minMemoryMb" | "jvmPreset" | "jvmArgs" | "launch" | "window" | "launcherOnPlay" | "pxSize" | "textSize" | "motion" | "discordPresence" | "language"
   >
 >;
 
@@ -87,7 +84,6 @@ const DEFAULT_SETTINGS = {
   pxSize: "m",
   textSize: "m",
   motion: true,
-  pumpkin: "auto",
   discordPresence: false,
   language: "system",
 } satisfies Partial<SettingsState>;
@@ -108,7 +104,7 @@ const offline = (name: string | undefined): ActiveAccount | null => (name ? { ki
 type Stored = Record<string, unknown>;
 
 /** Version des gespeicherten Formats; jede Änderung braucht einen Schritt in `migrate`. */
-const SETTINGS_VERSION = 6;
+const SETTINGS_VERSION = 7;
 
 /** v1 kannte nur einen Offline-Namen, v2 eine Liste mit `offlineName` als aktivem Namen; ab v3 gilt `active` mit `offlineAccounts`. */
 function migrateAccounts(old: Stored, version: number): Stored {
@@ -141,6 +137,11 @@ function migrate(persisted: unknown, version: number): SettingsState {
   if (version < 5) state = withoutClientId(state);
   // v5 kannte noch keine Sprachwahl; „system“ (Browsersprache folgen) ist der neue Standard.
   if (version < 6) state = { ...state, language: DEFAULT_SETTINGS.language };
+  // v7 verwendet nur Pumpkin Block; die alte Markenwahl entfällt, alle anderen Einstellungen bleiben erhalten.
+  if (version < 7) {
+    const { pumpkin: _removed, ...rest } = state;
+    state = rest;
+  }
   return state as unknown as SettingsState;
 }
 

@@ -5,7 +5,6 @@ import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { TipProvider, Toaster } from "@/ui";
 import { LanguageProvider } from "@/i18n";
 import { Layout } from "@/app/Layout";
-import { BrandProvider } from "@/branding/Brand";
 import { trackLayoutShift } from "@/dev/layoutShift";
 import { queryClient } from "@/lib/queryClient";
 import { discoverUrl } from "@/lib/routes";
@@ -53,10 +52,8 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
         <TipProvider delayDuration={450}>
-          <BrandProvider>
-            <RouterProvider router={router} />
-            <Toaster />
-          </BrandProvider>
+          <RouterProvider router={router} />
+          <Toaster />
         </TipProvider>
       </LanguageProvider>
     </QueryClientProvider>

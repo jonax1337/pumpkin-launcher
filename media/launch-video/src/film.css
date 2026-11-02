@@ -127,8 +127,8 @@ canvas, img.px { image-rendering: pixelated; image-rendering: crisp-edges; displ
 
 /* ---------------------------------------------------------------- outro */
 .outro { position: absolute; inset: 0; }
-.o-buddy { position: absolute; width: 336px; height: 336px; left: 792px; top: 118px; }
-.o-buddy svg { width: 100%; height: 100%; display: block; }
+.o-mark { position: absolute; width: 336px; height: 336px; left: 792px; top: 118px; }
+.o-mark svg { width: 100%; height: 100%; display: block; }
 .o-lock { position: absolute; left: 0; top: 470px; width: 100%; display: flex; flex-direction: column; align-items: center; }
 .o-word { width: 880px; height: 99px; position: relative; }
 .o-word img { width: 100%; height: 100%; display: block; filter: drop-shadow(5px 5px 0 #03050a); }
@@ -141,7 +141,7 @@ canvas, img.px { image-rendering: pixelated; image-rendering: crisp-edges; displ
 .o-url .gh { width: 36px; height: 36px; filter: drop-shadow(3px 3px 0 #03050a); }
 .o-url span { padding-top: 4px; }
 
-.v .o-buddy { width: 420px; height: 420px; left: 330px; top: 330px; }
+.v .o-mark { width: 420px; height: 420px; left: 330px; top: 330px; }
 .v .o-lock { top: 800px; }
 .v .o-word { width: 900px; height: 101px; }
 .v .o-tag { flex-direction: column; align-items: center; gap: 12px; font-size: 128px; margin-top: 48px; }

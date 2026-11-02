@@ -28,6 +28,8 @@ dist-ssr
 *.tsbuildinfo
 .env
 .env.*
+__pycache__/
+*.py[cod]
 .playwright-mcp/
 
 # Fabric-Mod (mod/): heruntergeladenes JDK und Gradle-Ausgaben

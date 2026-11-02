@@ -116,7 +116,7 @@ fn form_decode(s: &str) -> String {
     percent_encoding::percent_decode_str(&s.replace('+', " ")).decode_utf8_lossy().into_owned()
 }
 
-// Seite im Browser nach der Anmeldung: Vorlage und Schriften liegen in `assets/login/`; Tokens (base.css, ui/tokens.css), Buddy, Wortzeichen
+// Seite im Browser nach der Anmeldung: Vorlage und Schriften liegen in `assets/login/`; Tokens (base.css, ui/tokens.css), Pumpkin Block, Wortzeichen
 // und Favicon sind die Dateien der App selbst (`src/`, `branding/`). Alles wird eingebunden, die Seite lädt nichts nach.
 const PAGE: &str = include_str!("../../../assets/login/page.html");
 const APP_CSS: &str = concat!(include_str!("../../../../src/styles/base.css"), "\n", include_str!("../../../../src/ui/tokens.css"));
@@ -127,21 +127,21 @@ const FAVICON: &[u8] = include_bytes!("../../../../branding/pumpkin-launcher/web
 
 /// Die Seite, die der Browser nach dem Rücksprung zeigt (nur feste Texte, nichts aus der Anfrage).
 struct ResultPage {
-    buddy: &'static [u8],
+    mark: &'static [u8],
     class: &'static str,
     title: &'static str,
     text: &'static str,
 }
 
 const SIGNED_IN: ResultPage = ResultPage {
-    buddy: include_bytes!("../../../../branding/pumpkin-launcher/motion/standard/success.svg"),
+    mark: include_bytes!("../../../../branding/pumpkin-launcher/assets/mark.svg"),
     class: "",
     title: "Angemeldet",
     text: "Du kannst dieses Fenster schließen und zu Pumpkin Launcher zurückkehren.",
 };
 
 const FAILED: ResultPage = ResultPage {
-    buddy: include_bytes!("../../../../branding/pumpkin-launcher/motion/standard/oops.svg"),
+    mark: include_bytes!("../../../../branding/pumpkin-launcher/assets/mark.svg"),
     class: "bad",
     title: "Das hat nicht geklappt",
     text: "Schließe dieses Fenster und versuch die Anmeldung in Pumpkin Launcher noch einmal.",
@@ -153,7 +153,7 @@ impl ResultPage {
         PAGE.replace("@FAVICON@", &data_url("image/svg+xml", FAVICON))
             .replace("@F_BIG@", &data_url("font/woff2", FONT_BIG))
             .replace("@F_HANKEN@", &data_url("font/woff2", FONT_HANKEN))
-            .replace("@BUDDY@", &data_url("image/svg+xml", self.buddy))
+            .replace("@MARK@", &data_url("image/svg+xml", self.mark))
             .replace("@WORDMARK@", &data_url("image/svg+xml", WORDMARK))
             .replace("@CLASS@", self.class)
             .replace("@TITLE@", self.title)
@@ -180,7 +180,7 @@ mod tests {
         assert!(ok.contains(".login-card") && ok.contains("--panel-2:"), "Karte und Tokens der App sind eingebunden");
         assert!(ok.contains("font-family:\"Big Shoulders Display\"") && !ok.contains("url(http"), "Schriften eingebettet, keine externen Adressen");
         for page in [&ok, &bad] {
-            for placeholder in ["@FAVICON@", "@F_BIG@", "@F_HANKEN@", "@BUDDY@", "@WORDMARK@", "@CLASS@", "@TITLE@", "@TEXT@", "@CSS_APP@"] {
+            for placeholder in ["@FAVICON@", "@F_BIG@", "@F_HANKEN@", "@MARK@", "@WORDMARK@", "@CLASS@", "@TITLE@", "@TEXT@", "@CSS_APP@"] {
                 assert!(!page.contains(placeholder), "offener Platzhalter {placeholder}");
             }
         }

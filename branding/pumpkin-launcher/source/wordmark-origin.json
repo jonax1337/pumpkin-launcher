@@ -1,0 +1,12 @@
+{
+  "repository": "jonax1337/pumpkin-launcher",
+  "ref": "8e638867e0c51e11e63e30ac0ab2f9b51d3ee63e",
+  "light": {
+    "path": "branding/pumpkin-launcher/wordmark/light.svg",
+    "gitBlobSha": "04dc28bfd8a21393c72f3078526c145911a26b84"
+  },
+  "dark": {
+    "path": "branding/pumpkin-launcher/wordmark/dark.svg",
+    "gitBlobSha": "1117f044ee8ab3171bbb87f7974c9ab0d86a7334"
+  }
+}

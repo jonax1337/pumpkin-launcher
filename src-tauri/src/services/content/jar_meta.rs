@@ -102,9 +102,11 @@ fn entry_bytes<R: Read + Seek>(
 fn nested_ids<R: Read + Seek>(zip: &mut ZipArchive<R>, budget: &mut ExpandedSize) -> AppResult<Vec<String>> {
     let names: Vec<String> = zip
         .file_names()
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
         .filter(|name| NESTED_FOLDERS.iter().any(|folder| name.starts_with(folder)) && name.ends_with(".jar"))
         .take(MAX_NESTED_JARS)
-        .map(String::from)
+        .map(|name| name.into_owned())
         .collect();
     let mut ids = Vec::new();
     for name in names {
