@@ -120,7 +120,7 @@ fn is_valid_value(value: &str) -> bool {
 /// Was die Einstellungen eines Starts ergeben: die Variablen, der aufgelöste Wrapper und die Hooks.
 #[derive(Debug)]
 pub struct LaunchEnvironment {
-    env: Vec<(String, String)>,
+    pub env: Vec<(String, String)>,
     pub wrapper: Option<Invocation>,
     pub pre_launch: Option<Hook>,
     pub post_exit: Option<Hook>,
@@ -138,12 +138,6 @@ impl LaunchEnvironment {
             pre_launch: hook(&settings.pre_launch, CommandKind::PreLaunch)?,
             post_exit: hook(&settings.post_exit, CommandKind::PostExit)?,
         })
-    }
-
-    /// Die Variablen des Nutzers, dahinter `injected` (die der Einspeisung der Mod): bei gleichem Namen gilt die spätere,
-    /// also die des Launchers.
-    pub fn variables_with(&self, injected: &[(String, String)]) -> Vec<(String, String)> {
-        self.env.iter().chain(injected).cloned().collect()
     }
 }
 
@@ -282,16 +276,6 @@ mod tests {
     }
 
     #[test]
-    fn the_variables_of_the_injection_come_last_so_they_win() {
-        let environment = LaunchEnvironment { env: vec![("FOO".into(), "bar".into()), ("SHARED".into(), "user".into())], wrapper: None, pre_launch: None, post_exit: None };
-
-        let merged = environment.variables_with(&[("SHARED".into(), "injected".into())]);
-
-        let expected = [("FOO", "bar"), ("SHARED", "user"), ("SHARED", "injected")].map(|(name, value)| (name.to_owned(), value.to_owned()));
-        assert_eq!(merged, expected);
-    }
-
-    #[test]
     fn resolving_builds_hooks_and_finds_the_wrapper() {
         let common = if cfg!(windows) { "cmd" } else { "sh" };
         let settings = LaunchSettings {
@@ -308,7 +292,7 @@ mod tests {
         assert_eq!(wrapper.args, ["--flag"]);
         assert!(environment.pre_launch.is_some());
         assert!(environment.post_exit.is_none());
-        assert_eq!(environment.variables_with(&[]), [("FOO".to_owned(), "bar".to_owned())]);
+        assert_eq!(environment.env, [("FOO".to_owned(), "bar".to_owned())]);
     }
 
     #[test]

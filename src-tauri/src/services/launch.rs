@@ -54,14 +54,8 @@ pub struct LaunchSpec<'a> {
     pub memory_mb: u32,
     /// Startgröße des Heaps (`-Xms`); ohne entscheidet die JVM.
     pub min_memory_mb: Option<u32>,
-    /// Startoptionen der eingespeisten Mod (docs/bridge/README.md, "Support selection"): nach den JVM-Argumenten der Version, vor `extra_jvm_args`.
-    pub injected_jvm_args: &'a [String],
-    /// Zusätzliche verifizierte Mod-JARs; verändert keine Library der Version.
-    pub injected_classpath: &'a [PathBuf],
     pub extra_jvm_args: &'a [String],
     pub window: GameWindow,
-    /// Spielargumente der eingespeisten Mod: nach denen der Version, vor `extra_game_args`.
-    pub injected_game_args: &'a [String],
     pub extra_game_args: &'a [String],
     /// Direkt in eine Welt oder auf einen Server.
     pub quick_play: Option<&'a QuickPlay>,
@@ -144,7 +138,7 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     args.extend(jvm.iter().map(|a| substitute(a, &vars)));
     // ForgeBootstrap sucht sonst relativ zum Spielverzeichnis statt im gemeinsamen Library-Verzeichnis.
     if version.main_class == "net.minecraftforge.bootstrap.ForgeBootstrap"
-        && !args.iter().chain(spec.injected_jvm_args).chain(spec.extra_jvm_args)
+        && !args.iter().chain(spec.extra_jvm_args)
             .any(|arg| arg == "-DlibraryDirectory" || arg.starts_with("-DlibraryDirectory="))
     {
         args.push(format!("-DlibraryDirectory={}", vars["library_directory"]));
@@ -153,7 +147,6 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
         let file = path_text(log_config_path(spec.dirs, log));
         args.push(substitute(&log.argument, &HashMap::from([("path", file)])));
     }
-    args.extend(spec.injected_jvm_args.iter().cloned());
     // Eigene JVM-Args der Instanz zuletzt, damit sie Vorgaben der Version überschreiben.
     args.extend(spec.extra_jvm_args.iter().cloned());
     args.push(version.main_class.clone());
@@ -162,7 +155,6 @@ pub fn build_args(spec: &LaunchSpec, env: &Env) -> AppResult<Vec<String>> {
     if let Some(QuickPlayArgs::Legacy(legacy)) = quick_play {
         args.extend(legacy);
     }
-    args.extend(spec.injected_game_args.iter().cloned());
     // Eigene Spielargumente zuletzt. Sie überschreiben nichts: doppelte Optionen lehnt Minecraft ab
     // (je nach Version Standardwert oder Startabbruch).
     args.extend(spec.extra_game_args.iter().cloned());
@@ -196,9 +188,7 @@ fn path_text(path: PathBuf) -> String {
 fn launch_vars(spec: &LaunchSpec, env: &Env) -> HashMap<&'static str, String> {
     let LaunchSpec { version, dirs, instance_id, account, session, .. } = spec;
     let sep = env.classpath_separator();
-    let cp = classpath(version, dirs, env).into_iter().map(path_text)
-        .chain(spec.injected_classpath.iter().map(|path| path.to_string_lossy().into_owned()))
-        .collect::<Vec<_>>().join(sep);
+    let cp = classpath(version, dirs, env).into_iter().map(path_text).collect::<Vec<_>>().join(sep);
     let token = session.map_or(OFFLINE_PLACEHOLDER, |s| s.access_token);
     HashMap::from([
         ("auth_player_name", account.username.clone()),
@@ -300,10 +290,8 @@ pub enum LogStream {
 
 /// Rückruf für jede Ausgabezeile des Spiels.
 type LineFn = Arc<dyn Fn(LogStream, String) + Send + Sync>;
-/// Rückruf für jede stdout-Zeile, wie das Spiel sie schrieb (vor dem Auflösen der XML-Ereignisse).
-type RawFn = Arc<dyn Fn(&str) + Send + Sync>;
 
-async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn, on_raw: Option<RawFn>) {
+async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn) {
     let mut reader = BufReader::new(stream);
     let mut xml = XmlLog::default();
     let mut buf = Vec::new();
@@ -320,9 +308,6 @@ async fn pump(stream: impl AsyncRead + Unpin, kind: LogStream, on_line: LineFn, 
         }
         let raw = String::from_utf8_lossy(&buf);
         let raw = raw.trim_end_matches(['\r', '\n']);
-        if let Some(on_raw) = &on_raw {
-            on_raw(raw);
-        }
         let line = if kind == LogStream::Stdout { xml.line(raw) } else { Some(raw.to_owned()) };
         if let Some(line) = line {
             on_line(kind, line);
@@ -374,12 +359,11 @@ pub struct GameCommand<'a> {
 
 /// Startet `command` im Spielverzeichnis. Mit Argumentdatei bekommt Java nur `@datei`; die Datei verschwindet, sobald
 /// Java sie gelesen haben muss (`argfile::READ_GRACE`).
-/// `on_line` bekommt jede aufbereitete Ausgabezeile, `on_stdout_raw` jede stdout-Zeile unverändert,
-/// `on_exit` das Prozessende samt Ursache, nachdem alle Ausgaben gelesen sind.
+/// `on_line` bekommt jede aufbereitete Ausgabezeile, `on_exit` das Prozessende samt Ursache, nachdem alle Ausgaben
+/// gelesen sind.
 pub fn spawn(
     command: &GameCommand,
     on_line: impl Fn(LogStream, String) + Send + Sync + 'static,
-    on_stdout_raw: impl Fn(&str) + Send + Sync + 'static,
     on_exit: impl FnOnce(ProcessExit) + Send + 'static,
 ) -> AppResult<Running> {
     std::fs::create_dir_all(command.game_dir)?;
@@ -391,8 +375,8 @@ pub fn spawn(
     let pid = child.id().unwrap_or_default();
     let on_line: LineFn = Arc::new(on_line);
     let pumps = [
-        child.stdout.take().map(|s| tokio::spawn(pump(s, LogStream::Stdout, on_line.clone(), Some(Arc::new(on_stdout_raw))))),
-        child.stderr.take().map(|s| tokio::spawn(pump(s, LogStream::Stderr, on_line, None))),
+        child.stdout.take().map(|s| tokio::spawn(pump(s, LogStream::Stdout, on_line.clone()))),
+        child.stderr.take().map(|s| tokio::spawn(pump(s, LogStream::Stderr, on_line))),
     ];
     let (kill, kill_rx) = oneshot::channel::<()>();
     tokio::spawn(supervise(child, kill_rx, pumps.into_iter().flatten().collect(), on_exit));
@@ -532,11 +516,8 @@ pub(crate) mod test_support {
             account,
             memory_mb: 2048,
             min_memory_mb: None,
-            injected_jvm_args: &[],
-            injected_classpath: &[],
             extra_jvm_args: &[],
             window: GameWindow::Default,
-            injected_game_args: &[],
             extra_game_args: &[],
             quick_play: None,
             session: None,
@@ -631,15 +612,9 @@ mod tests {
         let (mut version, dirs, account) = (test_version(), Dirs::new("/shared data"), notch());
         version.main_class = "net.minecraftforge.bootstrap.ForgeBootstrap".into();
         let shared = format!("-DlibraryDirectory={}", dirs.libraries().display());
-        let injected = ["-DlibraryDirectory=injected-libraries".to_owned()];
         let user = ["-DlibraryDirectory=user-libraries".to_owned()];
-        for (injected_jvm_args, extra_jvm_args, expected) in [
-            (&[][..], &[][..], vec![shared.as_str()]),
-            (&injected[..], &[][..], vec![injected[0].as_str()]),
-            (&[][..], &user[..], vec![user[0].as_str()]),
-            (&injected[..], &user[..], vec![injected[0].as_str(), user[0].as_str()]),
-        ] {
-            let spec = LaunchSpec { injected_jvm_args, extra_jvm_args, ..plain_spec(&version, &dirs, &account) };
+        for (extra_jvm_args, expected) in [(&[][..], vec![shared.as_str()]), (&user[..], vec![user[0].as_str()])] {
+            let spec = LaunchSpec { extra_jvm_args, ..plain_spec(&version, &dirs, &account) };
             let args = build_args(&spec, &LINUX).unwrap();
             let main = args.iter().position(|arg| arg == &version.main_class).unwrap();
             let libraries: Vec<_> = args[..main].iter()
@@ -653,7 +628,6 @@ mod tests {
     fn forge_bootstrap_preserves_version_library_directory_and_override_order() {
         let (mut version, dirs, account) = (test_version(), Dirs::new("/shared data"), notch());
         version.main_class = "net.minecraftforge.bootstrap.ForgeBootstrap".into();
-        let injected = ["-DlibraryDirectory=injected-libraries".to_owned()];
         let user = ["-DlibraryDirectory=user-libraries".to_owned()];
         for (property, expected) in [
             ("-DlibraryDirectory=profile-libraries", "-DlibraryDirectory=profile-libraries".to_owned()),
@@ -661,17 +635,13 @@ mod tests {
             ("-DlibraryDirectory", "-DlibraryDirectory".to_owned()),
         ] {
             version.arguments.as_mut().unwrap().jvm = serde_json::from_value(serde_json::json!([property])).unwrap();
-            let spec = LaunchSpec {
-                injected_jvm_args: &injected,
-                extra_jvm_args: &user,
-                ..plain_spec(&version, &dirs, &account)
-            };
+            let spec = LaunchSpec { extra_jvm_args: &user, ..plain_spec(&version, &dirs, &account) };
             let args = build_args(&spec, &LINUX).unwrap();
             let main = args.iter().position(|arg| arg == &version.main_class).unwrap();
             let libraries: Vec<_> = args[..main].iter()
                 .filter(|arg| *arg == "-DlibraryDirectory" || arg.starts_with("-DlibraryDirectory="))
                 .map(String::as_str).collect();
-            assert_eq!(libraries, [expected.as_str(), injected[0].as_str(), user[0].as_str()]);
+            assert_eq!(libraries, [expected.as_str(), user[0].as_str()]);
         }
     }
 
@@ -691,30 +661,6 @@ mod tests {
             let main = args.iter().position(|arg| arg == main_class).unwrap();
             assert_eq!(args[..main], original[..original_main]);
         }
-    }
-
-    #[test]
-    fn injected_options_sit_after_the_version_options_and_before_the_users() {
-        let (version, dirs, account) = (test_version(), Dirs::new("/data"), notch());
-        let (injected_jvm, injected_game) = (["-Dfabric.addMods=m.jar".to_owned()], ["--fml.mods".to_owned(), "g:a:1".to_owned()]);
-        let (user_jvm, user_game) = (["-Dfoo=1".to_owned()], ["--demo".to_owned()]);
-        let spec = LaunchSpec {
-            injected_jvm_args: &injected_jvm,
-            injected_game_args: &injected_game,
-            extra_jvm_args: &user_jvm,
-            extra_game_args: &user_game,
-            ..plain_spec(&version, &dirs, &account)
-        };
-
-        let args = build_args(&spec, &LINUX).unwrap();
-
-        let at = |wanted: &str| args.iter().position(|arg| arg == wanted).unwrap_or_else(|| panic!("{wanted} fehlt in {args:?}"));
-        let log_config = args.iter().position(|arg| arg.starts_with("-Dlog4j.configurationFile=")).unwrap();
-        assert_eq!(at("-Dfabric.addMods=m.jar"), log_config + 1, "direkt nach den JVM-Argumenten der Version");
-        assert_eq!(at("-Dfoo=1"), log_config + 2, "danach die des Nutzers");
-        assert!(at("-Dfoo=1") < at("net.minecraft.client.main.Main"));
-        assert_eq!(at("--fml.mods"), args.len() - 3, "die Spielargumente der Einspeisung stehen vor denen des Nutzers");
-        assert_eq!(args[args.len() - 2..], ["g:a:1", "--demo"]);
     }
 
     #[test]
@@ -829,18 +775,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_child_gets_the_given_environment_and_both_line_callbacks_see_its_output() {
+    async fn the_child_gets_the_given_environment_and_the_line_callback_sees_its_output() {
         let game_dir = std::env::temp_dir().join(crate::models::new_id());
         let (program, args) = echo_env_command();
-        let (lines, raw_lines) = (Arc::new(Mutex::new(Vec::new())), Arc::new(Mutex::new(Vec::new())));
-        let (on_line, on_raw) = (lines.clone(), raw_lines.clone());
+        let lines = Arc::new(Mutex::new(Vec::new()));
+        let on_line = lines.clone();
         let (exit_tx, exit_rx) = oneshot::channel();
         // Bei gleichem Namen gilt der spätere Eintrag.
         let env = [("PUMPKIN_TEST_VAR".to_owned(), "erst".to_owned()), ("PUMPKIN_TEST_VAR".to_owned(), "wert-42".to_owned())];
         spawn(
             &GameCommand { wrapper: None, java: Path::new(program), args: &args, argfile_dir: None, game_dir: &game_dir, env: &env },
             move |_, line| on_line.lock().unwrap().push(line),
-            move |raw| on_raw.lock().unwrap().push(raw.to_owned()),
             move |result| {
                 exit_tx.send(result).ok();
             },
@@ -848,7 +793,6 @@ mod tests {
         .unwrap();
         assert_eq!(exit_rx.await.unwrap(), ProcessExit { code: Some(0), cause: ExitCause::Natural });
         assert_eq!(*lines.lock().unwrap(), ["wert-42"]);
-        assert_eq!(*raw_lines.lock().unwrap(), ["wert-42"]);
         std::fs::remove_dir_all(game_dir).unwrap();
     }
 
@@ -857,7 +801,7 @@ mod tests {
     async fn lines_of(command: &GameCommand<'_>) -> Vec<String> {
         let (line_tx, mut line_rx) = tokio::sync::mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = oneshot::channel();
-        spawn(command, move |_, line| drop(line_tx.send(line)), |_| {}, move |result| {
+        spawn(command, move |_, line| drop(line_tx.send(line)), move |result| {
             exit_tx.send(result).ok();
         })
         .unwrap();
@@ -916,7 +860,6 @@ mod tests {
         let result = spawn(
             &GameCommand { wrapper: None, java: &missing, args: &["secret".to_owned()], argfile_dir: Some(&base.join("argfiles")), game_dir: &base, env: &[] },
             |_, _| {},
-            |_| {},
             |_| {},
         );
 
@@ -996,7 +939,6 @@ mod tests {
         let running = spawn(
             &GameCommand { wrapper: Some(&wrapper), java: Path::new("java"), args: &[], argfile_dir: None, game_dir: &game_dir, env: &[] },
             |_, _| {},
-            |_| {},
             move |result| {
                 exit_tx.send(result).ok();
             },

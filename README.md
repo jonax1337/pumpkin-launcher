@@ -36,7 +36,6 @@ If you use the [release page](https://github.com/jonax1337/pumpkin-launcher/rele
 - **macOS:** the app is ad hoc signed, not notarized. If opening is blocked, follow [Apple's app approval guidance](https://support.apple.com/en-us/102445) only if you trust the download. Minecraft through 1.18.2 needs Rosetta 2 on Apple Silicon.
 
 Pumpkin is still in beta. Linux and macOS packages have not yet been tried on real machines, so expect rough edges there.
-Friends is experimental; playing together across different networks is not yet established as reliable.
 
 ## First steps
 
@@ -66,7 +65,6 @@ For later imports, use **Library > New instance > File** for `.mrpack` or CurseF
 - **Shortcuts and links:** create a desktop shortcut from an instance's **… > Create desktop shortcut** to start it with a double click; it uses the instance's icon (your own image, the modpack's icon or the pixel icon). A `pumpkin://launch/<instance id>` link from anywhere else always asks before starting, and `pumpkin://install/modrinth/<type>/<slug>` opens a Modrinth project to install. On Windows and Linux, **Settings > Java & launch** can also route Modrinth and CurseForge install links to Pumpkin Launcher; this is off by default because it replaces other apps' handlers.
 - **Skins and screenshots:** manage skins and capes, preview them in 3D, and browse each instance's screenshots.
 - **Comfort settings:** German and English, adjustable text size, reduced motion, keyboard shortcuts (`?` shows them, `Ctrl+K`, `Cmd+K` on macOS, opens a command palette for instances, pages and actions), page-specific right-click menus and optional Discord Rich Presence, off by default.
-- **Friends:** opt in to friend requests, online status and sharing worlds. Friends networking and actions need consent. See [Friends](docs/friends/README.md) for availability and limits.
 - **Updates and troubleshooting:** available launcher updates stay visible in the title bar and signed updates install only when you choose, not while a game or task is running. Instance logs and crash hints help when a game fails to start. After a crash, the Log tab explains common causes found in the crash report or log, such as too little memory, a wrong Java version or a missing mod, and offers a one-click fix where there is one.
 - **Announcements:** read the [GitHub announcements](https://github.com/jonax1337/pumpkin-launcher/discussions/categories/announcements) inside the launcher. The sidebar badge shows unread loaded posts; selecting a post marks it read. Read/unread status stays on this device across restarts. Older posts load on demand, and GitHub sign-in is not required.
 
@@ -76,10 +74,6 @@ To preserve or move saves:
 - **Export a setup with saves:** use the instance's **… > Export…** and choose what to include in the `.mrpack`. **Worlds (`saves`)** is optional and not selected by default. This is not a full instance backup; historical world backups are excluded.
 - **Before deleting an instance:** deletion also deletes its backups. If it has any, choose **Export backups first** in the deletion dialog before confirming.
 
-## Pumpkin Bridge
-
-**0.3.0** introduces [Pumpkin Bridge](docs/bridge/README.md), the bundled client-only integration between the launcher and Minecraft. In supported modded Microsoft-account launches, a Pumpkin button opens a menu of in-game features; no manual JAR installation is needed. The shared connection and menu work independently of Friends opt-in. Friends is its first implemented feature, with private data and actions withheld until consent.
-
 This guide describes **0.4.0**. Download links above follow the latest published release and become available for a version only after its installer pipeline succeeds and the release is published. See the [Changelog](CHANGELOG.md) for version-specific changes and historical limits.
 
 ## Help and privacy
@@ -88,16 +82,12 @@ Open **Settings > Support**. Choose **Report a bug** for a GitHub issue or **Ope
 
 If Pumpkin will not open, use [Discussions in your browser](https://github.com/jonax1337/pumpkin-launcher/discussions); you do not need the app to ask for help. For Linux startup or sign-in failures, include your distribution and version, the package used (`.deb` or AppImage) and the exact error. Use **Settings > Support** only if the app opens.
 
-For a game crash, open **Library > your instance > Log > Share log > Upload** after reading the notice. This uploads the cleaned last-start log or crash report to mclo.gs and copies its link. Anyone with the link can read it; your player name remains visible. Review the log before sharing. **Copy debug info** in the log also includes that instance's mod list. For the historical **0.2.0** in-game Friends startup problem, see the [release-specific workaround](CHANGELOG.md#known-limits-1); it does not establish a fix in 0.3.0.
+For a game crash, open **Library > your instance > Log > Share log > Upload** after reading the notice. This uploads the cleaned last-start log or crash report to mclo.gs and copies its link. Anyone with the link can read it; your player name remains visible. Review the log before sharing. **Copy debug info** in the log also includes that instance's mod list.
 Report security problems privately as described in [SECURITY.md](.github/SECURITY.md).
 
 Pumpkin has no trackers or telemetry. **Settings > About > Privacy** explains which services each feature contacts.
 Microsoft refresh tokens (credentials that keep you signed in) stay in the operating system's secure password storage: Windows Credential Manager, macOS Keychain or a Linux keyring. With Java 9 or newer the launcher passes Minecraft its arguments, including the access token (a short-lived game sign-in credential), in a temporary file in its cache folder (owner-only permissions on Linux and macOS, the access rules of your user profile on Windows) and deletes it seconds after the start; on Windows this needs plain ASCII paths and arguments. Otherwise, such as with Java 8 for older Minecraft versions, local programs that can inspect the game's command line may see the token while Minecraft runs.
 Mods and modpacks are not scanned for malware: install content only from authors you trust.
-
-Friends uses encrypted connections, but direct peers can see your IP addresses.
-Turn on **Settings > Friends > Always connect through a relay** to hide them from peers; the relay operator still sees connection metadata, such as your IP address, which endpoints connect and when.
-Read [Friends privacy](docs/friends/PRIVACY.md#your-choices-at-a-glance) before enabling it.
 
 ## Contributing and license
 

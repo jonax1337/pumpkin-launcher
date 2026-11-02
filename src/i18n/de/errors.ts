@@ -1,6 +1,5 @@
 import type { Dict } from "../types.ts";
 import { errorsApp } from "./errors.app.ts";
-import { errorsFriends } from "./errors.friends.ts";
 import { errorsGame } from "./errors.game.ts";
 import { errorsModrinth } from "./errors.modrinth.ts";
 import { errorsPacks } from "./errors.packs.ts";
@@ -57,7 +56,6 @@ const errorsCore = {
 export const errors = {
   ...errorsCore,
   ...errorsApp,
-  ...errorsFriends,
   ...errorsGame,
   ...errorsModrinth,
   ...errorsPacks,

@@ -1,13 +1,11 @@
 import { createContext, useContext, useEffect, useRef, useState, type RefObject } from "react";
 import { useLocation, useOutlet } from "react-router";
-import { FriendDialogs } from "@/components/friends/FriendDialogs";
 import { ShareLogDialog } from "@/components/support";
 import { InstanceDialogs } from "@/components/instance";
 import { DeepLinks } from "@/components/DeepLinks";
 import { ManualDownloads } from "@/components/ManualDownloads";
 import { ShortcutsDialog } from "@/components/ShortcutsDialog";
 import { useUpdateCheckOnStart } from "@/hooks/useAppUpdate";
-import { useFriendEvents } from "@/hooks/useFriendEvents";
 import { useGameEvents } from "@/hooks/useGameEvents";
 import { useMigrateLooks } from "@/hooks/useMigrateLooks";
 import { useOnline } from "@/hooks/useOnline";
@@ -66,7 +64,6 @@ export function Layout() {
   usePixelUnit();
   useAppearance();
   useGameEvents();
-  useFriendEvents();
   useOpenedPack();
   useMigrateLooks();
   useUpdateCheckOnStart();
@@ -96,7 +93,6 @@ export function Layout() {
           <ViewScrollbar view={view} />
           <InstanceDialogs />
           <ShareLogDialog />
-          <FriendDialogs />
           <ShortcutsDialog />
           <CommandPalette />
           <ManualDownloads />

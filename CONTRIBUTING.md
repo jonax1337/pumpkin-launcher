@@ -21,21 +21,12 @@ From the repository root:
 ```bash
 pnpm install
 pnpm tauri dev     # desktop app with hot reload
-pnpm dev:friends   # desktop app with the Friends directory configured
 pnpm tauri:remote  # desktop app with reduced WebView2 animation for remote sessions
 pnpm dev           # browser frontend with mock data at http://localhost:1420
 ```
 
 Set `RUST_LOG` to adjust backend logging. The browser mock does not authenticate or launch Minecraft.
 Fork-specific Microsoft registration is described under [Microsoft sign-in for forks](#microsoft-sign-in-for-forks).
-
-`pnpm dev:friends` runs `scripts/tauri-friends.mjs`: it supplies
-`https://pumpkin-friends-directory.jonas-laux.workers.dev` only when
-`PUMPKIN_FRIENDS_DIRECTORY` is unset, and forwards extra arguments to `tauri dev`.
-An existing value (including an empty value) is preserved. To use your own Worker, set that
-environment variable before starting the command; see [directory configuration](directory/README.md#deployment).
-Plain `pnpm tauri dev` has no source-default directory. This wrapper configures name lookup;
-it is not evidence that the remote service or Friends networking is working.
 
 ## Build and automated checks
 
@@ -53,28 +44,15 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets
 ```
 
 `pnpm build` synchronizes branding icons, type-checks the frontend and builds it with Vite.
-CI runs the frontend checks, the Friends directory tests and Rust checks on Windows, Linux and macOS;
+CI runs the frontend checks and Rust checks on Windows, Linux and macOS;
 Clippy runs on Linux with warnings non-blocking. The dependency job checks Rust advisories with `cargo deny`.
-
-For Bridge changes, `Mod` runs layer/script checks and representative node builds on
-pushes and pull requests. It selects the first and last registry row for each
-loader/game-JDK/Gradle-JDK/injection-strategy combination (currently 34 of 102 nodes).
-The complete build and compile matrices, Fabric kit demos and aggregate `mod-index`
-package run nightly at 01:17 UTC or via **Actions → Mod → Run workflow**.
-`Mod smoke` exercises all production targets nightly at 03:22 UTC or via manual dispatch,
-not on each push/PR. Version-specific failures outside the representative set can
-therefore surface only in a full run; dispatch both workflows before merging broad
-compatibility changes. Release tags still build and package every registered node.
 
 Component-specific setup and commands:
 
-- [Bridge mod](mod/README.md) and [protocol fixtures](mod/fixtures/protocol/README.md)
-- [Friends contracts](docs/friends/SPEC.md), [directory Worker](directory/README.md) and [relay operations](docs/friends/RELAY-OPS.md)
 - [CurseForge proxy](proxy/README.md) and [website](website/README.md)
-- [Minecraft API probe](tools/mc-api-probe/README.md), [production mod smoke harness](tools/mod-smoke/README.md) and [P2P connection tool](tools/p2p-spike/README.md)
 - [Branding assets](branding/pumpkin-launcher/README.md) and [launch video](media/launch-video/README.md)
 
-`pnpm tauri build` creates packages for the current OS. See [Release packaging](#release-packaging) for signing and embedded Bridge artifacts.
+`pnpm tauri build` creates packages for the current OS. See [Release packaging](#release-packaging) for signing.
 For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:website` writes `website/dist/`.
 
 ## Code conventions
@@ -89,7 +67,6 @@ For the static website, `pnpm dev:website` serves port 1430 and `pnpm build:webs
 
 For module boundaries and data flow, see [Architecture](docs/ARCHITECTURE.md).
 The design language (palette, pixel grid, Inventar surfaces, icons, motion, accessibility) is described in [Pixelkino](docs/design/PIXELKINO.md).
-The [Pumpkin Bridge reference](docs/bridge/README.md) describes the launcher–game channel; [mod/README.md](mod/README.md) describes its build.
 
 ## Microsoft sign-in for forks
 
@@ -99,7 +76,7 @@ A fork needs its own approved public Microsoft application, not another launcher
 - Register an application for **Personal Microsoft accounts only** in [Microsoft Entra](https://portal.azure.com).
 - Add **Mobile and desktop applications**, with `http://localhost` as the redirect URI and no fixed port.
 - Enable **Allow public client flows** for the device-code fallback. Do not create or embed a client secret.
-- Obtain Minecraft API approval for your registration. Microsoft/Xbox sign-in alone does not grant Minecraft API access. The documented review entry point is [aka.ms/mce-reviewappid](https://aka.ms/mce-reviewappid); the process can change. Friends certificate/attribute use and name/UUID sharing also need to fit that approval and applicable terms.
+- Obtain Minecraft API approval for your registration. Microsoft/Xbox sign-in alone does not grant Minecraft API access. The documented review entry point is [aka.ms/mce-reviewappid](https://aka.ms/mce-reviewappid); the process can change.
 - Replace `DEFAULT_CLIENT_ID` in `src-tauri/src/services/auth/mod.rs` and rebuild.
 
 Browser sign-in uses PKCE and a loopback callback; device-code sign-in is the fallback.
@@ -110,20 +87,18 @@ family restrictions and missing Java Edition ownership are account issues.
 An unavailable keyring must not fall back to plaintext storage.
 
 A normal release requires an authenticated Microsoft account before player-name-only launches
-are available. That permission does not enable Friends hosting/joining or Bridge injection.
-See [Architecture](docs/ARCHITECTURE.md) and [Friends privacy](docs/friends/PRIVACY.md) for storage and data boundaries.
+are available. See [Architecture](docs/ARCHITECTURE.md) for storage and data boundaries.
 
 ## Release packaging
 
 [The release workflow](.github/workflows/release.yml) runs on annotated `v<version>` tags.
-It creates a **draft**, builds Bridge JARs from `mod/nodes.txt`, validates their index/hashes/budgets,
-and embeds them through `PUMPKIN_MOD_DIST` in the platform installers. Release builds configure
-the Friends directory and enable `beta-relays`; the development-only `smoke` feature is excluded.
+It creates a **draft**, builds the installers on Windows, Linux and macOS, and then assembles
+`latest.json`, the stable download names, `SHA256SUMS` and build provenance.
 
 ### Prepare the tag
 
-The tag must match `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`
-and `mod/gradle.properties`; `src-tauri/Cargo.lock` must record the same Rust package version.
+The tag must match `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`;
+`src-tauri/Cargo.lock` must record the same Rust package version.
 After committing the intended release, create its annotated tag:
 
 ```bash
@@ -261,9 +236,7 @@ For a local package without signed updater artifacts:
 pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 ```
 
-To include the in-game Bridge, `PUMPKIN_MOD_DIST` must point to a valid `mod-index.json` and matching-version JARs;
-see [mod/README.md](mod/README.md). Without the Bridge distribution, a local package is not equivalent
-to the release workflow. Local source checks do not verify GitHub's signing secrets or environment approvals.
+A local package is not equivalent to the release workflow. Local source checks do not verify GitHub's signing secrets or environment approvals.
 
 ### Windows installer template
 

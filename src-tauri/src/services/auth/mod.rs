@@ -408,11 +408,7 @@ fn rename_if_changed(
     if username == stored.username {
         return Ok(stored);
     }
-    let renamed = state.accounts.update(MsAccount { username, ..stored })?;
-    state
-        .friends
-        .update_account(crate::friends_commands::account_profile(state));
-    Ok(renamed)
+    state.accounts.update(MsAccount { username, ..stored })
 }
 
 /// Spielernamen ohne Konto gibt es nur in Debug-Builds (`pnpm tauri dev`) oder wenn ein Microsoft-Konto

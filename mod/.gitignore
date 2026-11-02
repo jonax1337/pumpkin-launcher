@@ -1,7 +1,0 @@
-# Heruntergeladene JDKs, Gradle-Zustand und Ausgaben (core/ und jeder Knoten haben ein eigenes build/)
-.jdk/
-.gradle/
-build/
-# Entwicklungsläufe (runClient) der Knoten
-run/
-logs/

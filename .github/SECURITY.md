@@ -4,9 +4,9 @@ Last updated: 2026-10-06.
 
 ## Reporting a vulnerability
 
-If you find a security vulnerability in Pumpkin Launcher or its repository-owned services, please do **not** open a public issue. This includes download handling, credential storage, the local Pumpkin Bridge channel, Friends networking and directory/relay handling.
+If you find a security vulnerability in Pumpkin Launcher or its repository-owned services, please do **not** open a public issue. This includes download handling, credential storage, and the handling of provider services and downloaded content.
 
-Use this repository's [private vulnerability report](https://github.com/jonax1337/pumpkin-launcher/security/advisories/new) (GitHub sign-in required), also reached through **Security > Report a vulnerability**. Include the affected launcher/service version, operating system, reproduction steps and potential impact if known. Do not include live access tokens, private keys or friend codes. For ordinary crashes and bugs, use [Issues](https://github.com/jonax1337/pumpkin-launcher/issues) instead.
+Use this repository's [private vulnerability report](https://github.com/jonax1337/pumpkin-launcher/security/advisories/new) (GitHub sign-in required), also reached through **Security > Report a vulnerability**. Include the affected launcher/service version, operating system, reproduction steps and potential impact if known. Do not include live access tokens or private keys. For ordinary crashes and bugs, use [Issues](https://github.com/jonax1337/pumpkin-launcher/issues) instead.
 
 You should get a response within a few days.
 
@@ -15,11 +15,8 @@ You should get a response within a few days.
 - The Rust backend (`src-tauri/`) and React frontend (`src/`) in this repository
 - The generated installer published from this repository
 - The CurseForge proxy (`proxy/`)
-- Pumpkin Bridge and its bundled client mod (`mod/`), including the local launcher–game protocol and Friends actions
-- Friends networking in the Rust backend and the repository's directory service (`directory/`)
-- The repository's relay configuration and deployment files (`infra/relay/`)
 
-Out of scope: vulnerabilities in the Minecraft/Microsoft APIs themselves, Modrinth and other upstream provider services, third-party relay infrastructure such as n0's service, and third-party mod content installed via the launcher. Report those to their respective maintainers. Vulnerabilities in Pumpkin's handling of those services or content remain in scope.
+Out of scope: vulnerabilities in the Minecraft/Microsoft APIs themselves, Modrinth and other upstream provider services, and third-party mod content installed via the launcher. Report those to their respective maintainers. Vulnerabilities in Pumpkin's handling of those services or content remain in scope.
 
 ## A note on credentials
 

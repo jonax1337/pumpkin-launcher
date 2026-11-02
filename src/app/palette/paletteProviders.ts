@@ -8,7 +8,7 @@ import { quickPlayTarget, type Instance, type QuickPlay } from "@/lib/types";
 import { SECTIONS, settingsSectionUrl } from "@/pages/settings/sections";
 import { TEXT_SIZE_KEYS } from "@/pages/settings/AppearanceTab";
 import { useSettings, type TextSize } from "@/store/settings";
-import { FRIENDS_PATH, TABS } from "../mainTabs";
+import { TABS } from "../mainTabs";
 import { SHORTCUT } from "../shortcuts";
 import type { PaletteItem } from "./paletteModel";
 
@@ -103,11 +103,11 @@ export const instanceItems = (instances: Instance[], actions: InstanceActions): 
 
 // ---------- Navigation ----------
 
-/** Die Bereiche der Seitenleiste (ohne Freunde, wo die Seitenleiste sie ausblendet), Einstellungen und jeder Abschnitt darin. */
-export function navigationItems(go: Go, friendsHidden: boolean): PaletteItem[] {
+/** Die Bereiche der Seitenleiste, Einstellungen und jeder Abschnitt darin. */
+export function navigationItems(go: Go): PaletteItem[] {
   const navigate = words("palette.kw.navigate");
   const settingsWords = [...navigate, ...words("palette.kw.settings")];
-  const areas = TABS.filter((tab) => !(tab.to === FRIENDS_PATH && friendsHidden)).map((tab): PaletteItem => ({
+  const areas = TABS.map((tab): PaletteItem => ({
     id: `nav:${tab.to}`,
     group: "navigation",
     title: t(tab.key),

@@ -18,7 +18,6 @@
 @import "./components/dialogs.css" layer(components);
 @import "./components/onboarding.css" layer(components);
 @import "./components/accounts/accounts.css" layer(components);
-@import "./components/friends/friends.css" layer(components);
 /* Kit (src/ui): danach, gleiche Schicht. Nur Aussehen; Layout kommt als Tailwind-Utilities */
 @import "./ui/ui.css" layer(components);
 /* Spielen (Knopf, Statuszeile, Protokoll) als Domänen-Baustein hinter dem Kit */

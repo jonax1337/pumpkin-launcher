@@ -4,10 +4,9 @@ import { showShortcuts } from "@/components/ShortcutsDialog";
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { useI18n } from "@/i18n";
 import { newInstanceUrl } from "@/lib/routes";
-import { useFriendsNav } from "@/pages/friends/useFriendsNav";
 import { ContextMenu, type MenuEntry } from "@/ui";
 import { dialogOpen } from "./dialogOpen";
-import { FRIENDS_PATH, TABS } from "./mainTabs";
+import { TABS } from "./mainTabs";
 
 type AppSurface = ReactElement<Pick<HTMLAttributes<HTMLElement>, "onContextMenuCapture" | "onPointerDownCapture">>;
 
@@ -15,7 +14,6 @@ export function AppContextMenu({ children }: { children: AppSurface }) {
   const { t } = useI18n();
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const friends = useFriendsNav();
   const { data: update } = useAppUpdate();
   const [inDialog, setInDialog] = useState(false);
 
@@ -31,7 +29,7 @@ export function AppContextMenu({ children }: { children: AppSurface }) {
 
   const items: MenuEntry[] = [
     { label: t("ui.nav.mainAreas") },
-    ...TABS.filter((tab) => tab.to !== FRIENDS_PATH || !friends.hidden).map((tab) => ({
+    ...TABS.map((tab) => ({
       id: tab.to, text: t(tab.key), icon: tab.icon, disabled: inDialog,
       checked: tab.match(pathname), onSelect: () => navigateFromMenu(tab.to),
     })),

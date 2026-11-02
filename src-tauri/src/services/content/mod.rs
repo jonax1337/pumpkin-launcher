@@ -4,7 +4,6 @@ mod analysis;
 pub(crate) mod fs_safety;
 mod install;
 mod jar_meta;
-mod mod_ids;
 mod pack;
 mod update;
 mod version_range;
@@ -21,7 +20,6 @@ pub(crate) use adopt::{
 pub use fs_safety::safe_path;
 pub(crate) use fs_safety::{regular_parents, rollback, write_new, StagedInstall};
 pub use install::install_mod;
-pub use mod_ids::ModIdScanner;
 pub(crate) use install::budget;
 pub use pack::{import, import_file, inspect, install_modrinth_pack, local_pack, PackInfo, PUMPKIN_FILE};
 pub(crate) use pack::{

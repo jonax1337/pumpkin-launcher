@@ -1,6 +1,6 @@
 # CurseForge proxy
 
-Cloudflare Worker that keeps the CurseForge API key out of the launcher and repository. It forwards only the catalog requests the launcher uses, adds the key server-side and rate-limits callers. The separate [Friends directory](../directory/README.md) uses different bindings and secrets.
+Cloudflare Worker that keeps the CurseForge API key out of the launcher and repository. It forwards only the catalog requests the launcher uses, adds the key server-side and rate-limits callers.
 
 ## Setup
 
@@ -22,8 +22,8 @@ $env:PUMPKIN_CF_PROXY = 'https://your-proxy.example'
 pnpm tauri dev
 ```
 
-Runtime configuration takes precedence over the compiled build-time value. Unlike the
-Friends directory, an empty/invalid selected proxy value falls back to `DEFAULT_PROXY`,
+Runtime configuration takes precedence over the compiled build-time value. An
+empty/invalid selected proxy value falls back to `DEFAULT_PROXY`,
 not to a disabled proxy or the lower-priority build-time value. Set a valid own endpoint
 for a fork; an invalid override is not a way to prevent requests to the official Worker.
 

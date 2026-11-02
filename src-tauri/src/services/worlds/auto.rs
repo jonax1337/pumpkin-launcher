@@ -133,7 +133,6 @@ mod tests {
             backup_worlds,
             backup_keep,
             quick_play: None,
-            friend_join: None,
         }
     }
 

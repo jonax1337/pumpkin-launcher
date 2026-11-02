@@ -113,11 +113,8 @@ fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -
         account: &account,
         memory_mb: launch::DEFAULT_MEMORY_MB,
         min_memory_mb: None,
-        injected_jvm_args: &[],
-        injected_classpath: &[],
         extra_jvm_args: &[],
         window: GameWindow::Default,
-        injected_game_args: &[],
         extra_game_args: &[],
         quick_play: None,
         session: None,
@@ -130,7 +127,7 @@ fn start(dirs: &Dirs, game: &InstalledGame, instance_id: &str, username: &str) -
     };
     let game_dir = dirs.game_dir(instance_id);
     let command = GameCommand { wrapper: None, java: &game.java, args: &args, argfile_dir: None, game_dir: &game_dir, env: &[] };
-    let running = launch::spawn(&command, |stream, line| println!("[{stream:?}] {line}"), |_| {}, on_exit)?;
+    let running = launch::spawn(&command, |stream, line| println!("[{stream:?}] {line}"), on_exit)?;
     Ok((running, exit_rx))
 }
 

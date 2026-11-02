@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-06.
 
-Pumpkin Launcher is a Tauri 2 desktop application. React owns presentation; Rust owns accounts, files, downloads, game processes and Friends networking. This guide maps the implementation and its important boundaries, rather than duplicating every command signature.
+Pumpkin Launcher is a Tauri 2 desktop application. React owns presentation; Rust owns accounts, files, downloads, game processes and Discord Rich Presence. This guide maps the implementation and its important boundaries, rather than duplicating every command signature.
 
 ```text
 React pages -> query hooks -> lib/api.ts -> Backend
@@ -12,8 +12,7 @@ React pages -> query hooks -> lib/api.ts -> Backend
                                                        |
                                stores + services + game processes
                                                        |
-                           local Pumpkin Bridge <-> Minecraft JVM
-                           Friends P2P <-> other launchers
+                                                Minecraft JVM
 ```
 
 ## Entry points and ownership
@@ -22,7 +21,7 @@ Paths below are relative to the repository root.
 
 | Area | Source | Responsibility |
 | --- | --- | --- |
-| Desktop startup | `src-tauri/src/lib.rs` | Plugins, capabilities, AppState, command registration, startup recovery and shared Bridge listener |
+| Desktop startup | `src-tauri/src/lib.rs` | Plugins, capabilities, AppState, command registration, and startup recovery |
 | Backend state | `src-tauri/src/state.rs`, `src-tauri/src/services/operation_locks.rs` | Persistent stores, running games, per-instance operation locks and cancellation |
 | Main models | `src-tauri/src/models.rs`, `src-tauri/src/services/shared_types.rs` | Instances, accounts, loaders and content; TypeScript counterpart in `src/lib/types.ts` |
 | Frontend startup | `src/main.tsx`, `src/app/` | Router, providers, window shell, shortcuts, command palette (`src/app/palette/`) and appearance |
@@ -33,9 +32,9 @@ Paths below are relative to the repository root.
 | Presentation | `src/pages/`, `src/components/`, `src/ui/`, `src/pixel/` | Pages, shared controls and pixel scenes |
 | Localisation | `src/i18n/` | German source dictionary and matching English keys; backend coded errors use the same dictionaries |
 
-Commands are thin adapters to domain services. Their exact arguments and return types are defined by `src/lib/backend.ts` and the Rust command modules, and registered in `src-tauri/src/lib.rs`. Domain command files cover instances, accounts, content, packs, worlds, storage, support, skins, screenshots, Friends sessions and Bridge injection. New IPC behavior must update both sides together.
+Commands are thin adapters to domain services. Their exact arguments and return types are defined by `src/lib/backend.ts` and the Rust command modules, and registered in `src-tauri/src/lib.rs`. Domain command files cover instances, accounts, content, packs, worlds, storage, support, skins and screenshots. New IPC behavior must update both sides together.
 
-`AppError` serializes a code and message, with translation keys, parameters and details for coded errors. `src/lib/errors.ts` translates those errors; unknown/plugin errors remain readable rather than becoming false successes. Friends state and event payloads do not embed command errors.
+`AppError` serializes a code and message, with translation keys, parameters and details for coded errors. `src/lib/errors.ts` translates those errors; unknown/plugin errors remain readable rather than becoming false successes.
 
 ## Data and process boundaries
 
@@ -50,11 +49,9 @@ The layout has two roots. The **metadata root** holds shared and launcher-owned 
 | `versions/<id>/` | Minecraft version JSON and client JAR |
 | `libraries/`, `assets/` | Shared libraries and assets |
 | `runtime/<component>/` | Shared Java runtimes |
-| `runtime/bridge-mod/<modVersion>/` | Materialised, launcher-owned Bridge JARs; never instance content |
 | `cache/mods/<sha1>.jar` | Shared content cache |
 | `cache/argfiles/<id>/java.args` | JVM argument file of a game that is starting; lives seconds, swept at startup |
 | `templates/<id>.mrpack`, `skins/<sha1>.png` | Templates and skin library |
-| `friends/` | Friends configuration, graph records, requests, blocks and pending delivery records |
 | `instances-path.txt`, `instances-path-request.txt` | Instance-root handoff files (below) |
 
 | Location under the instance root | Contents |
@@ -73,7 +70,7 @@ An installer request is only a hint and never blocks startup. If it cannot be re
 
 `src-tauri/src/services/store.rs` maintains JSON stores in memory and writes atomically through a temporary file and rename. Entry mutations happen under the store lock. Unreadable newer records are preserved instead of discarded during a write.
 
-Refresh tokens and permanent Friends keys belong in the OS keyring, not JSON. Minecraft sessions and directory login tokens are memory-only. Account records retain their OAuth `clientId`, because refresh must use the original app registration. See [Microsoft sign-in for forks](../CONTRIBUTING.md#microsoft-sign-in-for-forks).
+Refresh tokens belong in the OS keyring, not JSON. Minecraft sessions are memory-only. Account records retain their OAuth `clientId`, because refresh must use the original app registration. See [Microsoft sign-in for forks](../CONTRIBUTING.md#microsoft-sign-in-for-forks).
 
 Installation, content mutation and launch take a per-instance operation lock (`src-tauri/src/services/operation_locks.rs`): operations on different instances run in parallel, a second operation on the same instance is refused with `errors.operationRunning`, and a running game refuses conflicting mutations of its instance. Operations that create a new instance lock no other instance. Operations that touch every instance or the shared mod cache (moving the instance root, clearing the mod cache, the startup recovery sweeps) take the whole-library lock, which is granted only while no other operation runs and refuses new ones until it ends. Locks never wait; the exception is installation, which writes the shared game files (libraries, assets, versions, Java, loader profiles) one install at a time, so a second install waits for the first. Cancellation is propagated through service callbacks; blocking file operations run off the async executor and stop between files.
 
@@ -84,7 +81,7 @@ Installation, content mutation and launch take a per-instance operation lock (`s
 - Loader values are `vanilla`, `fabric`, `quilt`, `forge` and `neoforge`. Fabric/Quilt profiles merge with Vanilla metadata; Forge/NeoForge use the official installer and its processors. Forge starts at 1.16.5 and NeoForge at 1.20.1.
 - An omitted loader version resolves to a stable version and is saved on the instance. Installed profiles can launch without refetching their installation metadata.
 - Java selection is instance override, launcher preference, then Mojang runtime. Custom paths and JVM/game arguments are validated before launch.
-- Installation reports `install-progress`; content work reports `content-progress`. Game output, spawn and exit feed UI state, session logs, crash analysis and Friends lifecycle signals.
+- Installation reports `install-progress`; content work reports `content-progress`. Game output, spawn and exit feed UI state, session logs, and crash analysis.
 - The launch path takes configured world backups, recovers interrupted pack updates, synchronizes managed content, refreshes the account and resolves Java before spawning Minecraft.
 - `src-tauri/src/pack_open.rs` receives `.mrpack` files through the command line, single-instance handoff or macOS open events. It publishes `pack-opened`; the UI consumes `pack_open_take` and opens the import dialog.
 
@@ -93,9 +90,9 @@ Installation, content mutation and launch take a per-instance operation lock (`s
 `src-tauri/src/services/launch_settings.rs` (data, validation, merge), `launch_command.rs` (command-line parsing and program lookup), `launch_hooks.rs` (the two hooks) and `argfile.rs` implement this part of the launch path.
 
 - `Instance.launch` and the launcher defaults (`LaunchOptions.defaultLaunch`, from the frontend settings store) hold environment variables, a wrapper command and the pre-launch and post-exit commands. Per field, a non-empty instance value wins and an empty one falls back to the launcher default, like the JVM arguments. Both sides are validated when saved and again at launch.
-- Commands are parsed into a program and arguments (`"`/`'` group words, backslashes stay literal) and started directly, never through a shell. The program is an absolute file or is looked up on `PATH`, never in the game folder. A wrapper that cannot be found stops the launch with a coded error before the Bridge registers the launch.
-- Variable names are `[A-Za-z_][A-Za-z0-9_]*`; names starting with `PUMPKIN_` (any case) are refused because the launcher uses them for the Bridge and for hook context. The variables of the Bridge injection are appended last and win regardless.
-- The pre-launch hook runs in `prepare_launch`, before the injection, in the game folder with `PUMPKIN_INSTANCE_ID`, `PUMPKIN_INSTANCE_NAME`, `PUMPKIN_GAME_DIR`, `PUMPKIN_MC_VERSION` and `PUMPKIN_LOADER`. A non-zero exit, a start failure or the 60-second timeout aborts the launch. The post-exit hook is started from `on_game_exit` after `instance-exit` as a background task with the same variables plus `PUMPKIN_EXIT_CODE` (`-1` without a code); it is limited to 60 seconds and failures are only logged.
+- Commands are parsed into a program and arguments (`"`/`'` group words, backslashes stay literal) and started directly, never through a shell. The program is an absolute file or is looked up on `PATH`, never in the game folder. A wrapper that cannot be found stops the launch with a coded error.
+- Variable names are `[A-Za-z_][A-Za-z0-9_]*`; names starting with `PUMPKIN_` (any case) are refused because the launcher uses them for hook context.
+- The pre-launch hook runs in `prepare_launch`, before Minecraft is spawned, in the game folder with `PUMPKIN_INSTANCE_ID`, `PUMPKIN_INSTANCE_NAME`, `PUMPKIN_GAME_DIR`, `PUMPKIN_MC_VERSION` and `PUMPKIN_LOADER`. A non-zero exit, a start failure or the 60-second timeout aborts the launch. The post-exit hook is started from `on_game_exit` after `instance-exit` as a background task with the same variables plus `PUMPKIN_EXIT_CODE` (`-1` without a code); it is limited to 60 seconds and failures are only logged.
 - Hooks and wrappers run programs with the user's rights, so only the user's own settings may set them. Pack, template and launcher imports build instances from `Instance::from_new` and carry no launch settings; only duplicating an instance copies them.
 - With Java 9 or newer, `launch::spawn` passes the JVM a single `@file` argument (`wrapper args... java @file`). The file holds every argument in the JDK argument-file syntax (arguments with whitespace, quotes, `#` or backslashes are double-quoted, `\` and `"` escaped) and sits in its own folder under `cache/argfiles/` (`0700`/`0600` on Unix; the profile's access rules on Windows). It is deleted five seconds after the process started (20 seconds with a wrapper), when the launch fails, and any leftovers are swept at startup. The Java major comes from the cached `JavaMajors` probe; Java 8, an unknown version and, on Windows, non-ASCII arguments or folders (the JVM reads the file in the system code page) use plain arguments.
 
@@ -139,19 +136,6 @@ The icon is painted by the UI (`src/lib/shortcutIcon.ts`, the same choice as `In
 `src-tauri/src/services/transport.rs`, `src-tauri/src/services/download.rs`, `src-tauri/src/services/providers/net.rs`, `src-tauri/src/services/content/fs_safety.rs` and `src-tauri/src/services/zip_guard.rs` are security boundaries: destination/redirect restrictions, capped streaming, checksum verification, archive limits, traversal/symlink prevention and rollback. `src-tauri/src/services/limits.rs` centralizes their limits. Do not bypass these helpers for a new provider.
 
 The renderer sanitizes catalog Markdown with DOMPurify. Description links use HTTP(S); untrusted image hosts require a user click. File access and filesystem mutations remain behind Rust commands and Tauri capabilities.
-
-## Friends and Pumpkin Bridge
-
-These are separate layers:
-
-- `src-tauri/src/services/p2p/` is a Minecraft-independent iroh transport with compiled relay selection, framing, admission and stream tunneling.
-- `src-tauri/src/services/friends/` owns identity, codes, by-name requests, presence, invites, manifest matching and host/join sessions. Friends is off by default and requires a Microsoft account and consent.
-- `src-tauri/src/services/modbridge/` owns the shared process-bound loopback connection, protocol, scopes and queues. Its `ingame/` subdirectory owns the embedded index, injection, materialisation and startup circuit breaker.
-- `mod/` is the client-only Launcher–Minecraft integration, `pumpkin_bridge`. Its shared transport, protocol and UI home do not depend on Friends opt-in. Friends is the only currently implemented feature module, under `mod/core/src/main/java/dev/laux/pumpkin/bridge/modules/friends/` and `mod/src/main/java/dev/laux/pumpkin/bridge/modules/friends/`, not the owner of the connection or menu shell.
-
-The Bridge listener can run before Friends is enabled. It exposes no private Friends data or actions then. Disable/reset/identity changes revoke feature grants and private queued work, not the shared listener or launch token. Other mods in the same JVM can access the channel; process ownership and consent are not a malware sandbox.
-
-Exact contracts: [Friends specification](friends/SPEC.md), [Pumpkin Bridge integration, injection and protocol](bridge/README.md), [Minecraft API reference](bridge/MINECRAFT-API.md). Operational boundaries: [privacy](friends/PRIVACY.md), [relay runbook](friends/RELAY-OPS.md), [directory deployment](../directory/README.md), [mod build and support registry](../mod/README.md).
 
 ## Frontend conventions
 

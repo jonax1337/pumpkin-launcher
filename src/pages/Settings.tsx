@@ -7,7 +7,6 @@ import { showShortcuts } from "@/components/ShortcutsDialog";
 import { Button, ContextMenu, Form, Heading, Page, PageHeader, TabPanel, Workspace, WorkspaceContent, WorkspaceRail, WorkspaceTabs, type MenuEntry } from "@/ui";
 import { AboutTab } from "./settings/AboutTab";
 import { AppearanceTab } from "./settings/AppearanceTab";
-import { FriendsTab } from "./settings/FriendsTab";
 import { GameTab } from "./settings/GameTab";
 import { PanelActions, PanelActionsProvider } from "./settings/PanelActions";
 import { StorageTab } from "./settings/StorageTab";
@@ -25,8 +24,6 @@ function SectionBody({ id }: { id: SectionId }) {
       );
     case "spiel":
       return <GameTab />;
-    case "freunde":
-      return <FriendsTab />;
     case "speicher":
       return <StorageTab />;
     case "darstellung":
