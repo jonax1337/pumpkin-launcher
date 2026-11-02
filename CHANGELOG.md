@@ -13,6 +13,10 @@ For installation and a first game, start with the [launcher guide](README.md#dow
 - Remove the seasonal branding selector and migrate saved settings without changing other preferences.
 - Refresh app, window, installer, website and Bridge icons. Track native icon changes during builds and explicitly set the current window icon.
 
+### Security
+
+- Update ZIP extraction and updater dependencies, TLS and certificate validation, trust roots, Tokio and constant-time utilities to address current RustSec advisories.
+
 ### Maintenance
 
 - Remove obsolete concepts, mascot animations, duplicate branding data and unused media exports.
