@@ -1,8 +1,23 @@
 # Changelog
 
-Last updated: 2026-10-09.
+Last updated: 2026-11-02.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
+
+## 0.5.1 — 2026-11-02
+
+### Branding
+
+- Replace Buddy and seasonal variants with the carved Pumpkin Block identity on a clean 16×16 pixel grid.
+- Keep the original wordmark in the title bar without a separate logo; retain the existing interface layout and UI style.
+- Remove the seasonal branding selector and migrate saved settings without changing other preferences.
+- Refresh app, window, installer, website and Bridge icons. Track native icon changes during builds and explicitly set the current window icon.
+
+### Maintenance
+
+- Remove obsolete concepts, mascot animations, duplicate branding data and unused media exports.
+- Simplify the branding generator and preserve the original wordmark assets.
+- Include dependency and CI maintenance merged since 0.5.0.
 
 ## 0.5.0 — 2026-10-09
 
