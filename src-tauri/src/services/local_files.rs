@@ -197,7 +197,8 @@ fn detect_kind(path: &Path, name: &str) -> AppResult<Option<ModKind>> {
     }
     let zip = zip::ZipArchive::new(fs::File::open(path)?)
         .map_err(|_| AppError::invalid(coded!("errors.packs.unreadableZip", name = name)))?;
-    Ok(zip_kind(zip.file_names()))
+    let names = zip.file_names().collect::<Result<Vec<_>, _>>()?;
+    Ok(zip_kind(names.iter().map(|name| name.as_ref())))
 }
 
 /// Ressourcenpakete haben `pack.mcmeta` im Wurzelverzeichnis, Shaderpacks einen Ordner `shaders/`.

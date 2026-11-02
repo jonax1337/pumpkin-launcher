@@ -366,7 +366,7 @@ fn scan_archive(zip: &mut zip::ZipArchive<fs::File>) -> AppResult<Archive> {
     let (mut index, mut meta, mut overrides) = (None, MetaSearch::default(), Vec::new());
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
-        let name = entry.name().to_string();
+        let name = entry.name()?.into_owned();
         let clean = name.strip_suffix('/').unwrap_or(&name);
         safe_path(clean)?;
         if !seen.insert(clean.to_lowercase()) {
