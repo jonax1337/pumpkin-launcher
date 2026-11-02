@@ -12,7 +12,6 @@ const AREA_TITLES: [prefix: string, key: TKey][] = [
   ["/discover", "ui.nav.discover"],
   ["/settings", "common.settings"],
   ["/skins", "ui.nav.skins"],
-  ["/friends", "ui.nav.friends"],
   ["/announcements", "ui.nav.announcements"],
 ];
 

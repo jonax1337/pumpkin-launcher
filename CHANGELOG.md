@@ -4,6 +4,17 @@ Last updated: 2026-11-02.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
 
+## Unreleased
+
+### Removed
+
+- Friends: friend codes and requests, online status, sharing and joining worlds, find-by-name directory and relays.
+- Pumpkin Bridge in-game mod, with its build and release pipeline.
+
+### Fixed
+
+- Release builds failed because the updater npm package and Rust crate had different minor versions.
+
 ## 0.5.1 — 2026-11-02
 
 ### Branding

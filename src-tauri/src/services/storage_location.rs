@@ -880,7 +880,7 @@ mod tests {
         let (root, dirs) = fixture();
         let source = dirs.instances_dir();
         write_files(&root, &[("occupied/foreign", "keep")]);
-        for target in [source.join("nested"), root.clone(), dirs.root.clone(), dirs.root.join("friends"), root.join("occupied")] {
+        for target in [source.join("nested"), root.clone(), dirs.root.clone(), root.join("occupied")] {
             assert!(relocate(&dirs, &target).is_err(), "{}", target.display());
             assert_eq!(dirs.instances_dir(), source);
             assert!(source.join("i/installed").exists());
@@ -1257,7 +1257,7 @@ mod tests {
     fn a_stored_location_around_the_launcher_or_program_is_refused_and_nothing_is_deleted() {
         let (root, dirs) = fixture();
         let program = std::env::current_exe().unwrap().parent().unwrap().to_owned();
-        for unsafe_location in [root.clone(), dirs.root.clone(), dirs.root.join("friends"), program] {
+        for unsafe_location in [root.clone(), dirs.root.clone(), program] {
             fs::create_dir_all(&unsafe_location).unwrap();
             write_path(&dirs.root.join(CURRENT), &unsafe_location).unwrap();
             let reload = Dirs::new(&dirs.root);

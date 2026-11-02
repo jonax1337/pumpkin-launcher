@@ -8,7 +8,6 @@ import { createContentFilesMock } from "./mock-content-files";
 import { createCrashMock } from "./mock-crash";
 import { crowdedInstance, initialInstances } from "./mock-data";
 import { pickPaths, pickSavePath } from "./mock-files";
-import { createFriendsMock } from "./mock-friends";
 import { createGameMock } from "./mock-game";
 import { createInstanceMock } from "./mock-instances";
 import { createLifecycleMock } from "./mock-lifecycle";
@@ -64,15 +63,13 @@ export function createMockBackend(): Backend {
   const worlds = createWorldMock(context);
   const game = createGameMock(context);
   const skins = createSkinMock();
-  // Nach dem Spiel-Mock: Er legt `pumpkinMock` an, die Freunde-Hooks kommen dazu.
-  const friends = createFriendsMock(context, skins);
 
   return {
     capabilities: allCapabilities(false),
     ...eventSubscriptions(on),
     ...createInstanceMock(context),
     ...game,
-    ...createAccountMock(context, friends.accountChanged),
+    ...createAccountMock(context),
     ...createContentMock(context),
     ...createContentFilesMock(context),
     ...createCrashMock(context),
@@ -83,7 +80,6 @@ export function createMockBackend(): Backend {
     ...worlds,
     ...createScreenshotMock(),
     ...createSettingsMock(context),
-    ...friends.api,
     async announcementFeed(page) {
       if (!Number.isInteger(page) || page < 1 || page > 0xffff_ffff) {
         throw new Error("Announcement page must be a positive 32-bit integer.");
@@ -94,11 +90,6 @@ export function createMockBackend(): Backend {
       });
       if (!response.ok) throw new Error(`GitHub announcements: HTTP ${response.status}`);
       return response.text();
-    },
-    async launchInstance(instanceId, options) {
-      const pid = await game.launchInstance(instanceId, options);
-      friends.joinSpawned(options.friendJoin);
-      return pid;
     },
 
     checkLocalFiles: onlyInApp("hooks.api.addLocalFiles"),

@@ -8,10 +8,9 @@ use regex::{Captures, Regex};
 use serde::Serialize;
 
 /// Deutsche Fehlertexte des Frontends, beim Bauen eingelesen; `coded!` prüft gegen sie, ob es einen Code gibt.
-const GERMAN_SOURCES: [&str; 7] = [
+const GERMAN_SOURCES: [&str; 6] = [
     include_str!("../../../src/i18n/de/errors.ts"),
     include_str!("../../../src/i18n/de/errors.app.ts"),
-    include_str!("../../../src/i18n/de/errors.friends.ts"),
     include_str!("../../../src/i18n/de/errors.game.ts"),
     include_str!("../../../src/i18n/de/errors.modrinth.ts"),
     include_str!("../../../src/i18n/de/errors.packs.ts"),

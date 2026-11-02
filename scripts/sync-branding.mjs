@@ -14,9 +14,6 @@ await run(['icon', fileURLToPath(new URL('mark.svg', source)), '--output', fileU
 for (const filename of ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns']) {
   await copyFile(new URL(filename, source), new URL(filename, target));
 }
-for (const filename of ['logo.png', 'icon.png']) {
-  await copyFile(new URL('32x32.png', source), new URL('mod/src/main/resources/assets/pumpkin_bridge/' + filename, root));
-}
 await mkdir(installerTarget, { recursive: true });
 for (const filename of ['sidebar.bmp', 'header.bmp']) {
   await copyFile(new URL(filename, installerSource), new URL(filename, installerTarget));

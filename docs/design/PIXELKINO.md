@@ -16,7 +16,7 @@ route with mock data (`src/ui/KitPage.tsx`), not a shipped player page.
 | Global colors, fonts, pixel unit default, notches, reset, scrollbars, focus, text helpers | `src/styles/base.css` |
 | App shell (window bar, side bar, plate, scenes) and shared page frame | `src/styles/shell.css` |
 | Page styles, next to their page | `src/pages/**/*.css` (for example `home/home.css`, `instances/library.css`, `detail/detail.css`, `discover.css`, `announcements.css`) |
-| Dialog, onboarding, account and friends content | `src/components/dialogs.css`, `src/components/onboarding.css`, `src/components/accounts/accounts.css`, `src/components/friends/friends.css` |
+| Dialog, onboarding and account content | `src/components/dialogs.css`, `src/components/onboarding.css`, `src/components/accounts/accounts.css` |
 | Kit components, look, tokens, Tailwind bridge, preview | `src/ui/` (`*.tsx`, `look.css` + `look/*.css`, `tokens.css`, `surface.css`, `theme.css`, `KitPage.tsx`); see `src/ui/README.md` |
 | Pixel unit and icon cell sizes | `src/pixel/unit.ts` |
 | Icon set (8×8 drawings) | `src/pixel/icon-data.ts`, rendered by `src/ui/Icon.tsx` |
@@ -128,7 +128,7 @@ cannot hide the name or push Play and menus outside the row. Group collapsing,
 ordering, search, filters, persisted sorting and keyboard navigation remain
 available.
 
-Other composed surfaces: the skins page shows the rotating figure on a stepped podium in a slot with an "Active" chip on the worn skin; Settings › Storage stacks hard segments with a legend; the friends page shows the relay connection as a status plate; the shortcuts overview is a two-column grid of key-cap rows.
+Other composed surfaces: the skins page shows the rotating figure on a stepped podium in a slot with an "Active" chip on the worn skin; Settings › Storage stacks hard segments with a legend; the shortcuts overview is a two-column grid of key-cap rows.
 
 ## Color semantics
 

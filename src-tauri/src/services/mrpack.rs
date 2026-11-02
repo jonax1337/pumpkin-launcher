@@ -27,7 +27,7 @@ use crate::{
 const MAX_VERSION_LEN: usize = 64;
 const MAX_SUMMARY_LEN: usize = 500;
 /// Older vanilla releases cache the account's player certificate, private key included, in this folder of the game
-/// directory. It never goes into a pack: whoever holds it can log in to the friends directory as the account.
+/// directory. It never goes into a pack: whoever holds it can sign chat messages as the account.
 const PROFILE_KEYS: &str = "profilekeys";
 /// Projekte je Anfrage bei der Abfrage der Server-Umgebung; deutlich unter dem Limit der API.
 const PROJECT_BATCH: usize = 100;

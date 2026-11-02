@@ -43,11 +43,6 @@ impl Dirs {
         self.root.join("runtime").join(component)
     }
 
-    /// Hier legt der Launcher die Mod-JARs für die Einspeisung ab, je Mod-Version ein Unterordner (docs/bridge/README.md, "Support selection").
-    pub fn bridge_mod(&self) -> PathBuf {
-        self.root.join("runtime").join("bridge-mod")
-    }
-
     /// `versions/<id>/<id>.<ext>` (Versions-JSON und Client-JAR).
     pub fn version_file(&self, id: &str, ext: &str) -> PathBuf {
         self.root.join("versions").join(id).join(format!("{id}.{ext}"))

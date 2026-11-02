@@ -236,13 +236,13 @@ mod tests {
     #[test]
     fn an_atomic_write_replaces_the_whole_file_and_leaves_no_temp_file() {
         let root = std::env::temp_dir().join(crate::models::new_id());
-        write_files(&root, &[("friends.json", "a much longer old content")]);
-        let path = root.join("friends.json");
+        write_files(&root, &[("data.json", "a much longer old content")]);
+        let path = root.join("data.json");
 
         write_atomic(&path, b"new").unwrap();
 
         assert_eq!(fs::read(&path).unwrap(), b"new");
-        assert!(!root.join("friends.json.tmp").exists());
+        assert!(!root.join("data.json.tmp").exists());
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -12,19 +12,10 @@ use crate::error::{AppError, AppResult};
 use crate::models::{Instance, LibrarySkin, MsAccount, Template};
 use crate::services::auth::MsState;
 use crate::services::download::http_client;
-use crate::services::friends::config::friends_dir;
-use crate::services::modbridge::ingame::Ingame;
-use crate::services::friends::lookup::{ModrinthHttp, ModrinthLookup};
-use crate::services::friends::{
-    FriendSessions, Friends, JoinTimers, MojangVersions, NetOptions, SessionContext, PRODUCTION_LIVENESS,
-};
-use crate::services::gamesignal::GameSignals;
 use crate::services::launch::Running;
-use crate::services::modbridge::ModBridge;
 use crate::services::presence::Presence;
 use crate::services::operation_locks::{OperationGuard, OperationLocks};
 use crate::services::progress::{progress, SharedProgress};
-use crate::services::secrets::KeyringSecrets;
 use crate::services::store::JsonStore;
 use crate::services::{blocking, lock, until_phases_end, Dirs};
 
@@ -43,19 +34,9 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// Die Anzeige in Discord; gezeigt wird nur, was `LaunchOptions::discord_presence` beim Start erlaubt.
     pub presence: Presence,
-    /// Was beim Spielstart und -ende geschieht, für die Freunde-Funktion.
-    pub signals: GameSignals,
-    /// Shared Bridge listener, available at startup independently of Friends consent.
-    pub bridge: ModBridge,
     /// Hinweise vom Start, die den Nutzer betreffen, aber den Start nicht verhindern (etwa eine nicht gelöschte alte Kopie
     /// des Instanzordners nach erfolgreichem Umzug).
     pub startup_notices: Vec<String>,
-    /// Die Einspeisung der Mod in die Spielstarts: JARs des Builds, Zustand je Instanz, Java-Versionen.
-    pub ingame: Ingame,
-    /// Die Freunde-Funktion; aus, bis `lib.rs` sie beim Start (oder der Nutzer beim Aktivieren) startet.
-    pub friends: Friends,
-    /// Geteilte Welten, Einladungen, Beitritte und die Mod; hängt sich erst mit `start` in `friends` ein.
-    pub sessions: FriendSessions,
     /// Laufende Spiele je Instanz-ID; `None` hält die Sperre während eines angeforderten Stopps.
     running: Mutex<HashMap<String, Option<Running>>>,
     /// Abbrechbare Vorgänge je Instanz- bzw. operationId.
@@ -73,26 +54,10 @@ impl AppState {
 
     pub(crate) fn load_with_instances_default(data_dir: &Path, default: Option<&Path>) -> AppResult<Self> {
         fs::create_dir_all(data_dir)?;
-        let signals = GameSignals::default();
         let dirs = Dirs::new(data_dir);
         let startup_notices = crate::services::storage_location::initialize(&dirs, default)?;
-        let bridge = ModBridge::new(signals.clone());
-        let friends =
-            Friends::new(&dirs, Arc::new(KeyringSecrets), signals.clone(), bridge.clone(), NetOptions::production())?;
-        let ingame = Ingame::open(&friends_dir(&dirs), env!("CARGO_PKG_VERSION"))?;
         let instances = Arc::new(JsonStore::open(data_dir.join("instances.json"))?);
         let http = http_client()?;
-        let sessions = FriendSessions::new(SessionContext {
-            friends: friends.clone(),
-            signals: signals.clone(),
-            bridge: bridge.clone(),
-            instances: instances.clone(),
-            dirs: dirs.clone(),
-            lookup: Arc::new(ModrinthLookup::new(ModrinthHttp::new()?)),
-            versions: Arc::new(MojangVersions::new(http.clone())),
-            timers: JoinTimers::production(),
-            liveness: PRODUCTION_LIVENESS,
-        });
         Ok(Self {
             instances,
             templates: JsonStore::open(data_dir.join("templates.json"))?,
@@ -103,11 +68,6 @@ impl AppState {
             startup_notices,
             http,
             presence: Presence::discord(),
-            bridge,
-            ingame,
-            friends,
-            sessions,
-            signals,
             running: Mutex::new(HashMap::new()),
             operations: OperationLocks::default(),
             game_files: tokio::sync::Mutex::new(()),

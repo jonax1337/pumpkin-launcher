@@ -7,7 +7,6 @@ import { useReducedMotion } from "@/hooks/useMediaQuery";
 import { t } from "@/i18n";
 import { instanceUrl } from "@/lib/routes";
 import type { Instance } from "@/lib/types";
-import { useFriendsNav } from "@/pages/friends/useFriendsNav";
 import { settingsSectionUrl } from "@/pages/settings/sections";
 import { useGame } from "@/store/game";
 import { useSettings } from "@/store/settings";
@@ -50,7 +49,6 @@ export function usePaletteCommands(play: InstanceActions["play"]): PaletteItem[]
   const navigate = useNavigate();
   const instances = [...(useInstances().data ?? [])].sort(byRecent);
   const phases = useInstancePhases(instances);
-  const friendsHidden = useFriendsNav().hidden;
   const update = useAppUpdate();
   const installingUpdate = useUpdateRun((s) => s.phase !== "idle");
   const motion = useSettings((s) => s.motion);
@@ -70,7 +68,7 @@ export function usePaletteCommands(play: InstanceActions["play"]): PaletteItem[]
 
   return [
     ...instanceItems(instances, instanceActions),
-    ...navigationItems(navigate, friendsHidden),
+    ...navigationItems(navigate),
     ...actionItems({
       go: navigate,
       checkForUpdates,

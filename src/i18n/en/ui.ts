@@ -7,10 +7,8 @@ export const ui: typeof deUi = {
   "ui.nav.library": "Library",
   "ui.nav.discover": "Discover",
   "ui.nav.skins": "Skins",
-  "ui.nav.friends": "Friends",
   "ui.nav.announcements": "News",
   "ui.nav.announcementsBadgeAria": "{name}, {count} unread",
-  "ui.nav.friendsBadgeAria": "{name}, {count} pending",
   "ui.nav.mainAreas": "Main areas",
   "ui.pageTitle.notFound": "Page not found",
 

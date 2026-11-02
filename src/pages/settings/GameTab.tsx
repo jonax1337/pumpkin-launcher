@@ -2,11 +2,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Actions, Button, Disclosure, FormRow, FormSection, Hint, Radio, Switch, TextArea } from "@/ui";
 import { useCommitOnUnmount } from "@/hooks/useCommitOnUnmount";
-import { useFriendsState } from "@/hooks/useFriends";
 import { JavaChooser, MemoryChooser, MemoryHelp, MinMemoryChooser } from "@/components/common";
 import { useI18n, type TKey } from "@/i18n";
 import { JVM_PRESETS, presetArgs, type JvmPreset } from "@/lib/jvm";
-import { effectiveOnPlay } from "@/lib/onPlay";
 import { WindowChooser } from "@/pages/detail/settings/WindowChooser";
 import { LaunchFields } from "@/pages/detail/settings/LaunchFields";
 import { useSettings, type LauncherOnPlay } from "@/store/settings";
@@ -94,14 +92,13 @@ function JvmRow() {
   );
 }
 
-/** Was der Launcher beim Spielstart mit seinem Fenster tut; mit Freunden wird aus „Schließen“ ein Minimieren (lib/onPlay.ts). */
+/** Was der Launcher beim Spielstart mit seinem Fenster tut. */
 function LauncherOnPlayRow() {
   const { t } = useI18n();
   const mode = useSettings((s) => s.launcherOnPlay);
   const set = useSettings((s) => s.set);
-  const friendsEnabled = useFriendsState().data?.enabled ?? null;
   return (
-    <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup" aside={friendsEnabled ? t("friendsSettings.onPlayAside") : undefined}>
+    <FormRow label={t("settings.onPlay.label")} hint={t("settings.onPlay.hint")} group="radiogroup">
       <div className="flex flex-wrap gap-x-[22px] gap-y-2">
         {LAUNCHER_ON_PLAY.map((value) => (
           <Radio key={value} name="gonplay" checked={mode === value} onChange={() => set({ launcherOnPlay: value })}>
@@ -109,7 +106,7 @@ function LauncherOnPlayRow() {
           </Radio>
         ))}
       </div>
-      {effectiveOnPlay(mode, friendsEnabled) === "close" && <Hint tone="warn" live>{t("settings.onPlay.closeWarning")}</Hint>}
+      {mode === "close" && <Hint tone="warn" live>{t("settings.onPlay.closeWarning")}</Hint>}
     </FormRow>
   );
 }

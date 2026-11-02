@@ -27,11 +27,8 @@ for (const [path, info] of Object.entries(manifest.files)) {
 for (const filename of ['32x32.png', '128x128.png', '128x128@2x.png', 'icon.ico', 'icon.icns']) {
   assert.deepEqual(read('src-tauri/icons/' + filename), read('branding/pumpkin-launcher/assets/' + filename), filename);
 }
-for (const filename of ['logo.png', 'icon.png']) {
-  assert.deepEqual(read('mod/src/main/resources/assets/pumpkin_bridge/' + filename), read('branding/pumpkin-launcher/assets/32x32.png'), filename);
-}
 for (const filename of ['sidebar.bmp', 'header.bmp']) {
   assert.deepEqual(read('src-tauri/installer/' + filename), read('branding/pumpkin-launcher/installer/' + filename), filename);
 }
 assert.ok(readdirSync(new URL('assets/', brand)).every(name => !['spring', 'summer', 'halloween', 'winter', 'standard'].includes(name)));
-console.log('Branding OK: clean Pumpkin Block pixel grids, manifest hashes, identical app/mod/native icons and installer artwork.');
+console.log('Branding OK: clean Pumpkin Block pixel grids, manifest hashes, identical app/native icons and installer artwork.');

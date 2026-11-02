@@ -21,7 +21,6 @@ import { DatapacksDialog } from "./DatapacksDialog";
 import { GuardedButton, useBusyReason, useInstanceBusyReason, type SectionProps } from "./guards";
 import { KindTile } from "./KindTile";
 import { ServersSection } from "./ServersSection";
-import { ShareSection } from "./ShareSection";
 
 /** Spielart einer Welt als Übersetzungsschlüssel; der Text kommt aus dem Wörterbuch. */
 const GAME_MODE_KEYS: Record<NonNullable<World["gameMode"]>, TKey> = {
@@ -46,14 +45,13 @@ const worldLine = (w: World) =>
 /** Symbol der Welt ohne eigenes Bild: Hardcore Herz, Kreativ Diamant, sonst Welt. */
 const worldIcon = (w: World): IconName => (w.hardcore ? "heart" : w.gameMode === "creative" ? "diamond" : "world");
 
-/** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen, Welt für Freunde teilen. */
+/** Welten und Server einer Instanz: direkt hineinspielen, Welten sichern und wiederherstellen, Serverliste pflegen. */
 export function WorldsTab({ instance, onLaunched }: { instance: Instance; onLaunched: () => void }) {
   const play = usePlay();
   const busy = useInstanceBusyReason(instance.id);
   const quickPlay = (target: QuickPlay) => void play(instance, onLaunched, target);
   return (
     <div className="wl-root">
-      <ShareSection instance={instance} busy={busy} />
       <WorldsSection instance={instance} busy={busy} onPlay={quickPlay} />
       <ServersSection instance={instance} busy={busy} onPlay={quickPlay} />
     </div>

@@ -1,8 +1,10 @@
 //! Installierte Java-Versionen finden (Standardordner, `JAVA_HOME`, `PATH`) und ihre Version aus der Datei `release`
-//! im Java-Home lesen. Es wird nichts gestartet; der Launcher bringt für jede Minecraft-Version ohnehin eine eigene
-//! Runtime mit, die Funde sind nur ein Angebot für „Eigene Java-Installation“.
+//! im Java-Home lesen. Die Suche startet nichts; nur `probe_major` fragt notfalls das Programm selbst. Der Launcher
+//! bringt für jede Minecraft-Version ohnehin eine eigene Runtime mit, die Funde sind nur ein Angebot für „Eigene
+//! Java-Installation“.
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use serde::Serialize;
 
@@ -64,6 +66,47 @@ pub fn major_of_exe(exe: &Path) -> Option<u32> {
     version_of(exe).and_then(|version| major_of(&version))
 }
 
+/// Hauptversion der Java-Programmdatei `exe`: aus der Datei `release` ihres Java-Homes, sonst durch einen Aufruf von
+/// `java -version`. `None`, wenn beides nichts ergibt.
+pub fn probe_major(exe: &Path) -> Option<u32> {
+    major_of_exe(exe).or_else(|| major_from_version_output(exe))
+}
+
+/// Startet `java -version` (die Ausgabe kommt auf stderr). Unter Windows hat `javaw.exe` keine Konsole und schreibt
+/// nichts, also fragt der Aufruf deren Nachbarn `java.exe`.
+fn major_from_version_output(exe: &Path) -> Option<u32> {
+    let output = silent(Command::new(console_program(exe)).arg("-version")).stdin(Stdio::null()).output().ok()?;
+    from_version_output(&String::from_utf8_lossy(&output.stderr))
+}
+
+fn console_program(exe: &Path) -> PathBuf {
+    let is_windowless = exe.file_name().is_some_and(|name| name.eq_ignore_ascii_case("javaw.exe"));
+    if is_windowless { exe.with_file_name("java.exe") } else { exe.to_owned() }
+}
+
+#[cfg(windows)]
+fn silent(command: &mut Command) -> &mut Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW)
+}
+
+#[cfg(not(windows))]
+fn silent(command: &mut Command) -> &mut Command {
+    command
+}
+
+/// Hauptversion aus der Ausgabe von `java -version`, etwa `openjdk version "21.0.2" 2024-01-16` oder
+/// `java version "1.8.0_392"`. Zeilen davor, wie `Picked up JAVA_TOOL_OPTIONS: ...`, werden übersprungen.
+fn from_version_output(text: &str) -> Option<u32> {
+    text.lines().find_map(quoted_version_of_line).and_then(major_of)
+}
+
+fn quoted_version_of_line(line: &str) -> Option<&str> {
+    let after_keyword = line.split_once(" version \"")?.1;
+    after_keyword.split_once('"').map(|(version, _)| version)
+}
+
 /// Die Installation im Java-Home `home`, sofern dort Programmdatei und `release` liegen.
 fn install_at(home: &Path) -> Option<JavaInstall> {
     let exe = JAVA_FILE_NAMES.iter().map(|name| home.join("bin").join(name)).find(|exe| exe.is_file())?;
@@ -120,6 +163,41 @@ pub fn detect() -> Vec<JavaInstall> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_output_gives_the_major_version() {
+        let cases = [
+            ("openjdk version \"21.0.2\" 2024-01-16
+OpenJDK Runtime Environment Temurin-21.0.2+13 (build 21.0.2+13)
+", Some(21)),
+            ("java version \"1.8.0_392\"
+Java(TM) SE Runtime Environment (build 1.8.0_392-b08)
+", Some(8)),
+            ("openjdk version \"17\" 2021-09-14
+", Some(17)),
+            ("openjdk version \"25-ea\" 2025-09-16
+", Some(25)),
+            ("Picked up JAVA_TOOL_OPTIONS: -Dfile.encoding=UTF-8
+openjdk version \"21.0.2\" 2024-01-16
+", Some(21)),
+            ("openjdk version \"17.0.20\" 2026-04-21 LTS
+", Some(17)),
+        ];
+        for (text, expected) in cases {
+            assert_eq!(from_version_output(text), expected, "{text:?}");
+        }
+    }
+
+    #[test]
+    fn version_output_that_is_not_java_gives_nothing() {
+        for text in ["", "command not found: java
+", "version \"21\"
+", "openjdk version 21
+", "openjdk version \"\" 2024
+", "openjdk version \"21"] {
+            assert_eq!(from_version_output(text), None, "{text:?}");
+        }
+    }
 
     fn fake_home(parent: &Path, name: &str, release: Option<&str>) -> PathBuf {
         let home = parent.join(name);

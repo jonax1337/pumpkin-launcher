@@ -2,7 +2,6 @@
 use tauri::State;
 
 use crate::error::AppResult;
-use crate::friends_commands::account_profile;
 use crate::models::Account;
 use crate::services::auth::{self, LoginMode, LoginStart};
 use crate::state::AppState;
@@ -20,9 +19,7 @@ pub async fn ms_login_start(
 /// Wartet auf die Bestätigung im Browser und liefert das gespeicherte Konto.
 #[tauri::command]
 pub async fn ms_login_finish(state: State<'_, AppState>) -> AppResult<Account> {
-    let account = auth::finish_login(&state).await?;
-    announce_account_to_friends(&state);
-    Ok(account)
+    auth::finish_login(&state).await
 }
 
 #[tauri::command]
@@ -43,12 +40,5 @@ pub fn offline_allowed(state: State<'_, AppState>) -> bool {
 
 #[tauri::command]
 pub fn ms_account_remove(state: State<'_, AppState>, id: String) -> AppResult<()> {
-    auth::remove_account(&state, &id)?;
-    announce_account_to_friends(&state);
-    Ok(())
-}
-
-/// Freunde sehen das erste Microsoft-Konto; nach jeder Änderung der Konten wird es neu bestimmt.
-fn announce_account_to_friends(state: &AppState) {
-    state.friends.update_account(account_profile(state));
+    auth::remove_account(&state, &id)
 }

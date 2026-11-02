@@ -13,7 +13,6 @@ const ICON_SET = {
   library: [".XXXXXX.", "XXXXXXXX", "XXXXXXXX", "........", "XXXXXXXX", "XXXooXXX", "XXXooXXX", "XXXXXXXX"],
   discover: [".XXXX...", "XXooXX..", "XooooX..", "XooooX..", "XXooXX..", ".XXXXXX.", "....XXXX", ".....XXX"],
   skins: [".XX..XX.", "XXXooXXX", "XXXXXXXX", "XXXXXXXX", "ooXXXXoo", "..XXXX..", "..XXXX..", "..oooo.."],
-  friends: ["...ooooo", "...ooooo", "...o.o.o", "XXXXXooo", "XXXXXooo", "X.X.X...", "XXXXX...", "XXXXX..."],
   news: ["XX......", "oXXXX...", "oXXXXXXX", "oXXXXXXX", "oXXXXXXX", "oXXXXX..", "oXX.XXX.", "....XX.."],
   tasks: ["..XXXX..", "XXXXXXXX", "XoXXXXoX", "X......X", "XoXXXXoX", "X......X", "XoXXXXoX", "XXXXXXXX"],
   settings: [".X.XX.X.", "XXXXXXXX", ".XXXXXX.", "XXX..XXX", "XXX..XXX", ".XXXXXX.", "XXXXXXXX", ".X.XX.X."],

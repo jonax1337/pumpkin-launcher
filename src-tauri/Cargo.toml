@@ -16,12 +16,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.7.1", features = [] }
-# Für die Einbettung der Mod (build.rs): dieselbe Indexprüfung und derselbe SHA-256 wie zur Laufzeit; alle schon im Baum.
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-thiserror = "2.0.21"
-sha2 = "0.11.0"
-data-encoding = "2.11.1"
 
 [dependencies]
 tauri = { version = "2.12.1", features = ["image-png", "protocol-asset"] }
@@ -57,35 +51,15 @@ percent-encoding = "2.3.2"
 toml = { version = "1.1.6", default-features = false, features = ["std", "serde", "parse"] }
 hickory-resolver = { version = "0.26.3", default-features = false, features = ["system-config", "tokio"] }
 discord-rich-presence = "1.1.0"
-iroh = "1.3.0"
 data-encoding = "2.11.1"
-unicode-normalization = "0.1.25"
-bytes = "1.12.1"
-# Zufallsbytes für Freundescode-Geheimnis und Salz (schon im Baum über uuid und iroh).
 getrandom = "0.4.3"
-# Mojang's player certificate for the friends directory: RSA signing and the RFC 3339 times of the certificate
-# (both already in the tree through rustls and the Tauri crates; no new crate).
 ring = "0.17.14"
-time = { version = "0.3.55", features = ["parsing"] }
-
-[features]
-# Zusätzlich die öffentlichen Relays von n0 (nur Entwicklung und geschlossene Beta, siehe docs/friends/SPEC.md 3.2).
-beta-relays = []
-# Rauchtest der Mod im Spiel (tools/mod-smoke/README.md): schaltet `tests/smoke` frei und erlaubt dem Test,
-# das Microsoft-Konto-Tor zu überstimmen. Nie in den Standard-Features oder im Release-Workflow.
-smoke = []
-
-[[test]]
-name = "smoke"
-path = "tests/smoke/main.rs"
-required-features = ["smoke"]
 
 [dev-dependencies]
 tokio = { version = "1.53.3", features = ["test-util"] }
-iroh = { version = "1.3.0", features = ["test-utils"] }
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61.2", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock"] }
+windows-sys = { version = "0.61.2", features = ["Wdk_System_SystemServices", "Win32_Storage_FileSystem", "Win32_System_SystemInformation"] }
 windows-native-keyring-store = { version = "1.1.0", default-features = false }
 
 [target."cfg(unix)".dependencies]
