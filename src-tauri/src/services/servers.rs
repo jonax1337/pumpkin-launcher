@@ -10,7 +10,7 @@ use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{require_name, NO_NAME_LIMIT};
 
-const FILE: &str = "servers.dat";
+pub(crate) const FILE: &str = "servers.dat";
 /// Längste Serveradresse in Bytes.
 const MAX_ADDRESS_LEN: usize = 255;
 const MAX_HOST_LEN: usize = 253;
@@ -81,6 +81,45 @@ pub fn remove(game_dir: &Path, index: usize) -> AppResult<()> {
         list.remove(position(list, index)?);
         Ok(())
     })
+}
+
+/// Die sichtbaren Einträge der Datei in `dir` unverändert (samt Icon und unbekannter Tags), in ihrer Reihenfolge.
+pub(crate) fn visible_entries(dir: &Path) -> AppResult<Vec<Value>> {
+    let mut root = read(&dir.join(FILE))?;
+    Ok(visible(entries(&mut root)?).map(|(_, entry)| Value::Compound(entry.clone())).collect())
+}
+
+/// Ersetzt die sichtbaren Einträge der Datei in `dir` durch `visible`; versteckte (Quick Play) und andere Tags der
+/// Datei bleiben, die versteckten hinter den sichtbaren.
+pub(crate) fn replace_visible(dir: &Path, visible: Vec<Value>) -> AppResult<()> {
+    modify_list(dir, |list| {
+        let hidden: Vec<Value> = list.drain(..).filter(|entry| matches!(entry, Value::Compound(c) if is_hidden(c))).collect();
+        *list = visible.into_iter().chain(hidden).collect();
+        Ok(())
+    })
+}
+
+/// Gleicher Eintrag bis aufs Icon, das das Spiel bei jedem Anpingen neu schreibt.
+pub(crate) fn same_server(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Compound(a), Value::Compound(b)) => without_icon(a) == without_icon(b),
+        _ => a == b,
+    }
+}
+
+fn without_icon(entry: &Compound) -> HashMap<&String, &Value> {
+    entry.iter().filter(|(key, _)| key.as_str() != ICON).collect()
+}
+
+/// Adresse eines Eintrags; leer, wenn er keine hat.
+pub(crate) fn address_of(entry: &Value) -> &str {
+    match entry {
+        Value::Compound(c) => match c.get(ADDRESS) {
+            Some(Value::String(address)) => address,
+            _ => "",
+        },
+        _ => "",
+    }
 }
 
 /// Eine geprüfte Serveradresse in ihren Teilen; `host` ohne eckige Klammern.
@@ -319,6 +358,18 @@ mod tests {
         assert_eq!(list(&dir).unwrap().iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["Baustelle", "Neu"]);
         assert_eq!(raw(&dir).len(), 3, "der versteckte Eintrag bleibt");
         assert!(remove(&dir, 5).is_err());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn replacing_the_visible_entries_keeps_hidden_ones_behind_them() {
+        let dir = game_dir();
+        let mut kept = visible_entries(&dir).unwrap();
+        assert_eq!(kept.iter().map(address_of).collect::<Vec<_>>(), ["lobby.example.net", "bau.example.net:25570"]);
+        kept.remove(0);
+        replace_visible(&dir, kept).unwrap();
+        let after: Vec<_> = raw(&dir).iter().map(address_of).map(str::to_owned).collect();
+        assert_eq!(after, ["bau.example.net:25570", "quick.example.net"]);
         fs::remove_dir_all(dir).unwrap();
     }
 

@@ -1,6 +1,7 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Actions, Button, Glyph, Hint, SearchField, SectionHeader, Segmented, Select, Spacer, Toolbar } from "@/ui";
 import { EmptyState } from "@/components/EmptyState";
+import { usePhase } from "@/components/play/phase";
 import { useAnnouncement } from "@/hooks/useAnnouncement";
 import { useProjects } from "@/hooks/useContent";
 import { useStableFn } from "@/hooks/useStableFn";
@@ -71,6 +72,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
   const local = useLocalFiles(instance, shown);
   const { active, target, progress } = useContentState();
   const busy = useInstanceBusyReason(instance.id);
+  const running = usePhase(instance.id) === "running";
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState<KindFilterValue>("all");
   const [mode, setMode] = useState<ViewMode>("list");
@@ -279,6 +281,7 @@ export function ContentTab({ instance, shown, updateFor, analysis, findingsOf, o
           />
         </Toolbar>
 
+        {running && <Hint icon="info">{t("detail.content.runningHint")}</Hint>}
         {rollback.applied && <UndoBar change={rollback.applied} locked={!!active} onUndo={rollback.undo} onDismiss={rollback.dismiss} />}
         {kind === "resourcepack" && packs.controls.available && <ResourcePackPanel packs={packs} say={say} />}
         {kind === "shader" && <ShaderPanel packs={packs} shaders={instance.mods.filter((m) => m.kind === "shader")} hasIris={!!iris?.enabled} loader={instance.loader} />}

@@ -13,7 +13,7 @@ import type {
   JavaInstall, LaunchOptions, LibrarySkin,
   LoaderVersion, LocalFile, LogKind, LogPayload, LogSession, MigrationCheck, MigrationOutcome, MigrationTarget,
   ModLoader, MsLoginStart, NewInstance, PackSelection, PackTarget, PackUpdateOutcome,
-  Screenshot, Server, ServerStatus, SkinProfile, SkinVariant, StorageOverview, StorageRelocation, Template, VersionEntry, World, WorldBackup,
+  Screenshot, Server, ServerStatus, Sharing, SkinProfile, SkinVariant, StorageOverview, StorageRelocation, Template, VersionEntry, World, WorldBackup,
 } from "./types";
 import { platform } from "./platform";
 
@@ -173,6 +173,8 @@ export interface Backend {
   updateInstance(instance: Instance): Promise<Instance>;
   /** Nur die Gruppe ändern (null oder leer = ohne); überschreibt keinen anderen Stand der Instanz. */
   setInstanceGroup(instanceId: string, group: string | null): Promise<Instance>;
+  /** Teilen ein- oder ausschalten; neu Eingeschaltetes nimmt die Instanz sofort auf. Nicht, während sie läuft. */
+  setInstanceSharing(instanceId: string, sharing: Sharing): Promise<Instance>;
   /** Eigenes Icon setzen; null = automatisch. Ändert nichts anderes an der Instanz. */
   setInstanceIcon(instanceId: string, icon: IconChoice | null): Promise<Instance>;
   /** Szene setzen; null = aus der ID abgeleitet. Ändert nichts anderes an der Instanz. */

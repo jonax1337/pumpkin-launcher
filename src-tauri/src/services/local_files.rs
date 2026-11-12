@@ -62,6 +62,7 @@ pub async fn add(
     files: Vec<LocalFile>,
     progress: SharedProgress,
 ) -> AppResult<Instance> {
+    content::require_addable(state, instance_id, files.iter().map(|file| file.kind))?;
     let instance = state.instances.get(instance_id)?;
     let total = files.len() as u64;
     let staged = {

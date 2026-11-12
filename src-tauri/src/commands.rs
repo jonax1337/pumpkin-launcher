@@ -9,7 +9,7 @@ use crate::coded;
 use crate::error::{AppError, AppResult};
 use crate::models::{
     now_ms, require_name, Account, GameWindow, Instance, InstanceIcon, InstanceScene, LaunchOptions, Mod, ModLoader,
-    NewInstance, QuickPlay, MAX_NOTES_LEN, NO_NAME_LIMIT,
+    NewInstance, QuickPlay, Sharing, MAX_NOTES_LEN, NO_NAME_LIMIT,
 };
 use crate::services::install::{self, InstallProgress, InstallStep, OnProgress, INSTALL_PROGRESS_EVENT};
 use crate::services::launch::{self, ExitCause, GameCommand, LaunchSpec, LogStream, ProcessExit, Running, Session, EXIT_EVENT, LOG_EVENT};
@@ -100,6 +100,7 @@ pub fn update_instance(state: State<'_, AppState>, instance: Instance) -> AppRes
                 scene: current.scene.take(),
                 mod_profiles: std::mem::take(&mut current.mod_profiles),
                 active_mod_profile: current.active_mod_profile.take(),
+                sharing: current.sharing,
                 ..instance
             }
         })
@@ -142,6 +143,16 @@ pub fn instance_set_icon(state: State<'_, AppState>, instance_id: String, icon: 
 pub fn instance_set_scene(state: State<'_, AppState>, instance_id: String, scene: Option<InstanceScene>) -> AppResult<Instance> {
     let scene = scene.map(InstanceScene::validated).transpose()?;
     state.instances.modify(&instance_id, |i| i.scene = scene)
+}
+
+/// Schaltet das Teilen von Serverliste und Optionen. Neu Eingeschaltetes nimmt die Instanz gleich auf (siehe
+/// `SharedSettings::change`); das Spiel darf dabei nicht laufen, es überschriebe die Dateien beim Beenden.
+#[tauri::command]
+pub fn instance_set_sharing(state: State<'_, AppState>, instance_id: String, sharing: Sharing) -> AppResult<Instance> {
+    let _operation = state.exclusive(&instance_id)?;
+    let instance = state.instances.get(&instance_id)?;
+    state.shared.change(&state.dirs, &instance, sharing)?;
+    state.instances.modify(&instance_id, |i| i.sharing = sharing)
 }
 
 #[tauri::command]
@@ -258,13 +269,17 @@ async fn launch_instance(app: &AppHandle, state: &AppState, instance_id: &str, o
     let instance = state.instances.get(instance_id)?;
     worlds::backup_before_launch(state, &instance, options).await;
     let prepared = prepare_launch(state, &instance, options).await?;
-    let pid = state.spawn_running(instance_id, || {
-        let game = spawn_game(app, instance_id, &prepared)?;
-        // Noch unter der Sperre: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
-        announce_in_discord(state, &instance, options);
-        record_launch(state, instance_id, options.quick_play.clone());
-        Ok(game)
-    })?;
+    // Erst nach Pack-Wiederherstellung und Befehl vor dem Start: beide könnten die übergebenen Dateien überschreiben.
+    hand_out_shared(state, &instance);
+    let pid = state
+        .spawn_running(instance_id, || {
+            let game = spawn_game(app, instance_id, &prepared)?;
+            // Noch unter der Sperre: `instance-exit` eines sofort beendeten Spiels kommt so erst nach diesem Stand.
+            announce_in_discord(state, &instance, options);
+            record_launch(state, instance_id, options.quick_play.clone());
+            Ok(game)
+        })
+        .inspect_err(|_| take_back_shared(state, instance_id))?;
     tracing::info!(instance = %instance_id, pid, user = %prepared.player, "Spiel gestartet");
     Ok(pid)
 }
@@ -370,6 +385,14 @@ fn spawn_game(app: &AppHandle, instance_id: &str, prepared: &PreparedLaunch) -> 
     )
 }
 
+/// Gibt der Instanz die geteilte Serverliste und Optionen. Scheitert das, startet das Spiel mit ihren eigenen: der
+/// Fehler wird nur geloggt, denn Geteiltes ist Komfort und soll das Spielen nicht verhindern.
+fn hand_out_shared(state: &AppState, instance: &Instance) {
+    if let Err(err) = state.shared.before_launch(&state.dirs, instance) {
+        tracing::warn!(instance = %instance.id, %err, "Geteilte Einstellungen nicht übergeben");
+    }
+}
+
 /// Merkt sich Startzeit und Quick-Play-Ziel. Das Spiel läuft schon: ein Schreibfehler (etwa durch ein
 /// kurz gesperrtes `instances.json`) wird nur geloggt, damit der Start nicht als gescheitert gemeldet wird.
 fn record_launch(state: &AppState, instance_id: &str, quick_play: Option<QuickPlay>) {
@@ -409,6 +432,7 @@ fn on_game_exit(app: &AppHandle, instance_id: String, started: SystemTime, resul
     let log_file = Some(state.dirs.latest_log(&instance_id)).filter(|p| p.is_file()).map(text);
     record_playtime(&state, &instance_id, started);
     archive_log(&state, &instance_id, started);
+    take_back_shared(&state, &instance_id);
     drop(running);
     tracing::info!(instance = %instance_id, ?code, crashed, "Spiel beendet");
     emit(app, EXIT_EVENT, ExitPayload { instance_id, code, crashed, crash_report, log_file, suspected_mods });
@@ -433,6 +457,14 @@ impl Drop for ReleaseRunning<'_> {
 fn suspects_of(state: &AppState, instance_id: &str, report: &Path) -> Vec<String> {
     let mods = state.instances.get(instance_id).map(|instance| instance.mods).unwrap_or_default();
     crashreport::suspects_in_file(report, &mods)
+}
+
+/// Übernimmt geänderte Server und Optionen in die geteilte Kopie, solange die Instanz noch als laufend gilt: ein
+/// neuer Start bekäme sonst den alten Stand. Ein Fehler wird nur geloggt; der nächste Start holt den Abgleich nach.
+fn take_back_shared(state: &AppState, instance_id: &str) {
+    if let Err(err) = state.shared.after_exit(&state.dirs, instance_id) {
+        tracing::warn!(instance = %instance_id, %err, "Geteilte Einstellungen nicht abgeglichen");
+    }
 }
 
 /// Sichert das Protokoll der Sitzung, damit es den nächsten Start überlebt; ein Fehler wird nur geloggt.

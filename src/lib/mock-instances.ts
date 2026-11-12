@@ -61,6 +61,13 @@ export function createInstanceMock({ db, emit }: MockContext) {
       inst.group = group?.trim() || null;
       return clone(inst);
     },
+    async setInstanceSharing(instanceId, sharing) {
+      await wait();
+      if (db.running.has(instanceId)) throw new Error(t("errors.instance.stillRunning"));
+      const inst = findInstance(db, instanceId);
+      inst.sharing = { ...sharing };
+      return clone(inst);
+    },
     async setInstanceIcon(instanceId, icon) {
       await wait();
       const inst = findInstance(db, instanceId);

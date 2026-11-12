@@ -39,6 +39,7 @@ export const errors: typeof deErrors = {
   "errors.operationRunning": "An installation or change is already in progress",
   "errors.instance.stillRunning": "The instance is still running",
   "errors.instance.alreadyRunning": "The instance is already running",
+  "errors.instance.modsNeedStoppedGame": "Mods can only be added once Minecraft is closed. Resource packs and shaders work while the game is running.",
   "errors.auth.cancelled": "Sign-in cancelled.",
   "errors.auth.expired": "The sign-in has expired. Please start it again.",
   "errors.auth.notApproved": "Microsoft has not yet approved this launcher for Minecraft. It's not you or your account: this build's Microsoft app has no approval yet. The official Pumpkin Launcher is approved, so this usually means a fork or a self-built copy.",

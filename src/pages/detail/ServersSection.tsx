@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
-  Actions, Cell, ConfirmDialog, Count, Dialog, DialogActions, Empty, Field, Glyph, IconButton, Input, List, ListRow, Menu, RowTitle, SectionHeader,
+  Actions, Cell, ConfirmDialog, Count, Dialog, DialogActions, Empty, Field, Glyph, Hint, IconButton, Input, List, ListRow, Menu, RowTitle, SectionHeader,
   Segmented,
   type ListLayout,
   type MenuEntry,
@@ -66,6 +66,7 @@ export function ServersSection({ instance, busy, onPlay }: SectionProps) {
         actions={<Actions>{(servers.data?.length ?? 0) > 0 && refreshButton}{addButton}</Actions>}
       />
       <div className="wl-body">
+        {instance.sharing.servers && <Hint icon="info">{t("detail.servers.sharedHint")}</Hint>}
         <QueryList
           query={servers}
           error={t("detail.servers.loadError")}

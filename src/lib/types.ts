@@ -247,6 +247,8 @@ export interface Instance {
   scene: InstanceScene | null;
   /** Welten vor dem Start sichern: die Wahl dieser Instanz; null = Einstellung des Launchers. */
   backupWorlds: boolean | null;
+  /** Was die Instanz mit den anderen teilenden Instanzen gemeinsam hat; nur `setInstanceSharing` ändert es. */
+  sharing: Sharing;
   mods: Mod[];
   createdAt: number;
   lastPlayedAt: number | null;
@@ -258,6 +260,12 @@ export interface Instance {
   modProfiles: ModProfile[];
   /** `ModProfile.id` des zuletzt gespeicherten oder angewendeten Profils; null = keins. */
   activeModProfile: string | null;
+}
+
+/** Geteilte Serverliste (`servers.dat`) und Spieloptionen samt Tasten (`options.txt`, ohne Ressourcenpakete). */
+export interface Sharing {
+  servers: boolean;
+  options: boolean;
 }
 
 /** Vorlage: gespeicherter Schnappschuss einer Instanz (lokales .mrpack, ohne Welten). */

@@ -307,6 +307,16 @@ impl InstanceScene {
     }
 }
 
+/// Was eine Instanz mit den anderen teilenden Instanzen gemeinsam hat (siehe `services::shared_settings`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Sharing {
+    /// Die Serverliste (`servers.dat`).
+    pub servers: bool,
+    /// Die Spieloptionen samt Tastenbelegung (`options.txt`), ohne die Auswahl der Ressourcenpakete.
+    pub options: bool,
+}
+
 /// Benanntes Profil: welche Inhalte einer Instanz an waren, als es gespeichert wurde (siehe `services::mod_profiles`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -366,6 +376,9 @@ pub struct Instance {
     /// Welten vor dem Start sichern: die Wahl dieser Instanz; ohne gilt die Einstellung des Launchers.
     #[serde(default)]
     pub backup_worlds: Option<bool>,
+    /// Was die Instanz mit anderen teilt; nur `instance_set_sharing` ändert es.
+    #[serde(default)]
+    pub sharing: Sharing,
     pub mods: Vec<Mod>,
     pub created_at: u64,
     pub last_played_at: Option<u64>,
@@ -415,6 +428,7 @@ impl Instance {
             icon: None,
             scene: None,
             backup_worlds: None,
+            sharing: Sharing::default(),
             mods: Vec::new(),
             created_at: now_ms(),
             last_played_at: None,

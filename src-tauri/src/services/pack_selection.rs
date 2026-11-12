@@ -1,11 +1,10 @@
 //! Welche Ressourcenpakete und welcher Shader im Spiel gewählt sind: `options.txt` (`resourcePacks`,
 //! `incompatibleResourcePacks`) und Iris (`config/iris.properties`). Geändert werden nur diese Zeilen, alles andere
 //! samt Zeilenenden bleibt, wie das Spiel es geschrieben hat.
-use std::{fs, path::Path};
-
 use serde::Serialize;
 
-use super::{none_if_missing, require_plain_name, write_atomic, Dirs};
+use super::options_txt::{line_value, read_text, set_line, write_text};
+use super::{require_plain_name, Dirs};
 use crate::coded;
 use crate::error::{AppError, AppResult};
 
@@ -49,7 +48,7 @@ pub fn write_resource_packs(dirs: &Dirs, instance_id: &str, packs: &[String]) ->
     let incompatible: Vec<String> = pack_list(&options, INCOMPATIBLE_PACKS).into_iter().filter(|id| packs.contains(id)).collect();
     let options = set_line(&options, RESOURCE_PACKS, ':', Some(&pack_array(packs)?));
     let options = set_line(&options, INCOMPATIBLE_PACKS, ':', Some(&pack_array(&incompatible)?));
-    write_file(&path, &options)?;
+    write_text(&path, &options)?;
     read(dirs, instance_id)
 }
 
@@ -60,7 +59,7 @@ pub fn write_shader_pack(dirs: &Dirs, instance_id: &str, pack: Option<&str>) -> 
     let iris = read_text(&path)?;
     let iris = set_line(&iris, SHADER_PACK, '=', pack.map(escape_property).as_deref());
     let iris = if pack.is_some() { set_line(&iris, SHADERS_ENABLED, '=', Some("true")) } else { iris };
-    write_file(&path, &iris)?;
+    write_text(&path, &iris)?;
     read(dirs, instance_id)
 }
 
@@ -77,17 +76,6 @@ fn check_packs(packs: &[String]) -> AppResult<()> {
     Ok(())
 }
 
-fn read_text(path: &Path) -> AppResult<String> {
-    Ok(none_if_missing(fs::read_to_string(path))?.unwrap_or_default())
-}
-
-fn write_file(path: &Path, text: &str) -> AppResult<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    write_atomic(path, text.as_bytes())
-}
-
 fn pack_array(packs: &[String]) -> AppResult<String> {
     Ok(serde_json::to_string(packs)?)
 }
@@ -95,38 +83,6 @@ fn pack_array(packs: &[String]) -> AppResult<String> {
 /// Die Liste hinter `key` in `options.txt` (ein JSON-Feld mit Texten); fehlt sie oder ist sie unlesbar, ist sie leer.
 fn pack_list(options: &str, key: &str) -> Vec<String> {
     line_value(options, key, ':').and_then(|value| serde_json::from_str(value).ok()).unwrap_or_default()
-}
-
-/// Der Wert der Zeile `key<separator>wert` ohne Zeilenende.
-fn line_value<'t>(text: &'t str, key: &str, separator: char) -> Option<&'t str> {
-    text.lines().find_map(|line| line.strip_prefix(key)?.strip_prefix(separator))
-}
-
-/// Setzt den Wert der Zeile `key<separator>…`, `None` entfernt sie. Fehlt die Zeile, kommt sie ans Ende. Alle anderen
-/// Zeilen bleiben unverändert, auch ihre Zeilenenden.
-fn set_line(text: &str, key: &str, separator: char, value: Option<&str>) -> String {
-    let is_target = |line: &str| line.strip_prefix(key).is_some_and(|rest| rest.starts_with(separator));
-    let ending = if text.contains("\r\n") { "\r\n" } else { "\n" };
-    let mut out = String::with_capacity(text.len());
-    let mut found = false;
-    for line in text.split_inclusive('\n') {
-        let content = line.trim_end_matches(['\r', '\n']);
-        if !is_target(content) {
-            out.push_str(line);
-            continue;
-        }
-        found = true;
-        if let Some(value) = value {
-            out.push_str(&format!("{key}{separator}{value}{}", &line[content.len()..]));
-        }
-    }
-    if let (false, Some(value)) = (found, value) {
-        if !out.is_empty() && !out.ends_with('\n') {
-            out.push_str(ending);
-        }
-        out.push_str(&format!("{key}{separator}{value}{ending}"));
-    }
-    out
 }
 
 /// Wert für `.properties`: Zeichen mit Bedeutung und alles außerhalb von ASCII maskiert, wie Java es schreibt.
@@ -183,6 +139,7 @@ fn unescape_property(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn dirs() -> Dirs {
         Dirs::new(std::env::temp_dir().join(crate::models::new_id()))

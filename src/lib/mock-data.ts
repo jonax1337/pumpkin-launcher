@@ -86,6 +86,7 @@ export const blankInstanceFields = (): Omit<Instance, DerivedInstanceFields> => 
   icon: null,
   scene: null,
   backupWorlds: null,
+  sharing: { servers: false, options: false },
   lastPlayedAt: null,
   lastQuickPlay: null,
   defaultAccount: null,
