@@ -1,8 +1,15 @@
 # Changelog
 
-Last updated: 2026-11-02.
+Last updated: 2026-11-12.
 
 For installation and a first game, start with the [launcher guide](README.md#download-and-install).
+
+## 0.7.0 — 2026-11-12
+
+### Added
+
+- Add resource packs and shaders to an instance while its game is running; pick them in the game under Options. Mods still wait until the game is closed.
+- Share the server list and the game options with key bindings between instances, switchable per instance under Settings → Share with other instances. Resource pack selection stays per instance. Changes made while several instances run at the same time are merged instead of overwritten. Instances up to 1.12 share a separate copy of the options because they store key bindings differently.
 
 ## 0.6.0 — 2026-11-02
 
