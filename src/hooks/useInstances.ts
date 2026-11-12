@@ -1,9 +1,9 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { currentLanguage, t } from "@/i18n/core";
 import { api } from "@/lib/api";
-import type { IconChoice, Instance, InstanceScene, ModLoader, NewInstance } from "@/lib/types";
+import type { IconChoice, Instance, InstanceScene, ModLoader, NewInstance, Sharing } from "@/lib/types";
 import { CATALOG_STALE_MS } from "./staleTimes";
-import { appKeys, instanceKeys } from "./queryKeys";
+import { appKeys, instanceKeys, isServerListKey } from "./queryKeys";
 
 const instanceListQuery = { queryKey: instanceKeys.all, queryFn: api.listInstances };
 
@@ -69,6 +69,18 @@ export function useSetGroup(instanceId: string) {
   return useMutation({
     mutationFn: (group: string | null) => api.setInstanceGroup(instanceId, group),
     onSuccess: (instance) => instanceSaved(qc, instance),
+  });
+}
+
+/** Teilen von Serverliste und Optionen schalten. Danach kann sich die Serverliste jeder teilenden Instanz geändert haben. */
+export function useSetSharing(instanceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sharing: Sharing) => api.setInstanceSharing(instanceId, sharing),
+    onSuccess: (instance) => {
+      void qc.invalidateQueries({ predicate: ({ queryKey }) => isServerListKey(queryKey) });
+      return instanceSaved(qc, instance);
+    },
   });
 }
 

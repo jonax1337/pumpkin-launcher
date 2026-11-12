@@ -132,6 +132,7 @@ pub fn run() {
             commands::create_instance,
             commands::update_instance,
             commands::instance_set_group,
+            commands::instance_set_sharing,
             commands::instance_set_icon,
             commands::instance_set_scene,
             profile_commands::mod_profile_save,

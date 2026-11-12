@@ -14,6 +14,7 @@ use crate::services::auth::MsState;
 use crate::services::download::http_client;
 use crate::services::launch::Running;
 use crate::services::presence::Presence;
+use crate::services::shared_settings::SharedSettings;
 use crate::services::operation_locks::{OperationGuard, OperationLocks};
 use crate::services::progress::{progress, SharedProgress};
 use crate::services::store::JsonStore;
@@ -34,6 +35,8 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// Die Anzeige in Discord; gezeigt wird nur, was `LaunchOptions::discord_presence` beim Start erlaubt.
     pub presence: Presence,
+    /// Serverliste und Optionen, die sich Instanzen teilen.
+    pub shared: SharedSettings,
     /// Hinweise vom Start, die den Nutzer betreffen, aber den Start nicht verhindern (etwa eine nicht gelöschte alte Kopie
     /// des Instanzordners nach erfolgreichem Umzug).
     pub startup_notices: Vec<String>,
@@ -68,6 +71,7 @@ impl AppState {
             startup_notices,
             http,
             presence: Presence::discord(),
+            shared: SharedSettings::default(),
             running: Mutex::new(HashMap::new()),
             operations: OperationLocks::default(),
             game_files: tokio::sync::Mutex::new(()),
@@ -178,6 +182,12 @@ impl AppState {
 
     pub fn is_running(&self, instance_id: &str) -> bool {
         lock(&self.running).contains_key(instance_id)
+    }
+
+    /// Trägt die Instanz als laufend ein, ohne ein Spiel zu starten.
+    #[cfg(test)]
+    pub(crate) fn pretend_running(&self, instance_id: &str) {
+        lock(&self.running).insert(instance_id.to_owned(), None);
     }
 
     /// Startet das Spiel der Instanz mit `spawn` und trägt es als laufend ein. Prüfen, Starten und Eintragen laufen

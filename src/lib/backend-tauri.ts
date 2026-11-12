@@ -85,6 +85,7 @@ export function createTauriBackend(): Backend {
     createInstance: (input) => call("create_instance", { input }),
     updateInstance: (instance) => call("update_instance", { instance }),
     setInstanceGroup: (instanceId, group) => call("instance_set_group", { instanceId, group }),
+    setInstanceSharing: (instanceId, sharing) => call("instance_set_sharing", { instanceId, sharing }),
     setInstanceIcon: (instanceId, icon) => call("instance_set_icon", { instanceId, icon }),
     setInstanceScene: (instanceId, scene) => call("instance_set_scene", { instanceId, scene }),
     modProfileSave: (instanceId, name) => call("mod_profile_save", { instanceId, name }),

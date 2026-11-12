@@ -41,6 +41,16 @@ pub(crate) fn commit_mods(state: &AppState, id: &str, mods: Vec<Mod>) -> AppResu
     state.instances.modify(id, |current| current.mods = mods)
 }
 
+/// Ressourcenpakete und Shader liest das Spiel neu ein, sobald man ihr Auswahlmenü öffnet: sie dürfen auch zu einer
+/// laufenden Instanz. Mods lädt es nur beim Start, also nicht. Der Aufrufer hält die Vorgangssperre der Instanz, damit
+/// das Spiel zwischen Prüfung und Ablage nicht startet.
+pub(crate) fn require_addable(state: &AppState, id: &str, kinds: impl IntoIterator<Item = ModKind>) -> AppResult<()> {
+    if state.is_running(id) && kinds.into_iter().any(|kind| kind == ModKind::Mod) {
+        return Err(AppError::invalid(coded!("errors.instance.modsNeedStoppedGame")));
+    }
+    Ok(())
+}
+
 /// Jede der `mod_ids` muss ein Eintrag der Instanz sein.
 pub(crate) fn ensure_known(instance: &Instance, mod_ids: &[String]) -> AppResult<()> {
     match mod_ids.iter().find(|id| !instance.mods.iter().any(|m| &m.id == *id)) {
@@ -181,6 +191,18 @@ pub(crate) mod fixtures {
 mod tests {
     use super::{fixtures::modrinth_mod, *};
     use crate::services::mods;
+
+    #[test]
+    fn a_running_game_takes_packs_and_shaders_but_no_mods() {
+        let root = std::env::temp_dir().join(crate::models::new_id());
+        let state = AppState::load(&root).unwrap();
+        assert!(require_addable(&state, "i", [ModKind::Mod]).is_ok());
+        state.pretend_running("i");
+        assert!(require_addable(&state, "i", [ModKind::ResourcePack, ModKind::Shader]).is_ok());
+        let refused = require_addable(&state, "i", [ModKind::Shader, ModKind::Mod]).unwrap_err();
+        assert_eq!(refused.key(), Some("errors.instance.modsNeedStoppedGame"));
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn sync_places_content_kinds_in_their_folders() {

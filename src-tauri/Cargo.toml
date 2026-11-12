@@ -1,6 +1,6 @@
 [package]
 name = "launcher"
-version = "0.6.0"
+version = "0.7.0"
 description = "Pumpkin Launcher – Jede Welt. Ein Klick."
 authors = ["LAUX DIGITAL"]
 edition = "2021"
@@ -45,7 +45,7 @@ regex = "1.13.1"
 fastnbt = "2.6.3"
 flate2 = "1.1.10"
 trash = "5.2.9"
-rusqlite = { version = "0.40.2", features = ["bundled"] }
+rusqlite = { version = "0.41.1", features = ["bundled"] }
 dirs = "7.0.0"
 percent-encoding = "2.3.2"
 toml = { version = "1.1.6", default-features = false, features = ["std", "serde", "parse"] }

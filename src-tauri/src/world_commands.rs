@@ -11,6 +11,7 @@ use crate::services::datapacks::{self, Datapack};
 use crate::services::progress::progress;
 use crate::services::server_ping::{self, ServerStatus};
 use crate::services::servers::{self, Server, ServerInput};
+use crate::services::shared_settings::server_list_dir;
 use crate::services::worlds::{self, World, WorldBackup};
 use crate::services::{install, launch};
 use crate::state::AppState;
@@ -136,29 +137,29 @@ pub fn datapack_remove(state: State<'_, AppState>, instance_id: String, world_id
     datapacks::remove(&state.dirs, &instance_id, &world_id, &pack_id)
 }
 
+/// Die Serverliste der Instanz; teilt sie sie, die gemeinsame.
 #[tauri::command]
 pub fn server_list(state: State<'_, AppState>, instance_id: String) -> AppResult<Vec<Server>> {
-    state.require_instance(&instance_id)?;
-    servers::list(&state.dirs.game_dir(&instance_id))
+    let instance = state.instances.get(&instance_id)?;
+    servers::list(&server_list_dir(&state.dirs, &instance))
 }
 
 /// Legt einen Server an (`index` fehlt) oder ändert den an Stelle `index` aus `server_list`.
 #[tauri::command]
 pub fn server_save(state: State<'_, AppState>, instance_id: String, index: Option<usize>, server: ServerInput) -> AppResult<()> {
     let _operation = state.exclusive(&instance_id)?;
-    let game_dir = state.dirs.game_dir(&instance_id);
-    match index {
-        Some(index) => servers::update(&game_dir, index, &server),
-        None => servers::add(&game_dir, &server),
-    }
+    let instance = state.instances.get(&instance_id)?;
+    state.shared.with_server_list(&state.dirs, &instance, |dir| match index {
+        Some(index) => servers::update(dir, index, &server),
+        None => servers::add(dir, &server),
+    })
 }
 
 /// Fragt den Status eines Servers der Instanz ab. Angepingt wird nur, was in deren Serverliste steht.
 #[tauri::command]
 pub async fn server_ping(state: State<'_, AppState>, instance_id: String, address: String) -> AppResult<ServerStatus> {
-    state.require_instance(&instance_id)?;
-    let game_dir = state.dirs.game_dir(&instance_id);
-    let listed = state.blocking_with_dirs(move |_| servers::list(&game_dir)).await?;
+    let list_dir = server_list_dir(&state.dirs, &state.instances.get(&instance_id)?);
+    let listed = state.blocking_with_dirs(move |_| servers::list(&list_dir)).await?;
     if !listed.iter().any(|server| server.address == address) {
         return Err(AppError::NotFound(coded!("errors.app.notFound.server", id = address).into()));
     }
@@ -168,5 +169,6 @@ pub async fn server_ping(state: State<'_, AppState>, instance_id: String, addres
 #[tauri::command]
 pub fn server_remove(state: State<'_, AppState>, instance_id: String, index: usize) -> AppResult<()> {
     let _operation = state.exclusive(&instance_id)?;
-    servers::remove(&state.dirs.game_dir(&instance_id), index)
+    let instance = state.instances.get(&instance_id)?;
+    state.shared.with_server_list(&state.dirs, &instance, |dir| servers::remove(dir, index))
 }

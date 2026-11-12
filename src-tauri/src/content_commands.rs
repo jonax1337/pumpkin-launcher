@@ -70,7 +70,7 @@ pub async fn modrinth_install_mod(
     version_id: String,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.begin_instance_operation(&instance_id)?;
+    let _operation = state.begin_instance_operation_even_if_running(&instance_id)?;
     content::install_mod(&state, &instance_id, &version_id, &*progress(app, operation_id)).await
 }
 
@@ -222,7 +222,7 @@ pub async fn provider_install_mod(
     if Source::parse(&source)? != Source::CurseForge {
         return Err(AppError::invalid(coded!("errors.app.providerOnlyPacks")));
     }
-    let _operation = state.begin_instance_operation(&instance_id)?;
+    let _operation = state.begin_instance_operation_even_if_running(&instance_id)?;
     providers::curseforge::install_mod(&state, &instance_id, &project_id, &version_id, &*progress(app, operation_id)).await
 }
 
@@ -327,7 +327,8 @@ pub async fn instance_check_files(
     local_files::check(&state, &instance_id, paths).await
 }
 
-/// Eigene .jar-/.zip-Dateien in die Instanz; was Modrinth per SHA-1 kennt, bekommt Updates von dort.
+/// Eigene .jar-/.zip-Dateien in die Instanz; was Modrinth per SHA-1 kennt, bekommt Updates von dort. Pakete und Shader
+/// auch bei laufendem Spiel (siehe `content::require_addable`).
 #[tauri::command]
 pub async fn instance_add_files(
     app: AppHandle,
@@ -336,7 +337,7 @@ pub async fn instance_add_files(
     files: Vec<local_files::LocalFile>,
     operation_id: String,
 ) -> AppResult<Instance> {
-    let _operation = state.begin_instance_operation(&instance_id)?;
+    let _operation = state.begin_instance_operation_even_if_running(&instance_id)?;
     local_files::add(&state, &instance_id, files, progress(app, operation_id)).await
 }
 

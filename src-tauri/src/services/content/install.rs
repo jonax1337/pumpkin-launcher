@@ -16,12 +16,14 @@ use crate::{
     state::AppState,
 };
 
-/// Installiert die Modrinth-Version `version` in die Instanz `id`; bei Mods samt Pflicht-Abhängigkeiten.
+/// Installiert die Modrinth-Version `version` in die Instanz `id`; bei Mods samt Pflicht-Abhängigkeiten. Pakete und
+/// Shader auch bei laufendem Spiel (siehe `require_addable`).
 pub async fn install_mod(state: &AppState, id: &str, version: &str, progress: ProgressFn<'_>) -> AppResult<Instance> {
     let mut instance = state.instances.get(id)?;
     let client = modrinth::client()?;
     progress(Phase::Resolve, 0, 1);
     let Resolved { kind, root_project, selected } = resolve_install(&client, version, &instance).await?;
+    super::require_addable(state, id, [kind])?;
     keep_present(&mut instance.mods, &selected, &root_project)?;
     let planned = new_files(&instance.mods, &selected, kind)?;
     let instances_root = state.dirs.instances_dir();

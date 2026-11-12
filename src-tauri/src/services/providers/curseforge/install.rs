@@ -136,6 +136,7 @@ pub async fn install_mod(
     let client = modrinth::client()?;
     progress(Phase::Resolve, 0, 1);
     let plan = plan_install(&client, &instance, project, file_no).await?;
+    content::require_addable(state, instance_id, plan.all().map(|planned| planned.kind))?;
     let instances_root = state.dirs.instances_dir();
     let staged = StagedInstall::new(&instances_root);
     let downloads = reserve_targets(&plan, &instance, &state.dirs.game_dir(instance_id), &staged)?;

@@ -7,6 +7,7 @@ import { GeneralSection } from "./settings/GeneralSection";
 import { LaunchSection } from "./settings/LaunchSection";
 import { NotesSection } from "./settings/NotesSection";
 import { PackSection } from "./settings/PackSection";
+import { SharingSection } from "./settings/SharingSection";
 import { useInstanceForm } from "./settings/useInstanceForm";
 import { DangerSection, VersionSection } from "./settings/VersionSection";
 
@@ -25,6 +26,7 @@ export function SettingsTab({ instance, packRequested = false, onPackShown }: { 
       <GeneralSection instance={instance} form={form} locked={locked} />
       <GameSection instance={instance} form={form} locked={locked} />
       <LaunchSection instance={instance} form={form} locked={locked} />
+      <SharingSection instance={instance} locked={locked} />
       <NotesSection instance={instance} form={form} locked={locked} />
       <VersionSection instance={instance} />
       <PackSection instance={instance} requested={packRequested} onShown={onPackShown} />

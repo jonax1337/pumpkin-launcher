@@ -52,6 +52,18 @@ impl Dirs {
         self.instances_dir().join(instance_id)
     }
 
+    /// Serverliste und Optionen, die sich Instanzen teilen (siehe `services::shared_settings`); bleibt beim Umzug
+    /// der Instanzen im Datenordner.
+    pub fn shared_settings(&self) -> PathBuf {
+        self.root.join("shared")
+    }
+
+    /// Was die Instanz beim letzten Start aus `shared_settings` bekam, bis ihr Spiel abgeglichen ist; bleibt liegen,
+    /// wenn der Launcher vor dem Spiel endete, und wird dann beim nächsten Start oder Umschalten abgeglichen.
+    pub fn shared_base(&self, instance_id: &str) -> PathBuf {
+        self.instance(instance_id).join("shared-base")
+    }
+
     pub fn game_dir(&self, instance_id: &str) -> PathBuf {
         self.instance(instance_id).join("minecraft")
     }

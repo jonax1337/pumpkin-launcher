@@ -43,6 +43,7 @@ const errorsCore = {
   "errors.operationRunning": "Eine Installation/Änderung läuft bereits",
   "errors.instance.stillRunning": "Instanz läuft noch",
   "errors.instance.alreadyRunning": "Instanz läuft bereits",
+  "errors.instance.modsNeedStoppedGame": "Mods kommen erst dazu, wenn Minecraft beendet ist. Ressourcenpakete und Shader gehen auch während des Spiels.",
   "errors.auth.cancelled": "Anmeldung abgebrochen.",
   "errors.auth.expired": "Die Anmeldung ist abgelaufen. Starte sie bitte neu.",
   "errors.auth.notApproved": "Microsoft hat diesen Launcher noch nicht für Minecraft freigeschaltet. Das liegt nicht an dir und nicht an deinem Konto: Für die Microsoft-App dieses Builds fehlt die Freigabe. Der offizielle Pumpkin Launcher ist freigegeben, hier handelt es sich meist um einen Fork oder eine selbst gebaute Kopie.",

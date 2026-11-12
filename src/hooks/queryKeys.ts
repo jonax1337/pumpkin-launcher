@@ -44,6 +44,9 @@ export const worldKeys = {
   quickPlay: (instanceId: string, minecraftVersion: string) => ["world-quick-play", instanceId, minecraftVersion] as const,
 };
 
+/** Trifft die Serverlisten aller Instanzen (`worldKeys.servers`); teilen sie eine, ändert sie sich für alle. */
+export const isServerListKey = (queryKey: readonly unknown[]) => queryKey[0] === "worlds" && queryKey[2] === "servers";
+
 /** Status der Server einer Instanz; außerhalb von `worldKeys`, damit Welt-Änderungen keine neuen Pings auslösen. */
 export const serverStatusKeys = {
   all: (instanceId: string) => ["server-status", instanceId] as const,
